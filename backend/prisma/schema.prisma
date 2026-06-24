@@ -1,0 +1,253 @@
+// This is your Prisma schema file
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  ORGANIZER
+  CONTROLLER
+}
+
+enum TicketStatus {
+  PENDING
+  VALID
+  USED
+  CANCELLED
+  FRAUDULENT
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+  COMPLETED
+}
+
+enum ScanResult {
+  VALID
+  ALREADY_USED
+  INVALID
+  FRAUDULENT
+  EXPIRED
+}
+
+enum TeamMemberRole {
+  MANAGER
+  STAFF
+  VOLUNTEER
+  SECURITY
+  PRESS
+  VIP
+  ARTIST
+  SPONSOR
+}
+
+model User {
+  id                    String    @id @default(uuid())
+  email                 String    @unique
+  password              String
+  firstName             String
+  lastName              String
+  role                  Role      @default(ORGANIZER)
+  isEmailVerified       Boolean   @default(false)
+  emailVerificationToken String?
+  emailVerificationExpiry DateTime?
+  twoFactorSecret       String?
+  twoFactorEnabled      Boolean   @default(false)
+  passwordResetToken    String?
+  passwordResetExpiry   DateTime?
+  refreshToken          String?
+  isActive              Boolean   @default(true)
+  lastLoginAt           DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  events      Event[]
+  controllers Controller[]
+  keyPairs    KeyPair[]
+  auditLogs   AuditLog[]
+}
+
+model Event {
+  id               String      @id @default(uuid())
+  name             String
+  description      String?
+  venue            String
+  address          String?
+  city             String
+  country          String
+  startDate        DateTime
+  endDate          DateTime
+  totalCapacity    Int
+  status           EventStatus @default(DRAFT)
+  bannerUrl        String?
+  organizerId      String
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  organizer         User               @relation(fields: [organizerId], references: [id])
+  ticketTemplates   TicketTemplate[]
+  tickets           Ticket[]
+  controllerEvents  ControllerEvent[]
+  teamMembers       TeamMember[]
+  accreditations    Accreditation[]
+}
+
+model TeamMember {
+  id           String         @id @default(uuid())
+  eventId      String
+  name         String
+  email        String?
+  phone        String?
+  role         TeamMemberRole @default(STAFF)
+  department   String?
+  notes        String?
+  photoUrl     String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  event         Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  accreditation Accreditation?
+}
+
+model Accreditation {
+  id           String    @id @default(uuid())
+  teamMemberId String    @unique
+  eventId      String
+  code         String    @unique
+  zones        Json      @default("[]")
+  validFrom    DateTime?
+  validUntil   DateTime?
+  isActive     Boolean   @default(true)
+  printedAt    DateTime?
+  badgeConfig  Json?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  teamMember TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+  event      Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+model TicketTemplate {
+  id              String   @id @default(uuid())
+  name            String
+  description     String?
+  price           Decimal  @db.Decimal(10, 2)
+  currency        String   @default("USD")
+  quantity        Int
+  availableCount  Int
+  color           String   @default("#1a1a2e")
+  logoUrl         String?
+  backgroundUrl   String?
+  customFields    Json?
+  eventId         String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  event   Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  tickets Ticket[]
+}
+
+model Ticket {
+  id               String       @id @default(uuid())
+  serialNumber     String       @unique
+  qrCode           String?      @db.Text
+  qrCodeSignature  String?      @db.Text
+  holderName       String?
+  holderEmail      String?
+  status           TicketStatus @default(PENDING)
+  price            Decimal      @db.Decimal(10, 2)
+  currency         String       @default("USD")
+  purchasedAt      DateTime?
+  checkedInAt      DateTime?
+  cancelledAt      DateTime?
+  metadata         Json?
+  eventId          String
+  templateId       String
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  event           Event          @relation(fields: [eventId], references: [id])
+  template        TicketTemplate @relation(fields: [templateId], references: [id])
+  scanValidations ScanValidation[]
+}
+
+model Controller {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  password     String
+  isActive     Boolean  @default(true)
+  organizerId  String
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  organizer        User              @relation(fields: [organizerId], references: [id])
+  controllerEvents ControllerEvent[]
+  scanValidations  ScanValidation[]
+}
+
+model ControllerEvent {
+  id           String   @id @default(uuid())
+  controllerId String
+  eventId      String
+  assignedAt   DateTime @default(now())
+
+  controller Controller @relation(fields: [controllerId], references: [id], onDelete: Cascade)
+  event      Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([controllerId, eventId])
+}
+
+model ScanValidation {
+  id             String     @id @default(uuid())
+  ticketId       String?    // nullable — null when QR code is invalid/unrecognized
+  controllerId   String
+  result         ScanResult
+  scannedAt      DateTime   @default(now())
+  deviceId       String?
+  location       String?
+  ipAddress      String?
+  notes          String?
+  isSynced       Boolean    @default(true)
+  offlineScannedAt DateTime?
+
+  ticket     Ticket?    @relation(fields: [ticketId], references: [id])
+  controller Controller @relation(fields: [controllerId], references: [id])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String?
+  action      String
+  entity      String?
+  entityId    String?
+  oldValues   Json?
+  newValues   Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+}
+
+model KeyPair {
+  id          String   @id @default(uuid())
+  publicKey   String   @db.Text
+  privateKey  String   @db.Text
+  algorithm   String   @default("RSA-4096")
+  isActive    Boolean  @default(true)
+  organizerId String
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime?
+
+  organizer User @relation(fields: [organizerId], references: [id])
+}
