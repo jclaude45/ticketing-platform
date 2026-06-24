@@ -9,6 +9,7 @@ import {
   ArrowLeft, Users, Plus, Pencil, Trash2, BadgeCheck,
   BadgeX, Printer, RefreshCw, ShieldCheck, X, Check,
   Phone, Mail, Building2, Camera, Upload, FlipHorizontal, ZapOff,
+  FileSpreadsheet, Download, AlertCircle, CheckCircle2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { apiClient, teamApi } from '@/lib/api';
@@ -611,6 +612,7 @@ export default function TeamPage() {
   const [printingId, setPrintingId] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
+  const [importOpen, setImportOpen] = useState(false);
 
   const { data: event } = useQuery({
     queryKey: ['event', eventId],
@@ -693,10 +695,16 @@ export default function TeamPage() {
             </h1>
             {event?.name && <p className="text-sm text-gray-500 mt-0.5">{event.name}</p>}
           </div>
-          <button onClick={() => setAddOpen(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 transition-colors">
-            <Plus className="h-4 w-4" /> Ajouter un membre
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setImportOpen(true)}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50 transition-colors">
+              <FileSpreadsheet className="h-4 w-4 text-green-600" /> Importer Excel
+            </button>
+            <button onClick={() => setAddOpen(true)}
+              className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 transition-colors">
+              <Plus className="h-4 w-4" /> Ajouter un membre
+            </button>
+          </div>
         </div>
       </div>
 
@@ -885,6 +893,198 @@ export default function TeamPage() {
       {addOpen && <MemberModal eventId={eventId} onClose={() => setAddOpen(false)} onSaved={invalidate} />}
       {editMember && <MemberModal eventId={eventId} member={editMember} onClose={() => setEditMember(null)} onSaved={invalidate} />}
       {accMember && <AccreditationModal eventId={eventId} member={accMember} onClose={() => setAccMember(null)} onSaved={invalidate} />}
+      {importOpen && <ImportExcelModal eventId={eventId} onClose={() => setImportOpen(false)} onImported={invalidate} />}
+    </div>
+  );
+}
+
+// ─── ImportExcelModal ────────────────────────────────────────────────────────
+
+type ImportResult = {
+  created: number;
+  errors: number;
+  members: any[];
+  errorDetails: { row: number; name: string; reason: string }[];
+};
+
+function ImportExcelModal({ eventId, onClose, onImported }: {
+  eventId: string;
+  onClose: () => void;
+  onImported: () => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+
+  const handleFile = (f: File) => {
+    if (!f.name.match(/\.(xlsx|xls|csv)$/i)) {
+      toast.error('Seuls les fichiers .xlsx, .xls et .csv sont acceptés');
+      return;
+    }
+    setFile(f);
+    setResult(null);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const f = e.dataTransfer.files[0];
+    if (f) handleFile(f);
+  };
+
+  const handleImport = async () => {
+    if (!file) return;
+    setLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await apiClient.post(`/events/${eventId}/team/import`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const data: ImportResult = (res.data as any)?.data ?? res.data;
+      setResult(data);
+      if (data.created > 0) {
+        toast.success(`${data.created} membre(s) importé(s) avec succès`);
+        onImported();
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'Erreur lors de l\'import');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const downloadTemplate = async () => {
+    try {
+      const res = await apiClient.get(`/events/${eventId}/team/import/template`, {
+        responseType: 'blob',
+      });
+      const url = URL.createObjectURL(res.data as Blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'import-membres-template.xlsx';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Erreur lors du téléchargement du modèle');
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-green-50">
+              <FileSpreadsheet className="h-5 w-5 text-green-600" />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Importer des membres</h2>
+              <p className="text-xs text-gray-500">Fichier Excel (.xlsx, .xls) ou CSV</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto flex-1 p-6 space-y-4">
+          {/* Download template */}
+          <button onClick={downloadTemplate}
+            className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-green-200 bg-green-50 py-3 text-sm font-medium text-green-700 hover:bg-green-100 transition-colors">
+            <Download className="h-4 w-4" />
+            Télécharger le modèle Excel
+          </button>
+
+          {/* Columns info */}
+          <div className="rounded-xl bg-gray-50 p-3 text-xs text-gray-600 space-y-1">
+            <p className="font-semibold text-gray-700">Colonnes attendues :</p>
+            <p><span className="font-medium text-red-500">Nom *</span> — Email — Téléphone — Rôle — Département — Notes</p>
+            <p className="text-gray-400">Rôles valides : MANAGER, STAFF, VOLUNTEER, SECURITY, PRESS, VIP, ARTIST, SPONSOR</p>
+          </div>
+
+          {/* Drop zone */}
+          {!result && (
+            <div
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleDrop}
+              onClick={() => fileRef.current?.click()}
+              className={cn(
+                'relative cursor-pointer rounded-xl border-2 border-dashed p-8 text-center transition-colors',
+                dragOver ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50',
+              )}
+            >
+              <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+              <Upload className="mx-auto h-8 w-8 text-gray-300 mb-2" />
+              {file ? (
+                <div>
+                  <p className="font-medium text-gray-800">{file.name}</p>
+                  <p className="text-xs text-gray-500 mt-1">{(file.size / 1024).toFixed(0)} Ko</p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Glisser-déposer un fichier ici</p>
+                  <p className="text-xs text-gray-400 mt-1">ou cliquer pour parcourir</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Result */}
+          {result && (
+            <div className="space-y-3">
+              <div className="flex gap-3">
+                <div className="flex-1 rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-center">
+                  <CheckCircle2 className="mx-auto h-5 w-5 text-emerald-600 mb-1" />
+                  <p className="text-xl font-bold text-emerald-700">{result.created}</p>
+                  <p className="text-xs text-emerald-600">importé(s)</p>
+                </div>
+                {result.errors > 0 && (
+                  <div className="flex-1 rounded-xl bg-red-50 border border-red-200 p-3 text-center">
+                    <AlertCircle className="mx-auto h-5 w-5 text-red-500 mb-1" />
+                    <p className="text-xl font-bold text-red-600">{result.errors}</p>
+                    <p className="text-xs text-red-500">erreur(s)</p>
+                  </div>
+                )}
+              </div>
+              {result.errorDetails.length > 0 && (
+                <div className="rounded-xl border border-red-100 bg-red-50 p-3 max-h-40 overflow-y-auto">
+                  <p className="text-xs font-semibold text-red-700 mb-2">Détail des erreurs :</p>
+                  {result.errorDetails.map((e, i) => (
+                    <p key={i} className="text-xs text-red-600 py-0.5">
+                      Ligne {e.row} · <span className="font-medium">{e.name}</span> — {e.reason}
+                    </p>
+                  ))}
+                </div>
+              )}
+              <button onClick={() => { setFile(null); setResult(null); }}
+                className="w-full rounded-xl border border-gray-200 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+                Importer un autre fichier
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
+          <button onClick={onClose}
+            className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors">
+            {result ? 'Fermer' : 'Annuler'}
+          </button>
+          {!result && (
+            <button onClick={handleImport} disabled={!file || loading}
+              className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              {loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              {loading ? 'Importation…' : 'Importer'}
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

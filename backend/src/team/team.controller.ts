@@ -53,6 +53,50 @@ export class TeamController {
     return this.teamService.deleteMember(eventId, memberId, user.id, user.role);
   }
 
+  // ── Excel import ─────────────────────────────────────────────────────────────
+
+  @Post('import')
+  @Roles(Role.ORGANIZER, Role.ADMIN)
+  @ApiOperation({ summary: 'Import team members from Excel (.xlsx/.xls/.csv)' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file', {
+    storage: memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (_, file, cb) => {
+      const allowed = [
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-excel',
+        'text/csv',
+        'application/csv',
+      ];
+      if (allowed.includes(file.mimetype) || file.originalname.match(/\.(xlsx|xls|csv)$/i)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Seuls les fichiers .xlsx, .xls et .csv sont acceptés'), false);
+      }
+    },
+  }))
+  importMembers(
+    @Param('eventId') eventId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: any,
+  ) {
+    return this.teamService.importFromExcel(eventId, user.id, user.role, file);
+  }
+
+  @Get('import/template')
+  @Roles(Role.ORGANIZER, Role.ADMIN)
+  @ApiOperation({ summary: 'Download Excel import template' })
+  downloadTemplate(@Res() res: Response) {
+    const buffer = this.teamService.generateExcelTemplate();
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': 'attachment; filename="import-membres-template.xlsx"',
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
   // ── Photo upload ─────────────────────────────────────────────────────────────
 
   @Post(':memberId/photo')

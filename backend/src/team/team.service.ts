@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { CryptoService } from '../crypto/crypto.service';
-import { Role } from '@prisma/client';
+import { Role, TeamMemberRole } from '@prisma/client';
 import {
   CreateTeamMemberDto, UpdateTeamMemberDto,
   CreateAccreditationDto, UpdateAccreditationDto,
@@ -11,6 +11,7 @@ import {
 } from './dto/team.dto';
 import * as PDFDocument from 'pdfkit';
 import * as QRCode from 'qrcode';
+import * as XLSX from 'xlsx';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -144,6 +145,111 @@ export class TeamService {
     if (!member) throw new NotFoundException('Team member not found');
     await this.prisma.teamMember.delete({ where: { id: memberId } });
     return { message: 'Team member removed' };
+  }
+
+  async importFromExcel(eventId: string, organizerId: string, organizerRole: Role, file: Express.Multer.File) {
+    await this.assertAccess(eventId, organizerId, organizerRole);
+    if (!file) throw new BadRequestException('No file received');
+
+    const validRoles = Object.values(TeamMemberRole);
+    // Column aliases (FR + EN) → field name
+    const COL = {
+      name:       ['nom', 'name', 'prénom nom', 'prenom nom', 'full name'],
+      email:      ['email', 'e-mail', 'courriel', 'mail'],
+      phone:      ['téléphone', 'telephone', 'phone', 'tel', 'portable'],
+      role:       ['rôle', 'role', 'fonction'],
+      department: ['département', 'departement', 'department', 'service', 'equipe', 'équipe'],
+      notes:      ['notes', 'note', 'remarques', 'commentaires'],
+    };
+
+    let workbook: XLSX.WorkBook;
+    try {
+      workbook = XLSX.read(file.buffer, { type: 'buffer' });
+    } catch {
+      throw new BadRequestException('Fichier Excel invalide ou corrompu');
+    }
+
+    const sheetName = workbook.SheetNames[0];
+    const rows: Record<string, any>[] = XLSX.utils.sheet_to_json(
+      workbook.Sheets[sheetName],
+      { defval: '' },
+    );
+
+    if (rows.length === 0) throw new BadRequestException('Le fichier est vide');
+    if (rows.length > 500) throw new BadRequestException('Maximum 500 membres par import');
+
+    // Normalize header keys
+    const normalize = (s: string) => String(s).toLowerCase().trim().replace(/\s+/g, ' ');
+
+    function findCol(row: Record<string, any>, aliases: string[]): string {
+      const key = Object.keys(row).find(k => aliases.includes(normalize(k)));
+      return key ? String(row[key]).trim() : '';
+    }
+
+    const created: any[] = [];
+    const errors: { row: number; name: string; reason: string }[] = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const rowNum = i + 2; // +2 : header=1, data starts at 2
+
+      const name = findCol(row, COL.name);
+      if (!name) {
+        errors.push({ row: rowNum, name: '-', reason: 'Colonne "Nom" manquante ou vide' });
+        continue;
+      }
+
+      const email = findCol(row, COL.email) || undefined;
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        errors.push({ row: rowNum, name, reason: `Email invalide : ${email}` });
+        continue;
+      }
+
+      let role = findCol(row, COL.role).toUpperCase() as TeamMemberRole;
+      if (!role || !validRoles.includes(role)) role = TeamMemberRole.STAFF;
+
+      try {
+        const member = await this.prisma.teamMember.create({
+          data: {
+            eventId,
+            name,
+            email: email || null,
+            phone: findCol(row, COL.phone) || null,
+            role,
+            department: findCol(row, COL.department) || null,
+            notes: findCol(row, COL.notes) || null,
+          },
+          include: { accreditation: true },
+        });
+        created.push(member);
+      } catch (err: any) {
+        errors.push({ row: rowNum, name, reason: err?.message ?? 'Erreur inconnue' });
+      }
+    }
+
+    return {
+      created: created.length,
+      errors: errors.length,
+      members: created,
+      errorDetails: errors,
+    };
+  }
+
+  generateExcelTemplate(): Buffer {
+    const headers = [['Nom *', 'Email', 'Téléphone', 'Rôle', 'Département', 'Notes']];
+    const example = [['Marie Dupont', 'marie@example.com', '+33612345678', 'STAFF', 'Production', '']];
+    const roles = [['Rôles valides :'], ['MANAGER'], ['STAFF'], ['VOLUNTEER'], ['SECURITY'], ['PRESS'], ['VIP'], ['ARTIST'], ['SPONSOR']];
+
+    const wb = XLSX.utils.book_new();
+
+    const wsMembers = XLSX.utils.aoa_to_sheet([...headers, ...example]);
+    wsMembers['!cols'] = [{ wch: 20 }, { wch: 25 }, { wch: 16 }, { wch: 12 }, { wch: 16 }, { wch: 20 }];
+    XLSX.utils.book_append_sheet(wb, wsMembers, 'Membres');
+
+    const wsRoles = XLSX.utils.aoa_to_sheet(roles);
+    XLSX.utils.book_append_sheet(wb, wsRoles, 'Rôles valides');
+
+    return Buffer.from(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
   }
 
   async uploadPhoto(eventId: string, memberId: string, organizerId: string, organizerRole: Role, file: Express.Multer.File) {
