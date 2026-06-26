@@ -10,7 +10,11 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  UploadedFile,
+  UseInterceptors,
+  BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
   ApiOperation,
@@ -61,7 +65,7 @@ export class UsersController {
 
   @Post('me/rotate-keys')
   @HttpCode(HttpStatus.OK)
-  @Roles(Role.ORGANIZER, Role.ADMIN)
+  @Roles(Role.ORGANIZER, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Rotate RSA key pair for ticket signing' })
   async rotateKeyPair(@CurrentUser('id') userId: string) {
     return this.usersService.rotateKeyPair(userId);
@@ -77,6 +81,18 @@ export class UsersController {
   @ApiOperation({ summary: 'Update current user profile' })
   async updateProfile(@CurrentUser('id') userId: string, @Body() dto: UpdateUserDto) {
     return this.usersService.updateProfile(userId, dto);
+  }
+
+  @Post('me/avatar')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor('avatar'))
+  @ApiOperation({ summary: 'Upload avatar for current user' })
+  async uploadAvatar(
+    @CurrentUser('id') userId: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) throw new BadRequestException('No file uploaded');
+    return this.usersService.uploadAvatar(userId, file.buffer, file.originalname, file.mimetype);
   }
 
   @Post('me/change-password')

@@ -7,10 +7,12 @@ import { TicketExportService } from './ticket-export.service';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { QrcodeModule } from '../qrcode/qrcode.module';
+import { SubscriptionModule } from '../subscription/subscription.module';
 
 @Module({
   imports: [
     QrcodeModule,
+    SubscriptionModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -27,6 +29,6 @@ import { QrcodeModule } from '../qrcode/qrcode.module';
     TicketGenerationService,
     TicketExportService,
   ],
-  exports: [TicketsService, TicketTemplateService],
+  exports: [TicketsService, TicketTemplateService, TicketGenerationService],
 })
 export class TicketsModule {}

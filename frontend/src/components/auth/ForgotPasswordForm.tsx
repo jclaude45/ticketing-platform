@@ -35,11 +35,11 @@ export function ForgotPasswordForm() {
         className="text-center space-y-4"
       >
         <CheckCircle className="h-16 w-16 text-green-400 mx-auto" />
-        <h3 className="text-xl font-semibold text-white">Email Sent!</h3>
+        <h3 className="text-xl font-semibold text-white">Email envoyé !</h3>
         <p className="text-white/60 text-sm">
-          We sent a password reset link to <span className="text-indigo-300 font-medium">{getValues('email')}</span>
+          Nous avons envoyé un lien de réinitialisation à <span className="text-indigo-300 font-medium">{getValues('email')}</span>
         </p>
-        <p className="text-white/40 text-xs">Check your spam folder if you don&apos;t see it.</p>
+        <p className="text-white/40 text-xs">Vérifiez votre dossier spam si vous ne le voyez pas.</p>
       </motion.div>
     );
   }
@@ -53,7 +53,7 @@ export function ForgotPasswordForm() {
       className="space-y-5"
     >
       <div>
-        <label className="block text-sm font-medium text-white/80 mb-1.5">Email address</label>
+        <label className="block text-sm font-medium text-white/80 mb-1.5">Adresse e-mail</label>
         <div className="relative">
           <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
           <input
@@ -72,9 +72,9 @@ export function ForgotPasswordForm() {
         className="w-full py-3 px-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold rounded-lg shadow-lg hover:from-indigo-600 hover:to-purple-700 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
       >
         {forgotPassword.isPending ? (
-          <><Loader2 className="h-4 w-4 animate-spin" />Sending...</>
+          <><Loader2 className="h-4 w-4 animate-spin" />Envoi en cours...</>
         ) : (
-          'Send Reset Link'
+          'Envoyer le lien'
         )}
       </button>
     </motion.form>

@@ -281,7 +281,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _scanMode == ScanMode.tickets ? 'Scanner Tickets' : 'Scanner Badges',
+                  _scanMode == ScanMode.tickets ? 'Scanner les tickets' : 'Scanner les badges',
                   style: GoogleFonts.inter(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
@@ -317,7 +317,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
                 ),
                 const SizedBox(width: 5),
                 Text(
-                  isOnline ? 'Online' : 'Offline',
+                  isOnline ? 'En ligne' : 'Hors ligne',
                   style: GoogleFonts.inter(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
@@ -405,7 +405,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
               ),
               _ControlButton(
                 icon: Icons.sync_rounded,
-                label: 'Sync',
+                label: 'Sync.',
                 onTap: () => ref.read(scannerNotifierProvider.notifier).syncOfflineScans(),
                 isActive: false,
               ),

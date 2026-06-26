@@ -4,7 +4,7 @@ import { RedisService } from '../redis/redis.service';
 import { QrcodeService } from '../qrcode/qrcode.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { ScanTicketDto, OfflineScanDto } from './dto/scan-ticket.dto';
-import { ScanResult, TicketStatus } from '@prisma/client';
+import { ScanResult, TicketStatus, Role } from '@prisma/client';
 
 @Injectable()
 export class ValidationService {
@@ -17,20 +17,61 @@ export class ValidationService {
     private readonly realtimeGateway: RealtimeGateway,
   ) {}
 
+  // Returns a Controller.id valid for ScanValidation FK.
+  // Organizers/admins don't have Controller rows — create one on first use.
+  private async resolveControllerIdForScan(userId: string, callerRole: Role): Promise<string> {
+    if (callerRole !== Role.ORGANIZER && callerRole !== Role.ADMIN && callerRole !== Role.SUPER_ADMIN) {
+      return userId; // already a Controller ID
+    }
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, firstName: true, lastName: true, email: true },
+    });
+    if (!user) throw new ForbiddenException('User not found');
+
+    const existing = await this.prisma.controller.findUnique({ where: { email: user.email } });
+    if (existing) return existing.id;
+
+    const created = await this.prisma.controller.create({
+      data: {
+        name: `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || user.email,
+        email: user.email,
+        password: '',
+        isActive: true,
+        organizerId: userId,
+      },
+    });
+    return created.id;
+  }
+
   async scanTicket(
-    controllerId: string,
+    userId: string,
     eventId: string,
     dto: ScanTicketDto,
     ipAddress?: string,
+    callerRole?: Role,
   ) {
-    // Verify controller is assigned to this event
-    const controllerEvent = await this.prisma.controllerEvent.findUnique({
-      where: { controllerId_eventId: { controllerId, eventId } },
-      include: { event: { select: { id: true, name: true, status: true } } },
-    });
+    // ORGANIZER and ADMIN can scan any event they own without being in ControllerEvent table
+    const isPrivileged = callerRole === Role.ORGANIZER || callerRole === Role.ADMIN || callerRole === Role.SUPER_ADMIN;
 
-    if (!controllerEvent) {
-      throw new ForbiddenException('You are not authorized to scan tickets for this event');
+    // Resolve to a valid Controller table ID for ScanValidation FK
+    const controllerId = await this.resolveControllerIdForScan(userId, callerRole ?? Role.CONTROLLER as any);
+
+    if (!isPrivileged) {
+      const controllerEvent = await this.prisma.controllerEvent.findUnique({
+        where: { controllerId_eventId: { controllerId, eventId } },
+        include: { event: { select: { id: true, name: true, status: true } } },
+      });
+      if (!controllerEvent) {
+        throw new ForbiddenException('You are not authorized to scan tickets for this event');
+      }
+    } else {
+      const event = await this.prisma.event.findFirst({
+        where: { id: eventId, organizerId: userId },
+      });
+      if (!event && callerRole !== Role.ADMIN && callerRole !== Role.SUPER_ADMIN) {
+        throw new ForbiddenException('You are not the organizer of this event');
+      }
     }
 
     // Parse QR code — supports v2 compact format {"id","sn","v":"2"} and legacy v1 {"p","s","v":"1"}

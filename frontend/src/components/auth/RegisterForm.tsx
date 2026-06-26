@@ -18,7 +18,7 @@ function PasswordStrength({ password }: { password: string }) {
     return score;
   }, [password]);
 
-  const labels = ['', 'Weak', 'Fair', 'Good', 'Strong'];
+  const labels = ['', 'Faible', 'Moyen', 'Bien', 'Fort'];
   const colors = ['', 'bg-red-500', 'bg-yellow-500', 'bg-blue-500', 'bg-green-500'];
 
   if (!password) return null;
@@ -77,7 +77,7 @@ export function RegisterForm() {
     >
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium text-white/80 mb-1.5">First Name</label>
+          <label className="block text-sm font-medium text-white/80 mb-1.5">Prénom</label>
           <div className="relative">
             <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
             <input
@@ -92,7 +92,7 @@ export function RegisterForm() {
           {errors.firstName && <p className="mt-1 text-xs text-red-300">{errors.firstName.message}</p>}
         </div>
         <div>
-          <label className="block text-sm font-medium text-white/80 mb-1.5">Last Name</label>
+          <label className="block text-sm font-medium text-white/80 mb-1.5">Nom</label>
           <div className="relative">
             <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
             <input
@@ -109,7 +109,7 @@ export function RegisterForm() {
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-white/80 mb-1.5">Email address</label>
+        <label className="block text-sm font-medium text-white/80 mb-1.5">Adresse e-mail</label>
         <div className="relative">
           <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
           <input
@@ -125,14 +125,14 @@ export function RegisterForm() {
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-white/80 mb-1.5">Password</label>
+        <label className="block text-sm font-medium text-white/80 mb-1.5">Mot de passe</label>
         <div className="relative">
           <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
           <input
             {...register('password')}
             type={showPassword ? 'text' : 'password'}
             autoComplete="new-password"
-            placeholder="Create a strong password"
+            placeholder="Créez un mot de passe fort"
             suppressHydrationWarning
             className="w-full pl-10 pr-12 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all"
           />
@@ -149,14 +149,14 @@ export function RegisterForm() {
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-white/80 mb-1.5">Confirm Password</label>
+        <label className="block text-sm font-medium text-white/80 mb-1.5">Confirmer le mot de passe</label>
         <div className="relative">
           <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
           <input
             {...register('confirmPassword')}
             type={showConfirm ? 'text' : 'password'}
             autoComplete="new-password"
-            placeholder="Repeat your password"
+            placeholder="Répétez votre mot de passe"
             suppressHydrationWarning
             className="w-full pl-10 pr-12 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all"
           />
@@ -177,9 +177,9 @@ export function RegisterForm() {
         className="w-full py-3 px-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold rounded-lg shadow-lg hover:from-indigo-600 hover:to-purple-700 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2"
       >
         {register_mutation.isPending ? (
-          <><Loader2 className="h-4 w-4 animate-spin" />Creating account...</>
+          <><Loader2 className="h-4 w-4 animate-spin" />Création du compte...</>
         ) : (
-          'Create Account'
+          'Créer un compte'
         )}
       </button>
     </motion.form>

@@ -86,11 +86,11 @@ class QrScannerWidgetState extends State<QrScannerWidget> {
         icon = Icons.camera_alt_outlined;
         break;
       case MobileScannerErrorCode.unsupported:
-        message = 'Camera not supported on this device.';
+        message = 'Caméra non supportée sur cet appareil.';
         icon = Icons.no_photography_outlined;
         break;
       default:
-        message = 'Camera error: ${error.errorDetails?.message ?? "Unknown error"}';
+        message = 'Erreur caméra: ${error.errorDetails?.message ?? "Erreur inconnue"}';
         icon = Icons.error_outline;
     }
 

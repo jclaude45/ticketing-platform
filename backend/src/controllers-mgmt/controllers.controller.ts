@@ -45,7 +45,7 @@ export class ControllersController {
   }
 
   @Get()
-  @Roles(Role.ORGANIZER, Role.ADMIN)
+  @Roles(Role.ORGANIZER, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Get all controllers for the organizer' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
@@ -58,14 +58,14 @@ export class ControllersController {
   }
 
   @Get(':id')
-  @Roles(Role.ORGANIZER, Role.ADMIN)
+  @Roles(Role.ORGANIZER, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Get a specific controller' })
   async findOne(@Param('id') id: string, @CurrentUser() user: any) {
     return this.controllersService.findOne(id, user.id, user.role);
   }
 
   @Get(':id/stats')
-  @Roles(Role.ORGANIZER, Role.ADMIN)
+  @Roles(Role.ORGANIZER, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Get controller scan statistics' })
   async getStats(@Param('id') id: string, @CurrentUser() user: any) {
     return this.controllersService.getControllerStats(id, user.id, user.role);

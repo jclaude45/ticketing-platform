@@ -56,7 +56,7 @@ export function StatsCard({
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</p>
-          <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">
+          <p className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mt-1">
             {value}
             {suffix && <span className="text-sm font-normal text-gray-400 ml-1">{suffix}</span>}
           </p>
@@ -80,7 +80,7 @@ export function StatsCard({
           )}>
             {change}
           </span>
-          <span className="text-xs text-gray-400">vs last month</span>
+          <span className="text-xs text-gray-400">vs mois dernier</span>
         </div>
       )}
     </motion.div>

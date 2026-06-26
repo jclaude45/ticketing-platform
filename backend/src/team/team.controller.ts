@@ -29,7 +29,7 @@ export class TeamController {
   // ── Members ──────────────────────────────────────────────────────────────────
 
   @Get()
-  @Roles(Role.ORGANIZER, Role.ADMIN)
+  @Roles(Role.ORGANIZER, Role.ADMIN, Role.SUPER_ADMIN)
   listMembers(@Param('eventId') eventId: string, @CurrentUser() user: any) {
     return this.teamService.listMembers(eventId, user.id, user.role);
   }
@@ -85,7 +85,7 @@ export class TeamController {
   }
 
   @Get('import/template')
-  @Roles(Role.ORGANIZER, Role.ADMIN)
+  @Roles(Role.ORGANIZER, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Download Excel import template' })
   downloadTemplate(@Res() res: Response) {
     const buffer = this.teamService.generateExcelTemplate();
@@ -135,7 +135,7 @@ export class TeamController {
   }
 
   @Get(':memberId/accreditation/badge')
-  @Roles(Role.ORGANIZER, Role.ADMIN)
+  @Roles(Role.ORGANIZER, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Download accreditation badge PDF' })
   async downloadBadge(@Param('eventId') eventId: string, @Param('memberId') memberId: string, @CurrentUser() user: any, @Res() res: Response) {
     const member = await this.teamService.getMember(eventId, memberId, user.id, user.role);

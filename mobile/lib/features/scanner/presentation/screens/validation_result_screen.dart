@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/constants/colors.dart';
 import '../../domain/entities/validation_result.dart';
 import '../widgets/fraudulent_ticket_card.dart';
+import '../widgets/invalid_qr_card.dart';
 import '../widgets/used_ticket_card.dart';
 import '../widgets/valid_ticket_card.dart';
 
@@ -101,31 +102,26 @@ class _ValidationResultScreenState extends State<ValidationResultScreen>
       return const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [
-          Color(0xFF001A0A),
-          Color(0xFF003319),
-          Color(0xFF001A0A),
-        ],
+        colors: [Color(0xFF001A0A), Color(0xFF003319), Color(0xFF001A0A)],
       );
     } else if (widget.result.isUsed) {
       return const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [
-          Color(0xFF1A0005),
-          Color(0xFF33000D),
-          Color(0xFF1A0005),
-        ],
+        colors: [Color(0xFF1A0005), Color(0xFF33000D), Color(0xFF1A0005)],
       );
-    } else {
+    } else if (widget.result.isFraudulent) {
       return const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [
-          Color(0xFF1A0800),
-          Color(0xFF331500),
-          Color(0xFF1A0800),
-        ],
+        colors: [Color(0xFF1A0800), Color(0xFF331500), Color(0xFF1A0800)],
+      );
+    } else {
+      // invalid QR / not found
+      return const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Color(0xFF000A1A), Color(0xFF001533), Color(0xFF000A1A)],
       );
     }
   }
@@ -133,7 +129,8 @@ class _ValidationResultScreenState extends State<ValidationResultScreen>
   Color get _accentColor {
     if (widget.result.isValid) return AppColors.validGreen;
     if (widget.result.isUsed) return AppColors.usedRed;
-    return AppColors.fraudOrange;
+    if (widget.result.isFraudulent) return AppColors.fraudOrange;
+    return const Color(0xFF448AFF); // blue for invalid QR
   }
 
   @override
@@ -225,7 +222,7 @@ class _ValidationResultScreenState extends State<ValidationResultScreen>
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'Tap anywhere to scan next ticket  •  $_countdownSeconds',
+                          'Appuyez pour scanner le prochain ticket  •  $_countdownSeconds',
                           style: GoogleFonts.inter(
                             fontSize: 13,
                             color: Colors.white.withOpacity(0.4),
@@ -251,7 +248,7 @@ class _ValidationResultScreenState extends State<ValidationResultScreen>
     } else if (widget.result.isFraudulent) {
       return FraudulentTicketCard(result: widget.result);
     } else {
-      return _buildErrorCard();
+      return InvalidQrCard(result: widget.result);
     }
   }
 
@@ -286,12 +283,12 @@ class _ValidationResultScreenState extends State<ValidationResultScreen>
                 const SizedBox(width: 6),
                 Text(
                   widget.result.isValid
-                      ? 'VALID'
+                      ? 'VALIDE'
                       : widget.result.isUsed
-                          ? 'USED'
+                          ? 'UTILISÉ'
                           : widget.result.isFraudulent
-                              ? 'FRAUD'
-                              : 'ERROR',
+                              ? 'FRAUDE'
+                              : 'ERREUR',
                   style: GoogleFonts.inter(
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
@@ -325,49 +322,4 @@ class _ValidationResultScreenState extends State<ValidationResultScreen>
     );
   }
 
-  Widget _buildErrorCard() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppColors.textMuted.withOpacity(0.1),
-              border: Border.all(
-                color: AppColors.textMuted.withOpacity(0.3),
-              ),
-            ),
-            child: const Icon(
-              Icons.error_outline_rounded,
-              size: 52,
-              color: AppColors.textMuted,
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'Scan Error',
-            style: GoogleFonts.inter(
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            widget.result.errorMessage ?? 'An unknown error occurred',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              color: AppColors.textSecondary,
-              height: 1.5,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

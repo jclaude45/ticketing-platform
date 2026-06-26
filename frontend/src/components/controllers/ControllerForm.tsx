@@ -58,8 +58,10 @@ export function ControllerForm({
     queryKey: ['events', 'published'],
     queryFn: async () => {
       const res = await eventsApi.list({ status: 'PUBLISHED', limit: 100 });
-      return (res.data as any)?.data ?? [];
+      return (res.data as any)?.data?.data ?? [];
     },
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   const toggleEvent = (id: string) => {

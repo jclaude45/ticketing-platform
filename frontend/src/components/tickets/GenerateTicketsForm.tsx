@@ -14,6 +14,7 @@ import {
 import { cn } from '@/lib/utils';
 import { apiClient } from '@/lib/api';
 import toast from 'react-hot-toast';
+import { UpgradePlanModal } from '@/components/subscription/UpgradePlanModal';
 
 // ── CSV helpers ───────────────────────────────────────────────────────────────
 function parseCSV(text: string): Array<{ holderName: string; holderEmail: string }> {
@@ -65,6 +66,7 @@ export function GenerateTicketsForm({ eventId }: Props) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [generatedCount, setGeneratedCount] = useState(0);
   const [generatedIds, setGeneratedIds] = useState<string[]>([]);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
   const csvInputRef = useRef<HTMLInputElement>(null);
 
   // ── Fetch templates ─────────────────────────────────────────────────────
@@ -129,7 +131,11 @@ export function GenerateTicketsForm({ eventId }: Props) {
       queryClient.invalidateQueries({ queryKey: ['event', eventId], refetchType: 'all' });
     },
     onError: (err: any) => {
-      toast.error(err?.response?.data?.message ?? 'Erreur lors de la génération');
+      if (err?.response?.status === 403) {
+        setUpgradeOpen(true);
+      } else {
+        toast.error(err?.response?.data?.message ?? 'Erreur lors de la génération');
+      }
     },
   });
 
@@ -163,6 +169,7 @@ export function GenerateTicketsForm({ eventId }: Props) {
   // ── Step 3 — Success ─────────────────────────────────────────────────────
   if (step === 3) {
     return (
+      <>
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -214,7 +221,20 @@ export function GenerateTicketsForm({ eventId }: Props) {
                 });
                 document.body.appendChild(a); a.click();
                 document.body.removeChild(a); URL.revokeObjectURL(url);
-              } catch { alert('Erreur lors de l\'export PDF'); }
+              } catch (err: any) {
+                if (err?.response?.status === 403) {
+                  setUpgradeOpen(true);
+                } else {
+                  const d = err?.response?.data;
+                  let msg = "Erreur lors de l'export PDF";
+                  if (d instanceof ArrayBuffer) {
+                    try { msg = JSON.parse(new TextDecoder().decode(d))?.message ?? msg; } catch { /* */ }
+                  } else if (d?.message) {
+                    msg = d.message;
+                  }
+                  toast.error(msg, { duration: 5000 });
+                }
+              }
             }}
             className="rounded-lg border border-emerald-300 bg-white px-5 py-2.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors"
           >
@@ -222,10 +242,17 @@ export function GenerateTicketsForm({ eventId }: Props) {
           </button>
         </div>
       </motion.div>
+      <UpgradePlanModal
+        open={upgradeOpen}
+        onClose={() => setUpgradeOpen(false)}
+        featureName="La génération ou l'export de billets"
+      />
+    </>
     );
   }
 
   return (
+    <>
     <form onSubmit={handleSubmit((d) => generate.mutate(d))} className="space-y-6">
 
       {/* Progress steps */}
@@ -555,5 +582,11 @@ export function GenerateTicketsForm({ eventId }: Props) {
         )}
       </AnimatePresence>
     </form>
+    <UpgradePlanModal
+      open={upgradeOpen}
+      onClose={() => setUpgradeOpen(false)}
+      featureName="La génération ou l'export de billets"
+    />
+    </>
   );
 }

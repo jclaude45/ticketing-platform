@@ -37,13 +37,13 @@ export function ResetPasswordForm() {
       className="space-y-5"
     >
       <div>
-        <label className="block text-sm font-medium text-white/80 mb-1.5">New Password</label>
+        <label className="block text-sm font-medium text-white/80 mb-1.5">Nouveau mot de passe</label>
         <div className="relative">
           <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
           <input
             {...register('password')}
             type={showPassword ? 'text' : 'password'}
-            placeholder="At least 8 characters"
+            placeholder="Au moins 8 caractères"
             className="w-full pl-10 pr-12 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all"
           />
           <button
@@ -58,13 +58,13 @@ export function ResetPasswordForm() {
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-white/80 mb-1.5">Confirm Password</label>
+        <label className="block text-sm font-medium text-white/80 mb-1.5">Confirmer le mot de passe</label>
         <div className="relative">
           <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
           <input
             {...register('confirmPassword')}
             type={showConfirm ? 'text' : 'password'}
-            placeholder="Repeat password"
+            placeholder="Répétez le mot de passe"
             className="w-full pl-10 pr-12 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all"
           />
           <button
@@ -84,9 +84,9 @@ export function ResetPasswordForm() {
         className="w-full py-3 px-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold rounded-lg shadow-lg hover:from-indigo-600 hover:to-purple-700 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
       >
         {resetPassword.isPending ? (
-          <><Loader2 className="h-4 w-4 animate-spin" />Resetting...</>
+          <><Loader2 className="h-4 w-4 animate-spin" />Réinitialisation...</>
         ) : (
-          'Reset Password'
+          'Réinitialiser'
         )}
       </button>
     </motion.form>

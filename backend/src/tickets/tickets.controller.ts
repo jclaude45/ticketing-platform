@@ -24,6 +24,7 @@ import { TicketsService } from './tickets.service';
 import { TicketTemplateService } from './ticket-template.service';
 import { TicketGenerationService } from './ticket-generation.service';
 import { TicketExportService } from './ticket-export.service';
+import { SubscriptionService } from '../subscription/subscription.service';
 import { CreateTicketTemplateDto } from './dto/create-ticket-template.dto';
 import { GenerateTicketsDto } from './dto/generate-tickets.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -42,6 +43,7 @@ export class TicketsController {
     private readonly templateService: TicketTemplateService,
     private readonly generationService: TicketGenerationService,
     private readonly exportService: TicketExportService,
+    private readonly subscriptionService: SubscriptionService,
   ) {}
 
   // ===== TICKET TEMPLATE ENDPOINTS =====
@@ -165,7 +167,7 @@ export class TicketsController {
   }
 
   @Get('tickets/export/zip')
-  @Roles(Role.ORGANIZER, Role.ADMIN)
+  @Roles(Role.ORGANIZER, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Export all event tickets as ZIP of PDFs' })
   async exportEventTicketsZip(
     @Param('eventId') eventId: string,
@@ -173,6 +175,7 @@ export class TicketsController {
     @Res() res: Response,
   ) {
     await this.ticketsService.findAllForEvent(eventId, user.id, user.role, 1, 1);
+    await this.subscriptionService.checkBulkExport(user.id);
     const zipBuffer = await this.exportService.generateEventTicketsZip(eventId);
 
     res.set({
@@ -186,7 +189,7 @@ export class TicketsController {
   // ── Export groupé : 4 billets par page ──────────────────────────────────────
 
   @Get('tickets/export/pdf-grouped')
-  @Roles(Role.ORGANIZER, Role.ADMIN)
+  @Roles(Role.ORGANIZER, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
     summary: 'Export all valid tickets — 4 per A4 page (2×2 grid)',
     description:
@@ -200,8 +203,8 @@ export class TicketsController {
     @CurrentUser() user: any,
     @Res() res: Response,
   ) {
-    // Verify organizer access
     await this.ticketsService.findAllForEvent(eventId, user.id, user.role, 1, 1);
+    await this.subscriptionService.checkBulkExport(user.id);
 
     const pdfBuffer = await this.exportService.generateGroupedEventTicketsPDF(eventId);
 
@@ -215,7 +218,7 @@ export class TicketsController {
   }
 
   @Post('tickets/export/pdf-grouped/selection')
-  @Roles(Role.ORGANIZER, Role.ADMIN)
+  @Roles(Role.ORGANIZER, Role.ADMIN, Role.SUPER_ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Export a selection of tickets — 4 per A4 page',
@@ -231,6 +234,7 @@ export class TicketsController {
     @Res() res: Response,
   ) {
     await this.ticketsService.findAllForEvent(eventId, user.id, user.role, 1, 1);
+    await this.subscriptionService.checkBulkExport(user.id);
 
     const pdfBuffer = await this.exportService.generateGroupedSelectionPDF(
       eventId,

@@ -46,7 +46,7 @@ export function LoginForm() {
         <>
           <div>
             <label className="block text-sm font-medium text-white/80 mb-1.5">
-              Email address
+              Adresse e-mail
             </label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
@@ -66,12 +66,12 @@ export function LoginForm() {
 
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-sm font-medium text-white/80">Password</label>
+              <label className="block text-sm font-medium text-white/80">Mot de passe</label>
               <a
                 href="/auth/forgot-password"
                 className="text-xs text-indigo-300 hover:text-white transition-colors"
               >
-                Forgot password?
+                Mot de passe oublié ?
               </a>
             </div>
             <div className="relative">
@@ -105,8 +105,8 @@ export function LoginForm() {
         >
           <div className="text-center">
             <ShieldCheck className="h-12 w-12 text-indigo-300 mx-auto mb-3" />
-            <p className="text-white font-semibold">Two-Factor Authentication</p>
-            <p className="text-white/60 text-sm mt-1">Enter the 6-digit code from your authenticator app</p>
+            <p className="text-white font-semibold">Authentification à deux facteurs</p>
+            <p className="text-white/60 text-sm mt-1">Entrez le code à 6 chiffres de votre application d&apos;authentification</p>
           </div>
           <div>
             <input
@@ -132,12 +132,12 @@ export function LoginForm() {
         {login.isPending ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin" />
-            Signing in...
+            Connexion en cours...
           </>
         ) : requires2FA ? (
-          'Verify Code'
+          'Vérifier le code'
         ) : (
-          'Sign In'
+          'Se connecter'
         )}
       </button>
     </motion.form>

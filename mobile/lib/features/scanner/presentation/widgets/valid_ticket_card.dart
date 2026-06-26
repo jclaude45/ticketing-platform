@@ -135,7 +135,7 @@ class _ValidTicketCardState extends State<ValidTicketCard>
             child: Column(
               children: [
                 Text(
-                  'VALID TICKET',
+                  'TICKET VALIDE',
                   style: GoogleFonts.rajdhani(
                     fontSize: 32,
                     fontWeight: FontWeight.w800,
@@ -153,7 +153,7 @@ class _ValidTicketCardState extends State<ValidTicketCard>
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
-                      'Validated Offline',
+                      'Validé hors ligne',
                       style: GoogleFonts.inter(
                         fontSize: 11,
                         color: AppColors.statusOffline,
@@ -188,7 +188,7 @@ class _ValidTicketCardState extends State<ValidTicketCard>
                   if (widget.result.holderName != null)
                     _InfoRow(
                       icon: Icons.person_outline_rounded,
-                      label: 'Holder',
+                      label: 'Titulaire',
                       value: widget.result.holderName!,
                       color: AppColors.validGreen,
                     ),
@@ -196,7 +196,7 @@ class _ValidTicketCardState extends State<ValidTicketCard>
                     const SizedBox(height: 12),
                     _InfoRow(
                       icon: Icons.confirmation_number_outlined,
-                      label: 'Serial',
+                      label: 'N° Série',
                       value: widget.result.serialNumber!,
                       color: AppColors.validGreen,
                     ),
@@ -214,7 +214,7 @@ class _ValidTicketCardState extends State<ValidTicketCard>
                     const SizedBox(height: 12),
                     _InfoRow(
                       icon: Icons.event_seat_outlined,
-                      label: 'Seat',
+                      label: 'Siège',
                       value: '${widget.result.zone != null ? "${widget.result.zone} - " : ""}${widget.result.seat}',
                       color: AppColors.validGreen,
                     ),
@@ -222,7 +222,7 @@ class _ValidTicketCardState extends State<ValidTicketCard>
                   const SizedBox(height: 12),
                   _InfoRow(
                     icon: Icons.access_time_rounded,
-                    label: 'Scanned At',
+                    label: 'Heure de scan',
                     value: AppDateUtils.formatShortTime(widget.result.scannedAt),
                     color: AppColors.validGreen,
                   ),

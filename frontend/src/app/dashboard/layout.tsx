@@ -29,7 +29,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
             </svg>
           </div>
-          <p className="text-gray-500 dark:text-gray-400 text-sm">Loading...</p>
+          <p className="text-gray-500 dark:text-gray-400 text-sm">Chargement...</p>
         </div>
       </div>
     );
@@ -56,7 +56,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <Header />
         <motion.main
-          className="flex-1 overflow-y-auto p-4 lg:p-6"
+          className="flex-1 overflow-y-auto p-4 md:p-5 lg:p-6"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2 }}

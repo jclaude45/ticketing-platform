@@ -15,6 +15,11 @@ export class UpdateUserDto {
   @MinLength(1)
   @MaxLength(50)
   lastName?: string;
+
+  @ApiPropertyOptional({ example: 'https://...' })
+  @IsOptional()
+  @IsString()
+  avatar?: string;
 }
 
 export class ChangePasswordDto {

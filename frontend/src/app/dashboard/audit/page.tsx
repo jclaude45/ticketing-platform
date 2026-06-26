@@ -89,7 +89,7 @@ export default function HistoriquePage() {
   const scanned    = logs.filter((l) => l.action === 'ticket.scan').length;
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6 p-4 sm:p-6">
 
       {/* Header */}
       <div className="flex items-center justify-between">

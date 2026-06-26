@@ -25,7 +25,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     const token = getAccessToken();
     if (!token) return;
 
-    const socket = io(SOCKET_URL, {
+    const socket = io(`${SOCKET_URL}/realtime`, {
       auth: { token },
       transports: ['websocket'],
       autoConnect: true,

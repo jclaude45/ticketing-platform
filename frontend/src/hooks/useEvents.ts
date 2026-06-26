@@ -64,8 +64,10 @@ export function useCreateEvent() {
       toast.success('Event created successfully!');
       router.push(`/dashboard/events/${res.data.data.id}`);
     },
-    onError: (error: { response?: { data?: { message?: string } } }) => {
-      toast.error(error.response?.data?.message ?? 'Failed to create event');
+    onError: (error: any) => {
+      if (error?.response?.status !== 403) {
+        toast.error(error.response?.data?.message ?? 'Failed to create event');
+      }
     },
   });
 }

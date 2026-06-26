@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { CryptoService } from '../crypto/crypto.service';
+import { SubscriptionService } from '../subscription/subscription.service';
 import { Role, TeamMemberRole } from '@prisma/client';
 import {
   CreateTeamMemberDto, UpdateTeamMemberDto,
@@ -11,7 +12,13 @@ import {
 } from './dto/team.dto';
 import * as PDFDocument from 'pdfkit';
 import * as QRCode from 'qrcode';
+import * as sharp from 'sharp';
+import * as fs from 'fs';
+import * as path from 'path';
 import * as XLSX from 'xlsx';
+
+const LOGO_SVG_PATH = path.join(__dirname, '../../assets/powered-logo.svg');
+const LOGO_ASPECT = 1109 / 300;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -80,21 +87,35 @@ async function fetchImageBuffer(url: string): Promise<Buffer | null> {
 
 @Injectable()
 export class TeamService {
+  private _logoBuffer: Buffer | null = null;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly crypto: CryptoService,
     private readonly config: ConfigService,
+    private readonly subscriptionService: SubscriptionService,
   ) {}
 
   private get qrSecret(): string {
     return this.config.get<string>('jwt.secret') ?? 'fallback-dev-secret';
   }
 
+  private async _getLogoBuffer(): Promise<Buffer> {
+    if (this._logoBuffer) return this._logoBuffer;
+    try {
+      const svgRaw = fs.readFileSync(LOGO_SVG_PATH, 'utf-8');
+      this._logoBuffer = await (sharp as any)(Buffer.from(svgRaw, 'utf-8')).resize(600, Math.round(600 / LOGO_ASPECT)).png().toBuffer();
+    } catch {
+      this._logoBuffer = Buffer.alloc(0);
+    }
+    return this._logoBuffer!;
+  }
+
   private async assertAccess(eventId: string, organizerId: string, organizerRole: Role) {
     const event = await this.prisma.event.findUnique({ where: { id: eventId }, select: { organizerId: true } });
     if (!event) throw new NotFoundException('Event not found');
-    if (organizerRole !== Role.ADMIN && event.organizerId !== organizerId) {
+    if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && event.organizerId !== organizerId) {
       throw new ForbiddenException('Access denied');
     }
   }
@@ -372,6 +393,9 @@ export class TeamService {
     if (!member) throw new NotFoundException('Team member not found');
     if (!member.accreditation) throw new NotFoundException('No accreditation found for this member');
 
+    // Enforce badge quota
+    await this.subscriptionService.checkAndIncrementBadges(organizerId, 1);
+
     const acc = member.accreditation;
     const cfg = mergeConfig(member.role, acc.badgeConfig);
     const zones = (acc.zones as string[]) ?? [];
@@ -404,6 +428,9 @@ export class TeamService {
       color: { dark: cfg.primaryColor, light: cfg.backgroundColor },
     });
 
+    const showLogo = await this.subscriptionService.getShowPoweredBy(organizerId);
+    const logoBuf = showLogo ? await this._getLogoBuffer() : Buffer.alloc(0);
+
     return new Promise((resolve, reject) => {
       const chunks: Buffer[] = [];
       const doc = new PDFDocument({ size: [W, H], margin: 0, autoFirstPage: false });
@@ -413,9 +440,9 @@ export class TeamService {
       doc.addPage({ size: [W, H], margin: 0 });
 
       if (isVertical) {
-        this._renderVertical(doc, W, H, member, acc, cfg, zones, photoBuffer, qrBuffer);
+        this._renderVertical(doc, W, H, member, acc, cfg, zones, photoBuffer, qrBuffer, logoBuf);
       } else {
-        this._renderHorizontal(doc, W, H, member, acc, cfg, zones, photoBuffer, qrBuffer);
+        this._renderHorizontal(doc, W, H, member, acc, cfg, zones, photoBuffer, qrBuffer, logoBuf);
       }
 
       doc.end();
@@ -423,7 +450,7 @@ export class TeamService {
     });
   }
 
-  private _renderHorizontal(doc: any, W: number, H: number, member: any, acc: any, cfg: BadgeConfig, zones: string[], photo: Buffer | null, qr: Buffer) {
+  private _renderHorizontal(doc: any, W: number, H: number, member: any, acc: any, cfg: BadgeConfig, zones: string[], photo: Buffer | null, qr: Buffer, logoBuf?: Buffer) {
     // Background
     doc.rect(0, 0, W, H).fill(cfg.backgroundColor);
 
@@ -472,7 +499,17 @@ export class TeamService {
 
     // QR code
     if (cfg.showQR) {
-      try { doc.image(qr, W - qrSize - 8, 22, { width: qrSize, height: qrSize }); } catch {}
+      const qrX = W - qrSize - 8;
+      try {
+        doc.image(qr, qrX, 22, { width: qrSize, height: qrSize });
+        if (logoBuf && logoBuf.length > 0) {
+          const logoW = qrSize;
+          const logoH = Math.round(logoW / LOGO_ASPECT);
+          const logoY = 22 + qrSize + 3;
+          doc.save().fillColor('#FFFFFF').roundedRect(qrX, logoY - 2, logoW, logoH + 4, 2).fill().restore();
+          doc.image(logoBuf, qrX, logoY, { width: logoW, height: logoH });
+        }
+      } catch {}
     }
 
     // Zones
@@ -504,7 +541,7 @@ export class TeamService {
     this._renderRevokedWatermark(doc, W, H, acc);
   }
 
-  private _renderVertical(doc: any, W: number, H: number, member: any, acc: any, cfg: BadgeConfig, zones: string[], photo: Buffer | null, qr: Buffer) {
+  private _renderVertical(doc: any, W: number, H: number, member: any, acc: any, cfg: BadgeConfig, zones: string[], photo: Buffer | null, qr: Buffer, logoBuf?: Buffer) {
     // Background
     doc.rect(0, 0, W, H).fill(cfg.backgroundColor);
 
@@ -596,7 +633,14 @@ export class TeamService {
       const qrX = (W - qrSize) / 2;
       try {
         doc.image(qr, qrX, currentY, { width: qrSize, height: qrSize });
-        currentY += qrSize + 8;
+        currentY += qrSize + 4;
+        if (logoBuf && logoBuf.length > 0) {
+          const logoW = qrSize;
+          const logoH = Math.round(logoW / LOGO_ASPECT);
+          doc.save().fillColor('#FFFFFF').roundedRect(qrX, currentY - 2, logoW, logoH + 4, 2).fill().restore();
+          doc.image(logoBuf, qrX, currentY, { width: logoW, height: logoH });
+          currentY += logoH + 4;
+        }
       } catch {}
     }
 

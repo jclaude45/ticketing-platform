@@ -24,7 +24,7 @@ export class TicketsService {
     const event = await this.prisma.event.findUnique({ where: { id: eventId } });
     if (!event) throw new NotFoundException('Event not found');
 
-    if (requesterRole !== Role.ADMIN && event.organizerId !== requesterId) {
+    if (requesterRole !== Role.ADMIN && requesterRole !== Role.SUPER_ADMIN && event.organizerId !== requesterId) {
       throw new ForbiddenException('Access denied');
     }
 
@@ -87,7 +87,7 @@ export class TicketsService {
 
     if (!ticket) throw new NotFoundException('Ticket not found');
 
-    if (requesterRole !== Role.ADMIN && ticket.event.organizerId !== requesterId) {
+    if (requesterRole !== Role.ADMIN && requesterRole !== Role.SUPER_ADMIN && ticket.event.organizerId !== requesterId) {
       throw new ForbiddenException('Access denied');
     }
 
@@ -121,7 +121,7 @@ export class TicketsService {
 
     if (!ticket) throw new NotFoundException('Ticket not found');
 
-    if (requesterRole !== Role.ADMIN && ticket.event.organizerId !== requesterId) {
+    if (requesterRole !== Role.ADMIN && requesterRole !== Role.SUPER_ADMIN && ticket.event.organizerId !== requesterId) {
       throw new ForbiddenException('Access denied');
     }
 
@@ -142,7 +142,7 @@ export class TicketsService {
 
     if (!ticket) throw new NotFoundException('Ticket not found');
 
-    if (requesterRole !== Role.ADMIN && ticket.event.organizerId !== requesterId) {
+    if (requesterRole !== Role.ADMIN && requesterRole !== Role.SUPER_ADMIN && ticket.event.organizerId !== requesterId) {
       throw new ForbiddenException('Access denied');
     }
 
@@ -175,7 +175,7 @@ export class TicketsService {
           continue;
         }
 
-        if (requesterRole !== Role.ADMIN && ticket.event.organizerId !== requesterId) {
+        if (requesterRole !== Role.ADMIN && requesterRole !== Role.SUPER_ADMIN && ticket.event.organizerId !== requesterId) {
           results.failed++;
           results.errors.push(`${ticketId}: Access denied`);
           continue;

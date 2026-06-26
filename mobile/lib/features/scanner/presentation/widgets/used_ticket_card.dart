@@ -117,7 +117,7 @@ class _UsedTicketCardState extends State<UsedTicketCard>
             child: Column(
               children: [
                 Text(
-                  'ALREADY USED',
+                  'DÉJÀ UTILISÉ',
                   style: GoogleFonts.rajdhani(
                     fontSize: 30,
                     fontWeight: FontWeight.w800,
@@ -127,7 +127,7 @@ class _UsedTicketCardState extends State<UsedTicketCard>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'This ticket has been validated',
+                  'Ce ticket a déjà été validé',
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     color: AppColors.usedRedLight.withOpacity(0.7),
@@ -168,7 +168,7 @@ class _UsedTicketCardState extends State<UsedTicketCard>
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        'First Use Details',
+                        'Détails de la première utilisation',
                         style: GoogleFonts.inter(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
@@ -182,20 +182,20 @@ class _UsedTicketCardState extends State<UsedTicketCard>
 
                   if (widget.result.holderName != null)
                     _DetailRow(
-                      label: 'Holder',
+                      label: 'Titulaire',
                       value: widget.result.holderName!,
                     ),
                   if (widget.result.serialNumber != null) ...[
                     const SizedBox(height: 10),
                     _DetailRow(
-                      label: 'Serial',
+                      label: 'N° Série',
                       value: widget.result.serialNumber!,
                     ),
                   ],
                   if (widget.result.usedAt != null) ...[
                     const SizedBox(height: 10),
                     _DetailRow(
-                      label: 'Used at',
+                      label: 'Utilisé à',
                       value: AppDateUtils.formatDateTime(widget.result.usedAt!),
                       highlight: true,
                     ),
@@ -203,14 +203,14 @@ class _UsedTicketCardState extends State<UsedTicketCard>
                   if (widget.result.usedBy != null) ...[
                     const SizedBox(height: 10),
                     _DetailRow(
-                      label: 'Scanned by',
+                      label: 'Scanné par',
                       value: widget.result.usedBy!,
                     ),
                   ],
                   if (widget.result.usedAtGate != null) ...[
                     const SizedBox(height: 10),
                     _DetailRow(
-                      label: 'At gate',
+                      label: 'À l\'entrée',
                       value: widget.result.usedAtGate!,
                     ),
                   ],
@@ -234,7 +234,7 @@ class _UsedTicketCardState extends State<UsedTicketCard>
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Deny entry. Alert supervisor if persistent.',
+                            'Refuser l\'accès. Alerter le responsable si persistant.',
                             style: GoogleFonts.inter(
                               fontSize: 12,
                               color: AppColors.usedRedLight.withOpacity(0.8),

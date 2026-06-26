@@ -25,7 +25,7 @@ interface Notification {
 }
 
 export const useUIStore = create<UIState>((set) => ({
-  sidebarOpen: true,
+  sidebarOpen: false,
   sidebarCollapsed: false,
   theme: 'system',
   activeModal: null,

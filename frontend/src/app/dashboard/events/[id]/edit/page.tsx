@@ -10,21 +10,21 @@ export default function EditEventPage() {
   const { id } = useParams<{ id: string }>();
   const { data: event, isLoading } = useEvent(id);
 
-  if (isLoading) return <PageLoader text="Loading event..." />;
-  if (!event) return <div className="text-center py-12 text-gray-500">Event not found</div>;
+  if (isLoading) return <PageLoader text="Chargement de l'événement..." />;
+  if (!event) return <div className="text-center py-12 text-gray-500">Événement introuvable</div>;
 
   return (
     <div className="max-w-5xl mx-auto">
       <PageHeader
-        title="Edit Event"
-        description={`Editing: ${event.name}`}
+        title="Modifier l'événement"
+        description={`Modification : ${event.name}`}
         breadcrumbs={[
-          { label: 'Events', href: '/dashboard/events' },
+          { label: 'Événements', href: '/dashboard/events' },
           { label: event.name, href: `/dashboard/events/${id}` },
-          { label: 'Edit' },
+          { label: 'Modifier' },
         ]}
       />
-      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm p-6">
+      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm p-4 sm:p-6">
         <EventForm event={event} isEdit />
       </div>
     </div>

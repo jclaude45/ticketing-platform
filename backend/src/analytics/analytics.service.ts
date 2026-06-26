@@ -18,7 +18,7 @@ export class AnalyticsService {
       select: { id: true, organizerId: true },
     });
     if (!event) throw new ForbiddenException('Event not found');
-    if (organizerRole !== Role.ADMIN && event.organizerId !== organizerId) {
+    if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && event.organizerId !== organizerId) {
       throw new ForbiddenException('Access denied');
     }
 
@@ -86,8 +86,8 @@ export class AnalyticsService {
     const cached = await this.redisService.cacheGet<any>(cacheKey);
     if (cached) return cached;
 
-    const where = organizerRole === Role.ADMIN ? {} : { organizerId };
-    const eventWhere = organizerRole === Role.ADMIN ? {} : { event: { organizerId } };
+    const where = organizerRole === Role.ADMIN || organizerRole === Role.SUPER_ADMIN ? {} : { organizerId };
+    const eventWhere = organizerRole === Role.ADMIN || organizerRole === Role.SUPER_ADMIN ? {} : { event: { organizerId } };
 
     const [
       totalEvents,
@@ -108,7 +108,7 @@ export class AnalyticsService {
       this.prisma.ticket.count({ where: { event: { ...where }, status: 'USED' } }),
       this.prisma.ticket.count({ where: { event: { ...where }, status: 'CANCELLED' } }),
       this.prisma.ticket.count({ where: { event: { ...where }, status: 'FRAUDULENT' } }),
-      this.prisma.controller.count({ where: organizerRole === Role.ADMIN ? {} : { organizerId } }),
+      this.prisma.controller.count({ where: organizerRole === Role.ADMIN || organizerRole === Role.SUPER_ADMIN ? {} : { organizerId } }),
       this.prisma.scanValidation.count({ where: { ticket: { event: { ...where } } } }),
       this.prisma.scanValidation.findMany({
         where: { ticket: { event: { ...where } } },
@@ -156,7 +156,7 @@ export class AnalyticsService {
     const event = await this.prisma.event.findUnique({ where: { id: eventId } });
     if (!event) throw new Error('Event not found');
 
-    if (organizerRole !== Role.ADMIN && event.organizerId !== organizerId) {
+    if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && event.organizerId !== organizerId) {
       throw new ForbiddenException('Access denied');
     }
 
@@ -205,7 +205,7 @@ export class AnalyticsService {
     });
     if (!event) throw new Error('Event not found');
 
-    if (organizerRole !== Role.ADMIN && event.organizerId !== organizerId) {
+    if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && event.organizerId !== organizerId) {
       throw new ForbiddenException('Access denied');
     }
 
@@ -244,7 +244,7 @@ export class AnalyticsService {
   }
 
   async getTopEvents(organizerId: string, organizerRole: Role, limit: number = 5) {
-    const where = organizerRole === Role.ADMIN ? {} : { organizerId };
+    const where = organizerRole === Role.ADMIN || organizerRole === Role.SUPER_ADMIN ? {} : { organizerId };
 
     const events = await this.prisma.event.findMany({
       where,
@@ -277,8 +277,8 @@ export class AnalyticsService {
     const cached = await this.redisService.cacheGet<any>(cacheKey);
     if (cached) return cached;
 
-    const where       = organizerRole === Role.ADMIN ? {} : { organizerId };
-    const ticketWhere = organizerRole === Role.ADMIN ? {} : { event: { organizerId } };
+    const where       = organizerRole === Role.ADMIN || organizerRole === Role.SUPER_ADMIN ? {} : { organizerId };
+    const ticketWhere = organizerRole === Role.ADMIN || organizerRole === Role.SUPER_ADMIN ? {} : { event: { organizerId } };
 
     const now             = new Date();
     const twelveMonthsAgo = new Date(now.getFullYear() - 1, now.getMonth(), 1);
@@ -394,7 +394,7 @@ export class AnalyticsService {
   }
 
   async getRevenueStats(organizerId: string, organizerRole: Role) {
-    const where = organizerRole === Role.ADMIN ? {} : { event: { organizerId } };
+    const where = organizerRole === Role.ADMIN || organizerRole === Role.SUPER_ADMIN ? {} : { event: { organizerId } };
 
     const tickets = await this.prisma.ticket.findMany({
       where: {
@@ -422,7 +422,7 @@ export class AnalyticsService {
     const event = await this.prisma.event.findUnique({ where: { id: eventId } });
     if (!event) throw new Error('Event not found');
 
-    if (organizerRole !== Role.ADMIN && event.organizerId !== organizerId) {
+    if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && event.organizerId !== organizerId) {
       throw new ForbiddenException('Access denied');
     }
 

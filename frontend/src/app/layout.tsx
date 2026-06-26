@@ -14,18 +14,21 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: 'SecureTicket — Event Ticketing Platform',
-    template: '%s | SecureTicket',
+    default: 'ZAYA — Event Ticketing Platform',
+    template: '%s | ZAYA',
   },
-  description: 'Secure, scalable event ticketing and access control platform',
+  description: "Plateforme de billetterie et contrôle d'accès événementiel",
   keywords: ['ticketing', 'events', 'qr code', 'access control'],
-  authors: [{ name: 'SecureTicket' }],
-  creator: 'SecureTicket',
+  authors: [{ name: 'ZAYA' }],
+  creator: 'ZAYA',
+  other: {
+    'google': 'notranslate',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="fr" translate="no" suppressHydrationWarning>
       <body className={`${inter.variable} font-sans antialiased`} suppressHydrationWarning>
         <QueryProvider>
           <AuthProvider>

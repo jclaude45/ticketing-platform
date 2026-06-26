@@ -50,11 +50,11 @@ export function DataTable<T extends { id: string }>({
   columns,
   isLoading,
   searchable = true,
-  searchPlaceholder = 'Search...',
+  searchPlaceholder = 'Rechercher...',
   selectable,
   onSelectionChange,
   actions,
-  emptyMessage = 'No data found',
+  emptyMessage = 'Aucune donnée',
   totalItems,
   page = 1,
   pageSize = 10,
@@ -132,7 +132,7 @@ export function DataTable<T extends { id: string }>({
           </div>
           {selected.size > 0 && (
             <span className="text-sm text-gray-500 dark:text-gray-400">
-              {selected.size} selected
+              {selected.size} sélectionné(s)
             </span>
           )}
         </div>
@@ -178,7 +178,7 @@ export function DataTable<T extends { id: string }>({
                   </div>
                 </th>
               ))}
-              {actions && <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Actions</th>}
+              {actions && <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Opérations</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -238,7 +238,7 @@ export function DataTable<T extends { id: string }>({
       {totalPages > 1 && (
         <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-            <span>Rows per page:</span>
+            <span>Lignes par page :</span>
             <select
               value={pageSize}
               onChange={(e) => onPageSizeChange?.(Number(e.target.value))}
@@ -251,7 +251,7 @@ export function DataTable<T extends { id: string }>({
           </div>
           <div className="flex items-center gap-1">
             <span className="text-sm text-gray-500 dark:text-gray-400 mr-2">
-              Page {page} of {totalPages}
+              Page {page} sur {totalPages}
             </span>
             <button
               onClick={() => onPageChange?.(page - 1)}

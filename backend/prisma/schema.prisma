@@ -10,9 +10,39 @@ datasource db {
 }
 
 enum Role {
+  SUPER_ADMIN
   ADMIN
   ORGANIZER
   CONTROLLER
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  WHATSAPP
+}
+
+enum CampaignType {
+  INVITATION
+  CONFIRMATION
+  REMINDER_7D
+  REMINDER_1D
+  CUSTOM
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  SENT
+  PARTIALLY_SENT
+  FAILED
+}
+
+enum RecipientStatus {
+  PENDING
+  SENT
+  FAILED
 }
 
 enum TicketStatus {
@@ -65,14 +95,22 @@ model User {
   passwordResetExpiry   DateTime?
   refreshToken          String?
   isActive              Boolean   @default(true)
+  avatar                String?
   lastLoginAt           DateTime?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  events      Event[]
-  controllers Controller[]
-  keyPairs    KeyPair[]
-  auditLogs   AuditLog[]
+  events       Event[]
+  controllers  Controller[]
+  keyPairs     KeyPair[]
+  auditLogs    AuditLog[]
+  subscription OrganizerSubscription?
+  sentInvitations    ProjectInvitation[] @relation("SentInvitations")
+  projectMemberships ProjectMember[]
+  taskAssignments    TaskAssignee[]
+  notificationTemplates NotificationTemplate[] @relation("UserTemplates")
+  notificationCampaigns NotificationCampaign[] @relation("UserCampaigns")
+  notifications         Notification[]
 }
 
 model Event {
@@ -98,6 +136,11 @@ model Event {
   controllerEvents  ControllerEvent[]
   teamMembers       TeamMember[]
   accreditations    Accreditation[]
+  tasks             EventTask[]
+  budgetLines       BudgetLine[]
+  projectInvitations ProjectInvitation[]
+  projectMembers     ProjectMember[]
+  campaigns          NotificationCampaign[]
 }
 
 model TeamMember {
@@ -250,4 +293,199 @@ model KeyPair {
   expiresAt   DateTime?
 
   organizer User @relation(fields: [organizerId], references: [id])
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  SUSPENDED
+}
+
+model SubscriptionPlan {
+  id              String   @id @default(uuid())
+  name            String   @unique
+  description     String?
+  price           Float    @default(0)
+  maxTickets      Int      @default(200)
+  maxBadges       Int      @default(50)
+  maxEvents       Int      @default(-1)
+  showPoweredBy        Boolean  @default(true)
+  allowBulkExport      Boolean  @default(true)
+  allowCommunication   Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  subscriptions OrganizerSubscription[]
+}
+
+model OrganizerSubscription {
+  id          String             @id @default(uuid())
+  organizerId String             @unique
+  planId      String
+  status      SubscriptionStatus @default(ACTIVE)
+  ticketsUsed Int                @default(0)
+  badgesUsed  Int                @default(0)
+  startsAt    DateTime           @default(now())
+  expiresAt   DateTime?
+  notes       String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  organizer User             @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  plan      SubscriptionPlan @relation(fields: [planId], references: [id])
+}
+
+model EventTask {
+  id           String    @id @default(uuid())
+  eventId      String
+  event        Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  title        String
+  description  String?
+  status       String    @default("TODO")
+  priority     String    @default("MEDIUM")
+  category     String?
+  assigneeName String?
+  assigneeId   String?
+  dueDate      DateTime?
+  position     Int       @default(0)
+  startDate    DateTime?
+  assignees    TaskAssignee[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model BudgetLine {
+  id            String          @id @default(uuid())
+  eventId       String
+  event         Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  category      String
+  label         String
+  plannedAmount Float           @default(0)
+  expenses      BudgetExpense[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+}
+
+model BudgetExpense {
+  id           String     @id @default(uuid())
+  budgetLineId String
+  budgetLine   BudgetLine @relation(fields: [budgetLineId], references: [id], onDelete: Cascade)
+  label        String
+  amount       Float
+  date         DateTime   @default(now())
+  notes        String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model TaskAssignee {
+  id        String    @id @default(uuid())
+  taskId    String
+  task      EventTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+
+  @@unique([taskId, userId])
+}
+
+model ProjectInvitation {
+  id          String    @id @default(uuid())
+  eventId     String
+  event       Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  email       String
+  firstName   String
+  lastName    String
+  projectRole String    @default("CONTRIBUTOR")
+  token       String    @unique
+  status      String    @default("PENDING")
+  invitedById String
+  invitedBy   User      @relation("SentInvitations", fields: [invitedById], references: [id])
+  acceptedAt  DateTime?
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model ProjectMember {
+  id          String   @id @default(uuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectRole String   @default("CONTRIBUTOR")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([eventId, userId])
+}
+
+model NotificationTemplate {
+  id          String              @id @default(uuid())
+  name        String
+  channel     NotificationChannel
+  subject     String?
+  body        String              @db.Text
+  isDefault   Boolean             @default(false)
+  organizerId String
+  organizer   User                @relation("UserTemplates", fields: [organizerId], references: [id], onDelete: Cascade)
+  campaigns   NotificationCampaign[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+}
+
+model NotificationCampaign {
+  id          String              @id @default(uuid())
+  name        String
+  eventId     String
+  event       Event               @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  channel     NotificationChannel
+  type        CampaignType        @default(CUSTOM)
+  subject     String?
+  body        String              @db.Text
+  templateId  String?
+  template    NotificationTemplate? @relation(fields: [templateId], references: [id])
+  scheduledAt DateTime?
+  sentAt      DateTime?
+  status      CampaignStatus      @default(DRAFT)
+  totalSent   Int                 @default(0)
+  totalFailed Int                 @default(0)
+  createdById String
+  createdBy   User                @relation("UserCampaigns", fields: [createdById], references: [id])
+  recipients  CampaignRecipient[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+}
+
+model CampaignRecipient {
+  id          String          @id @default(uuid())
+  campaignId  String
+  campaign    NotificationCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  email       String?
+  phone       String?
+  firstName   String
+  lastName    String
+  ticketId    String?
+  status      RecipientStatus @default(PENDING)
+  sentAt      DateTime?
+  error       String?
+  createdAt   DateTime        @default(now())
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      String   @default("info")
+  read      Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
 }

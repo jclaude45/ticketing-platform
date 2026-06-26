@@ -44,7 +44,7 @@ export default function EventAnalyticsPage() {
   const remaining = (analytics?.totalTickets ?? 0) - (analytics?.scannedTickets ?? 0);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6 p-4 sm:p-6">
 
       {/* Header */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -56,7 +56,7 @@ export default function EventAnalyticsPage() {
             <ArrowLeft className="h-4 w-4" />
             {event?.name ?? 'Événement'}
           </button>
-          <h1 className="text-2xl font-bold text-gray-900">Analytics de l'événement</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Analytique de l'événement</h1>
           {event?.startDate && (
             <p className="text-sm text-gray-500 mt-0.5">
               {format(new Date(event.startDate), "EEEE d MMMM yyyy 'à' HH:mm", { locale: fr })}
@@ -81,7 +81,7 @@ export default function EventAnalyticsPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatsCard
           title="Billets générés"
           value={analytics?.totalTickets ?? 0}

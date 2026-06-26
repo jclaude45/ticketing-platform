@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { RegisterForm } from '@/components/auth/RegisterForm';
 
-export const metadata: Metadata = { title: 'Create Account' };
+export const metadata: Metadata = { title: 'Créer un compte' };
 
 export default function RegisterPage() {
   return (
@@ -13,16 +13,16 @@ export default function RegisterPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2H5z" />
             </svg>
           </div>
-          <h1 className="text-3xl font-bold text-white">Create Account</h1>
-          <p className="text-indigo-200 mt-2">Start managing your events today</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-white">Créer un compte</h1>
+          <p className="text-indigo-200 mt-2">Commencez à gérer vos événements dès aujourd&apos;hui</p>
         </div>
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 shadow-2xl p-8">
+        <div className="bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 shadow-2xl p-5 sm:p-8">
           <RegisterForm />
         </div>
         <p className="text-center text-indigo-200 text-sm mt-6">
-          Already have an account?{' '}
+          Vous avez déjà un compte ?{' '}
           <a href="/auth/login" className="text-indigo-300 hover:text-white font-semibold underline underline-offset-2 transition-colors">
-            Sign in
+            Se connecter
           </a>
         </p>
       </div>

@@ -1,8 +1,9 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { BarChart3, Calendar, CheckCircle2, Ticket, TrendingUp } from 'lucide-react';
+import { BarChart3, Calendar, CheckCircle2, Ticket, TrendingUp, CreditCard, Users, Infinity, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line,
 } from 'recharts';
@@ -12,6 +13,76 @@ import { StatsCard } from '@/components/analytics/StatsCard';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { formatDate, formatNumber, getStatusColor } from '@/lib/utils';
 import { cn } from '@/lib/utils';
+import { subscriptionApi } from '@/lib/api';
+import { useAuthStore } from '@/store/auth.store';
+import type { OrganizerLimits } from '@/types';
+
+function QuotaBar({ used, max, color }: { used: number; max: number; color: string }) {
+  if (max === -1) return <p className="text-xs text-indigo-500 flex items-center gap-1 mt-1"><Infinity className="h-3 w-3" /> Illimité</p>;
+  const pct = Math.min(100, (used / max) * 100);
+  const barColor = pct > 90 ? 'bg-red-500' : pct > 70 ? 'bg-amber-500' : color;
+  return (
+    <div>
+      <div className="flex justify-between text-xs text-gray-500 mb-1">
+        <span>{used.toLocaleString('fr-FR')} utilisés</span>
+        <span>{max.toLocaleString('fr-FR')} max</span>
+      </div>
+      <div className="h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+        <div className={cn('h-full rounded-full transition-all', barColor)} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function SubscriptionWidget() {
+  const { user } = useAuthStore();
+  const { data, isLoading } = useQuery({
+    queryKey: ['my-subscription'],
+    queryFn: () => subscriptionApi.getMySubscription().then(r => r.data.data),
+    enabled: !!user && (user.role === 'ORGANIZER' || user.role === 'ADMIN'),
+  });
+
+  if (!user || (user.role !== 'ORGANIZER' && user.role !== 'ADMIN')) return null;
+  if (isLoading) return <div className="h-28 rounded-xl bg-gray-100 dark:bg-gray-800 animate-pulse" />;
+
+  const limits: OrganizerLimits = data?.limits ?? { maxTickets: 200, maxBadges: 50, maxEvents: -1, showPoweredBy: true, allowBulkExport: true, allowCommunication: false, ticketsUsed: 0, badgesUsed: 0 };
+  const planName = data?.subscription?.plan?.name ?? 'Gratuit';
+  const isNearTicketLimit = limits.maxTickets !== -1 && limits.ticketsUsed / limits.maxTickets > 0.85;
+  const isNearBadgeLimit  = limits.maxBadges  !== -1 && limits.badgesUsed  / limits.maxBadges  > 0.85;
+
+  return (
+    <motion.div variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0 } }}
+      className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5 shadow-sm"
+    >
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+            <CreditCard className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-gray-900 dark:text-white">Mon abonnement</p>
+            <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">{planName}</p>
+          </div>
+        </div>
+        {(isNearTicketLimit || isNearBadgeLimit) && (
+          <span className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/20 px-2.5 py-1 rounded-full">
+            <AlertTriangle className="h-3 w-3" /> Quota proche
+          </span>
+        )}
+      </div>
+      <div className="space-y-3">
+        <div>
+          <p className="text-xs font-medium text-gray-500 flex items-center gap-1 mb-1"><Ticket className="h-3 w-3" /> Billets</p>
+          <QuotaBar used={limits.ticketsUsed} max={limits.maxTickets} color="bg-indigo-500" />
+        </div>
+        <div>
+          <p className="text-xs font-medium text-gray-500 flex items-center gap-1 mb-1"><Users className="h-3 w-3" /> Badges accréditation</p>
+          <QuotaBar used={limits.badgesUsed} max={limits.maxBadges} color="bg-purple-500" />
+        </div>
+      </div>
+    </motion.div>
+  );
+}
 
 
 const containerVariants = {
@@ -28,7 +99,7 @@ export default function DashboardPage() {
   const { data: analytics, isLoading: analyticsLoading } = useGlobalAnalytics();
   const { data: eventsData, isLoading: eventsLoading } = useEvents();
 
-  if (analyticsLoading) return <PageLoader text="Loading dashboard..." />;
+  if (analyticsLoading) return <PageLoader text="Chargement du tableau de bord..." />;
 
   // Compute month-over-month % change; returns null when no previous data
   const mom = (analytics as any)?.mom;
@@ -49,7 +120,7 @@ export default function DashboardPage() {
 
   const stats = [
     {
-      title: 'Total Events',
+      title: 'Total événements',
       value: formatNumber(analytics?.totalEvents ?? 0),
       change: eventsChange?.label,
       changeType: eventsChange?.type ?? 'neutral',
@@ -57,7 +128,7 @@ export default function DashboardPage() {
       color: 'indigo' as const,
     },
     {
-      title: 'Total Tickets',
+      title: 'Total billets',
       value: formatNumber(analytics?.totalTickets ?? 0),
       change: ticketsChange?.label,
       changeType: ticketsChange?.type ?? 'neutral',
@@ -65,7 +136,7 @@ export default function DashboardPage() {
       color: 'purple' as const,
     },
     {
-      title: 'Total Scans',
+      title: 'Total scans',
       value: formatNumber(analytics?.totalScans ?? 0),
       change: scansChange?.label,
       changeType: scansChange?.type ?? 'neutral',
@@ -73,7 +144,7 @@ export default function DashboardPage() {
       color: 'green' as const,
     },
     {
-      title: 'Avg Occupancy',
+      title: 'Occupation moyenne',
       value: `${analytics?.averageOccupancy ?? 0}%`,
       icon: <TrendingUp className="h-5 w-5" />,
       color: 'blue' as const,
@@ -94,13 +165,16 @@ export default function DashboardPage() {
         ))}
       </motion.div>
 
+      {/* Subscription quota widget */}
+      <SubscriptionWidget />
+
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Scan activity chart */}
         <motion.div variants={itemVariants} className="lg:col-span-2 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="font-semibold text-gray-900 dark:text-white">Scan Activity</h3>
+              <h3 className="font-semibold text-gray-900 dark:text-white">Activité des scans</h3>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
                 Tickets scannés par heure aujourd&apos;hui
                 {analytics?.totalScans !== undefined && (
@@ -144,8 +218,8 @@ export default function DashboardPage() {
 
         {/* Monthly events trend */}
         <motion.div variants={itemVariants} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm">
-          <h3 className="font-semibold text-gray-900 dark:text-white mb-1">Events Trend</h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Monthly event creation</p>
+          <h3 className="font-semibold text-gray-900 dark:text-white mb-1">Tendance des événements</h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Création d&apos;événements par mois</p>
           <ResponsiveContainer width="100%" height={220}>
             <LineChart
               data={analytics?.eventsByMonth ?? [{ month: 'Jan', count: 0 }]}
@@ -179,16 +253,16 @@ export default function DashboardPage() {
       {/* Recent events */}
       <motion.div variants={itemVariants} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800">
-          <h3 className="font-semibold text-gray-900 dark:text-white">Recent Events</h3>
+          <h3 className="font-semibold text-gray-900 dark:text-white">Événements récents</h3>
           <Link
             href="/dashboard/events"
             className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
           >
-            View all
+            Voir tout
           </Link>
         </div>
         {eventsLoading ? (
-          <div className="p-6 text-center text-gray-400">Loading...</div>
+          <div className="p-6 text-center text-gray-400">Chargement...</div>
         ) : eventsData?.data && eventsData.data.length > 0 ? (
           <div className="divide-y divide-gray-100 dark:divide-gray-800">
             {eventsData.data.slice(0, 5).map((event) => (
@@ -214,7 +288,7 @@ export default function DashboardPage() {
                   </span>
                   <div className="text-right hidden sm:block">
                     <p className="text-sm font-medium text-gray-900 dark:text-white">{event.ticketsScanned}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">scanned</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">scannés</p>
                   </div>
                 </div>
               </Link>
@@ -223,9 +297,9 @@ export default function DashboardPage() {
         ) : (
           <div className="p-12 text-center">
             <Calendar className="h-10 w-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-500 dark:text-gray-400 text-sm">No events yet</p>
+            <p className="text-gray-500 dark:text-gray-400 text-sm">Aucun événement</p>
             <Link href="/dashboard/events/new" className="mt-3 inline-block text-sm text-indigo-600 hover:underline">
-              Create your first event
+              Créez votre premier événement
             </Link>
           </div>
         )}

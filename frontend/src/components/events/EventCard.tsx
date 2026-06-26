@@ -62,19 +62,19 @@ export function EventCard({ event }: EventCardProps) {
           <div className="flex items-center gap-1.5">
             <Ticket className="h-4 w-4 text-indigo-500" />
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{ticketsIssued}</span>
-            <span className="text-xs text-gray-400">issued</span>
+            <span className="text-xs text-gray-400">émis</span>
           </div>
           <div className="flex items-center gap-1.5">
             <Users className="h-4 w-4 text-green-500" />
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{event.totalCapacity}</span>
-            <span className="text-xs text-gray-400">capacity</span>
+            <span className="text-xs text-gray-400">capacité</span>
           </div>
         </div>
 
-        {/* Occupancy bar */}
+        {/* Barre d'occupation */}
         <div className="mb-4">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-xs text-gray-500 dark:text-gray-400">Occupancy</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">Occupation</span>
             <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{occupancy}%</span>
           </div>
           <div className="h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
@@ -96,19 +96,19 @@ export function EventCard({ event }: EventCardProps) {
             href={`/dashboard/events/${event.id}`}
             className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
           >
-            <Eye className="h-3.5 w-3.5" />View
+            <Eye className="h-3.5 w-3.5" />Voir
           </Link>
           <Link
             href={`/dashboard/events/${event.id}/edit`}
             className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
           >
-            <Edit className="h-3.5 w-3.5" />Edit
+            <Edit className="h-3.5 w-3.5" />Modifier
           </Link>
           <Link
             href={`/dashboard/events/${event.id}/tickets`}
             className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
           >
-            <Ticket className="h-3.5 w-3.5" />Tickets
+            <Ticket className="h-3.5 w-3.5" />Billets
           </Link>
         </div>
       </div>

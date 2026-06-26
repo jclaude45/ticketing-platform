@@ -23,8 +23,8 @@ export function FileUpload({
   accept = { 'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.gif'] },
   maxSize = 5 * 1024 * 1024,
   preview,
-  label = 'Upload file',
-  description = 'PNG, JPG, JPEG up to 5MB',
+  label = 'Téléverser un fichier',
+  description = 'PNG, JPG, JPEG jusqu\'à 5 Mo',
   className,
 }: FileUploadProps) {
   const [error, setError] = useState<string | null>(null);
@@ -63,9 +63,9 @@ export function FileUpload({
     maxFiles: 1,
     onDropRejected: (files) => {
       const err = files[0]?.errors[0];
-      if (err?.code === 'file-too-large') setError('File is too large');
-      else if (err?.code === 'file-invalid-type') setError('Invalid file type');
-      else setError('Upload failed');
+      if (err?.code === 'file-too-large') setError('Fichier trop volumineux');
+      else if (err?.code === 'file-invalid-type') setError('Type de fichier invalide');
+      else setError('Échec du téléversement');
     },
   });
 
@@ -115,7 +115,7 @@ export function FileUpload({
               </div>
               <div className="text-center">
                 <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {isDragActive ? 'Drop file here' : label}
+                  {isDragActive ? 'Déposez le fichier ici' : label}
                 </p>
                 <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{description}</p>
               </div>

@@ -187,7 +187,7 @@ class _FraudulentTicketCardState extends State<FraudulentTicketCard>
             child: Column(
               children: [
                 Text(
-                  'FRAUDULENT',
+                  'FRAUDULEUX',
                   style: GoogleFonts.rajdhani(
                     fontSize: 32,
                     fontWeight: FontWeight.w900,
@@ -197,7 +197,7 @@ class _FraudulentTicketCardState extends State<FraudulentTicketCard>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'SECURITY ALERT',
+                  'ALERTE SÉCURITÉ',
                   style: GoogleFonts.inter(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
@@ -250,7 +250,7 @@ class _FraudulentTicketCardState extends State<FraudulentTicketCard>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Invalid Ticket Detected',
+                              'Ticket invalide détecté',
                               style: GoogleFonts.inter(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w700,
@@ -260,7 +260,7 @@ class _FraudulentTicketCardState extends State<FraudulentTicketCard>
                             const SizedBox(height: 2),
                             Text(
                               widget.result.securityNote ??
-                                  'This QR code is not recognized as a valid ticket.',
+                                  'Ce QR code n\'est pas reconnu comme un ticket valide.',
                               style: GoogleFonts.inter(
                                 fontSize: 12,
                                 color: AppColors.fraudOrange.withOpacity(0.7),
@@ -283,19 +283,19 @@ class _FraudulentTicketCardState extends State<FraudulentTicketCard>
                   // Action instructions
                   _AlertItem(
                     icon: Icons.block_rounded,
-                    text: 'Deny entry immediately',
+                    text: 'Refuser l\'entrée immédiatement',
                     color: AppColors.fraudOrange,
                   ),
                   const SizedBox(height: 10),
                   _AlertItem(
                     icon: Icons.radio_button_unchecked,
-                    text: 'Retain ticket if possible',
+                    text: 'Conserver le ticket si possible',
                     color: AppColors.fraudOrangeLight,
                   ),
                   const SizedBox(height: 10),
                   _AlertItem(
                     icon: Icons.radio_button_unchecked,
-                    text: 'Alert supervisor immediately',
+                    text: 'Alerter le responsable immédiatement',
                     color: AppColors.fraudOrangeLight,
                   ),
 

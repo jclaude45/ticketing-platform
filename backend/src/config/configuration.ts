@@ -46,4 +46,11 @@ export default () => ({
   crypto: {
     privateKeyEncryptionKey: process.env.PRIVATE_KEY_ENCRYPTION_KEY,
   },
+  twilio: {
+    accountSid: process.env.TWILIO_ACCOUNT_SID || '',
+    authToken: process.env.TWILIO_AUTH_TOKEN || '',
+    phoneNumber: process.env.TWILIO_PHONE_NUMBER || '',
+    whatsappFrom: process.env.TWILIO_WHATSAPP_FROM || 'whatsapp:+14155238886',
+  },
+  APP_BASE_URL: process.env.APP_BASE_URL || '',
 });

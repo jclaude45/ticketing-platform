@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
+import { SubscriptionService } from '../subscription/subscription.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { EventStatus, Role } from '@prisma/client';
@@ -18,12 +20,15 @@ export class EventsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redisService: RedisService,
+    private readonly subscriptionService: SubscriptionService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(organizerId: string, dto: CreateEventDto) {
     if (new Date(dto.endDate) <= new Date(dto.startDate)) {
       throw new BadRequestException('End date must be after start date');
     }
+    await this.subscriptionService.checkEventCreation(organizerId);
 
     const event = await this.prisma.event.create({
       data: {
@@ -66,20 +71,27 @@ export class EventsService {
     const limit = Math.min(100, Math.max(1, parseInt(String(rawLimit ?? '20'), 10) || 20));
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: any = { AND: [] };
 
-    // Non-admins can only see their own events
-    if (organizerRole !== Role.ADMIN) {
-      where.organizerId = organizerId;
+    // Non-admins see their own events + events they're a ProjectMember of
+    if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN) {
+      where.AND.push({
+        OR: [
+          { organizerId: organizerId },
+          { projectMembers: { some: { userId: organizerId } } },
+        ],
+      });
     }
 
-    if (status) where.status = status;
+    if (status) where.AND.push({ status });
     if (search) {
-      where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { venue: { contains: search, mode: 'insensitive' } },
-        { city: { contains: search, mode: 'insensitive' } },
-      ];
+      where.AND.push({
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { venue: { contains: search, mode: 'insensitive' } },
+          { city: { contains: search, mode: 'insensitive' } },
+        ],
+      });
     }
 
     const [events, total] = await Promise.all([
@@ -122,8 +134,12 @@ export class EventsService {
 
     if (!event) throw new NotFoundException('Event not found');
 
-    if (requesterRole !== Role.ADMIN && event.organizerId !== requesterId) {
-      throw new ForbiddenException('You do not have access to this event');
+    if (requesterRole !== Role.ADMIN && requesterRole !== Role.SUPER_ADMIN && event.organizerId !== requesterId) {
+      // Also allow ProjectMembers
+      const membership = await this.prisma.projectMember.findUnique({
+        where: { eventId_userId: { eventId: id, userId: requesterId } },
+      });
+      if (!membership) throw new ForbiddenException('You do not have access to this event');
     }
 
     return event;
@@ -133,8 +149,13 @@ export class EventsService {
     const event = await this.prisma.event.findUnique({ where: { id } });
     if (!event) throw new NotFoundException('Event not found');
 
-    if (organizerRole !== Role.ADMIN && event.organizerId !== organizerId) {
-      throw new ForbiddenException('You can only update your own events');
+    if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && event.organizerId !== organizerId) {
+      const membership = await this.prisma.projectMember.findUnique({
+        where: { eventId_userId: { eventId: id, userId: organizerId } },
+      });
+      if (!membership || membership.projectRole !== 'MANAGER') {
+        throw new ForbiddenException('You can only update your own events');
+      }
     }
 
     if (event.status === EventStatus.CANCELLED) {
@@ -181,7 +202,7 @@ export class EventsService {
     });
     if (!event) throw new NotFoundException('Event not found');
 
-    if (organizerRole !== Role.ADMIN && event.organizerId !== organizerId) {
+    if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && event.organizerId !== organizerId) {
       throw new ForbiddenException('You can only publish your own events');
     }
 
@@ -199,6 +220,14 @@ export class EventsService {
     });
 
     await this.redisService.cacheDelete(`event:${id}`);
+
+    await this.notificationsService.create(organizerId, {
+      title: 'Événement publié',
+      message: `"${updated.name}" est maintenant en ligne.`,
+      type: 'success',
+      link: `/dashboard/events/${id}`,
+    });
+
     return updated;
   }
 
@@ -206,7 +235,7 @@ export class EventsService {
     const event = await this.prisma.event.findUnique({ where: { id } });
     if (!event) throw new NotFoundException('Event not found');
 
-    if (organizerRole !== Role.ADMIN && event.organizerId !== organizerId) {
+    if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && event.organizerId !== organizerId) {
       throw new ForbiddenException('You can only cancel your own events');
     }
 
@@ -226,6 +255,14 @@ export class EventsService {
     });
 
     await this.redisService.cacheDelete(`event:${id}`);
+
+    await this.notificationsService.create(organizerId, {
+      title: 'Événement annulé',
+      message: `"${updated.name}" a été annulé.`,
+      type: 'warning',
+      link: `/dashboard/events/${id}`,
+    });
+
     return updated;
   }
 
@@ -236,7 +273,7 @@ export class EventsService {
     });
     if (!event) throw new NotFoundException('Event not found');
 
-    if (organizerRole !== Role.ADMIN && event.organizerId !== organizerId) {
+    if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && event.organizerId !== organizerId) {
       throw new ForbiddenException('You can only duplicate your own events');
     }
 
@@ -284,7 +321,7 @@ export class EventsService {
     const event = await this.prisma.event.findUnique({ where: { id } });
     if (!event) throw new NotFoundException('Event not found');
 
-    if (organizerRole !== Role.ADMIN && event.organizerId !== organizerId) {
+    if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && event.organizerId !== organizerId) {
       throw new ForbiddenException('You can only delete your own events');
     }
 
@@ -310,7 +347,7 @@ export class EventsService {
     const event = await this.prisma.event.findUnique({ where: { id: eventId } });
     if (!event) throw new NotFoundException('Event not found');
 
-    if (organizerRole !== Role.ADMIN && event.organizerId !== organizerId) {
+    if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && event.organizerId !== organizerId) {
       throw new ForbiddenException('Access denied');
     }
 

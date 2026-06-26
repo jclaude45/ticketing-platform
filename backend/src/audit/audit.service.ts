@@ -23,7 +23,7 @@ export class AuditService {
 
     // Non-admins can only see their own audit logs
     const where: any = {};
-    if (requesterRole !== Role.ADMIN) {
+    if (requesterRole !== Role.ADMIN && requesterRole !== Role.SUPER_ADMIN) {
       where.userId = requesterId;
     } else if (userId) {
       where.userId = userId;
@@ -70,7 +70,7 @@ export class AuditService {
   }
 
   async getStats(requesterId: string, requesterRole: Role) {
-    if (requesterRole !== Role.ADMIN) {
+    if (requesterRole !== Role.ADMIN && requesterRole !== Role.SUPER_ADMIN) {
       throw new ForbiddenException('Only admins can view audit stats');
     }
 

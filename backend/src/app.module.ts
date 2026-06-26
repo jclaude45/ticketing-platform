@@ -23,6 +23,12 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { AuditModule } from './audit/audit.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { TeamModule } from './team/team.module';
+import { SubscriptionModule } from './subscription/subscription.module';
+import { AdminModule } from './admin/admin.module';
+import { ProjectModule } from './project/project.module';
+import { CommunicationModule } from './communication/communication.module';
+import { PublicModule } from './public/public.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -57,6 +63,12 @@ import { AppService } from './app.service';
     AuditModule,
     RealtimeModule,
     TeamModule,
+    SubscriptionModule,
+    AdminModule,
+    ProjectModule,
+    CommunicationModule,
+    PublicModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [

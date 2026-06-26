@@ -31,10 +31,9 @@ class ScannerRemoteSourceImpl implements ScannerRemoteSource {
       final response = await dioClient.post(
         ApiEndpoints.validateTicket(eventId),
         data: {
-          'qr_code': qrCode,
-          if (gate != null) 'gate': gate,
-          if (controllerId != null) 'controller_id': controllerId,
-          'scanned_at': DateTime.now().toUtc().toIso8601String(),
+          'qrContent': qrCode,
+          if (gate != null) 'location': gate,
+          if (controllerId != null) 'deviceId': controllerId,
         },
       );
 
@@ -42,10 +41,11 @@ class ScannerRemoteSourceImpl implements ScannerRemoteSource {
         throw const ServerException(message: 'Empty response from server');
       }
 
-      return ValidationResultModel.fromJson(
-        response.data as Map<String, dynamic>,
-        ticketCode: qrCode,
-      );
+      // Unwrap TransformInterceptor: { success, data: { result, message, ticket } }
+      final wrapper = response.data as Map<String, dynamic>;
+      final inner = (wrapper['data'] ?? wrapper) as Map<String, dynamic>;
+
+      return ValidationResultModel.fromJson(inner, ticketCode: qrCode);
     } on ServerException {
       rethrow;
     } on NetworkException {

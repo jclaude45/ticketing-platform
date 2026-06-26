@@ -28,44 +28,64 @@ class ValidationResultModel extends ValidationResult {
     required String ticketCode,
     bool isOfflineResult = false,
   }) {
-    final statusStr = json['status'] as String? ?? 'error';
-    final status = ValidationStatus.values.firstWhere(
-      (s) => s.name == statusStr,
-      orElse: () => ValidationStatus.error,
-    );
+    // Backend returns 'result' (uppercase: VALID, INVALID, ALREADY_USED, FRAUDULENT, EXPIRED)
+    final rawResult = (json['result'] as String? ?? json['status'] as String? ?? 'error').toUpperCase();
+    final status = _mapResult(rawResult);
 
+    // Backend returns camelCase ticket fields
     final ticket = json['ticket'] as Map<String, dynamic>?;
-    final firstUse = json['first_use'] as Map<String, dynamic>?;
+
+    DateTime? usedAt;
+    if (ticket?['checkedInAt'] != null) {
+      usedAt = DateTime.tryParse(ticket!['checkedInAt'] as String);
+    }
 
     return ValidationResultModel(
       status: status,
       ticketCode: ticketCode,
-      ticketId: ticket?['id'] as String? ?? json['ticket_id'] as String?,
-      serialNumber: ticket?['serial_number'] as String? ??
-          json['serial_number'] as String?,
-      holderName: ticket?['holder_name'] as String? ??
-          json['holder_name'] as String?,
-      holderEmail: ticket?['holder_email'] as String? ??
-          json['holder_email'] as String?,
-      ticketType: ticket?['type'] as String? ?? json['ticket_type'] as String?,
-      eventId: json['event_id'] as String?,
-      eventName: json['event_name'] as String?,
+      ticketId: ticket?['id'] as String?,
+      serialNumber: ticket?['serialNumber'] as String? ?? ticket?['serial_number'] as String?,
+      holderName: ticket?['holderName'] as String? ?? ticket?['holder_name'] as String?,
+      holderEmail: ticket?['holderEmail'] as String? ?? ticket?['holder_email'] as String?,
+      ticketType: ticket?['templateName'] as String? ?? ticket?['type'] as String?,
       gate: json['gate'] as String?,
-      zone: ticket?['zone'] as String?,
-      seat: ticket?['seat'] as String?,
-      usedAt: firstUse != null && firstUse['at'] != null
-          ? DateTime.parse(firstUse['at'] as String)
-          : (json['used_at'] != null
-              ? DateTime.parse(json['used_at'] as String)
-              : null),
-      usedBy: firstUse?['controller_name'] as String? ??
-          json['used_by'] as String?,
-      usedAtGate: firstUse?['gate'] as String? ??
-          json['used_at_gate'] as String?,
-      errorMessage: json['message'] as String? ?? json['error'] as String?,
+      usedAt: usedAt,
+      errorMessage: _translateMessage(json['message'] as String? ?? json['error'] as String?),
       isOfflineResult: isOfflineResult,
       scannedAt: DateTime.now(),
-      securityNote: json['security_note'] as String?,
     );
+  }
+
+  static ValidationStatus _mapResult(String result) {
+    switch (result) {
+      case 'VALID':
+        return ValidationStatus.valid;
+      case 'ALREADY_USED':
+        return ValidationStatus.used;
+      case 'FRAUDULENT':
+        return ValidationStatus.fraudulent;
+      case 'INVALID':
+        return ValidationStatus.notFound;
+      case 'EXPIRED':
+        return ValidationStatus.error;
+      default:
+        return ValidationStatus.error;
+    }
+  }
+
+  static String? _translateMessage(String? message) {
+    if (message == null) return null;
+    const map = {
+      'Ticket not found for this event': 'QR code non valide',
+      'Ticket not found in the system': 'QR code non valide',
+      'Invalid QR code format': 'Format de QR code invalide',
+      'Ticket has already been used': 'Ce ticket a déjà été utilisé',
+      'Ticket has been cancelled': 'Ce ticket a été annulé',
+      'Fraudulent ticket detected - invalid cryptographic signature': 'Ticket frauduleux détecté',
+      'Event has ended': 'L\'événement est terminé',
+      'You are not authorized to scan tickets for this event': 'Non autorisé à scanner cet événement',
+      'Server error. Please try again later.': 'Erreur serveur. Veuillez réessayer.',
+    };
+    return map[message] ?? message;
   }
 }

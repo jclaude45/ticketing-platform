@@ -1,10 +1,17 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { QrcodeService } from '../qrcode/qrcode.service';
+import { SubscriptionService } from '../subscription/subscription.service';
 import * as PDFDocument from 'pdfkit';
 import * as archiver from 'archiver';
 import * as QRCode from 'qrcode';
+import * as sharp from 'sharp';
+import * as fs from 'fs';
+import * as path from 'path';
 import { PassThrough } from 'stream';
+
+const LOGO_SVG_PATH = path.join(__dirname, '../../assets/powered-logo.svg');
+const LOGO_ASPECT = 1109 / 300;
 
 // A4 dimensions in PDFKit points (1pt = 1/72 inch)
 const A4_W = 595;
@@ -83,11 +90,25 @@ function computeLayout(
 @Injectable()
 export class TicketExportService {
   private readonly logger = new Logger(TicketExportService.name);
+  private _logoBuffer: Buffer | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly qrcodeService: QrcodeService,
+    private readonly subscriptionService: SubscriptionService,
   ) {}
+
+  private async _getLogoBuffer(): Promise<Buffer> {
+    if (this._logoBuffer) return this._logoBuffer;
+    try {
+      const svgRaw = fs.readFileSync(LOGO_SVG_PATH, 'utf-8');
+      this._logoBuffer = await (sharp as any)(Buffer.from(svgRaw, 'utf-8')).resize(600, Math.round(600 / LOGO_ASPECT)).png().toBuffer();
+    } catch (e) {
+      this.logger.warn(`Could not load powered logo: ${(e as Error).message}`);
+      this._logoBuffer = Buffer.alloc(0);
+    }
+    return this._logoBuffer!;
+  }
 
   async generateTicketPDF(ticketId: string): Promise<Buffer> {
     const ticket = await this.prisma.ticket.findUnique({
@@ -102,6 +123,7 @@ export class TicketExportService {
             startDate: true,
             endDate: true,
             bannerUrl: true,
+            organizerId: true,
           },
         },
         // customFields must be included so drawTicketCell can use the canvas design.
@@ -131,6 +153,9 @@ export class TicketExportService {
     const cx = STRIP_MX + Math.max(0, (STRIP_W - tileW) / 2);
     const cy = STRIP_MT + Math.max(0, (A4_H - STRIP_MT - STRIP_MB - tileH) / 2);
 
+    const showLogo = await this.subscriptionService.getShowPoweredBy((ticket.event as any).organizerId);
+    const logoBuf = showLogo ? await this._getLogoBuffer() : Buffer.alloc(0);
+
     return new Promise((resolve, reject) => {
       const chunks: Buffer[] = [];
       const doc = new PDFDocument({ size: 'A4', margin: 0, autoFirstPage: false });
@@ -140,7 +165,7 @@ export class TicketExportService {
       doc.on('error', reject);
 
       doc.addPage({ size: 'A4', margin: 0 });
-      this.drawTicketCell(doc, ticket, cx, cy, tileW, tileH, qrBuffer);
+      this.drawTicketCell(doc, ticket, cx, cy, tileW, tileH, qrBuffer, logoBuf);
       doc.end();
     });
   }
@@ -282,6 +307,7 @@ export class TicketExportService {
             city: true,
             country: true,
             startDate: true,
+            organizerId: true,
           },
         },
         template: {
@@ -306,6 +332,12 @@ export class TicketExportService {
         qrBufferMap.set(ticket.id, buf);
       }),
     );
+
+    const organizerIdForLogo = (tickets[0]?.event as any)?.organizerId;
+    const showLogo = organizerIdForLogo
+      ? await this.subscriptionService.getShowPoweredBy(organizerIdForLogo)
+      : true;
+    const logoBuf = showLogo ? await this._getLogoBuffer() : Buffer.alloc(0);
 
     // Group tickets by templateId so each tariff is rendered with its own canvas layout.
     // The Map preserves insertion order (tickets are already sorted by templateId then serialNumber).
@@ -373,7 +405,7 @@ export class TicketExportService {
             const row    = Math.floor(i / cols);
             const cx     = offX + col * (tileW + STRIP_GAP);
             const cy     = offY + row * (tileH + STRIP_GAP);
-            this.drawTicketCell(doc, ticket, cx, cy, tileW, tileH, qrBufferMap.get(ticket.id));
+            this.drawTicketCell(doc, ticket, cx, cy, tileW, tileH, qrBufferMap.get(ticket.id), logoBuf);
           }
 
           // Dashed cut marks between rows
@@ -421,7 +453,7 @@ export class TicketExportService {
    *   215..395 — pied : ID billet + mention légale
    */
   /** Dispatcher: uses canvas design if available, otherwise generic strip */
-  private drawTicketCell(doc: any, ticket: any, cx: number, cy: number, tileW: number, tileH: number, qrBuffer?: Buffer): void {
+  private drawTicketCell(doc: any, ticket: any, cx: number, cy: number, tileW: number, tileH: number, qrBuffer?: Buffer, logoBuf?: Buffer): void {
     const cf = ticket.template?.customFields as any;
     const preview: string | undefined = cf?.preview;
     const qrBounds = cf?.qrBounds as { left: number; top: number; width: number; height: number } | undefined;
@@ -429,7 +461,7 @@ export class TicketExportService {
     const nameBounds = cf?.nameBounds as { left: number; top: number; width: number; height: number; fontSize: number; fontFamily: string; fontWeight: string; fill: string; textAlign: string } | undefined;
 
     if (preview && preview.startsWith('data:image/')) {
-      this.drawDesignCell(doc, ticket, cx, cy, preview, qrBounds, serialBounds, nameBounds, tileW, tileH, qrBuffer);
+      this.drawDesignCell(doc, ticket, cx, cy, preview, qrBounds, serialBounds, nameBounds, tileW, tileH, qrBuffer, logoBuf);
       return;
     }
 
@@ -531,15 +563,20 @@ export class TicketExportService {
       }
     }
 
-    // "SCANNER" label
-    doc
-      .save()
-      .fillColor('rgba(255,255,255,0.7)')
-      .font('Helvetica-Bold').fontSize(6.5)
-      .text('SCANNER', QR_X - 4, QR_Y + QR_SIZE + 5, {
-        width: QR_SIZE + 8, align: 'center', lineBreak: false,
-      })
-      .restore();
+    // Powered-by logo below QR (white version, fits in the existing white QR background extension)
+    if (logoBuf && logoBuf.length > 0) {
+      const logoW = QR_SIZE + 8;
+      const logoH = Math.round(logoW / LOGO_ASPECT);
+      const logoX = QR_X - 4;
+      const logoY = QR_Y + QR_SIZE + 5;
+      // Extend white background to include logo
+      doc.save().fillColor('#FFFFFF')
+        .rect(logoX, logoY - 2, logoW, logoH + 4)
+        .fill().restore();
+      try {
+        doc.image(logoBuf, logoX, logoY, { width: logoW, height: logoH });
+      } catch {}
+    }
 
     // Cell border
     doc
@@ -568,6 +605,7 @@ export class TicketExportService {
     tileW: number,
     tileH: number,
     qrBuffer?: Buffer,
+    logoBuf?: Buffer,
   ): void {
     // Derive actual canvas dimensions from the PNG header.
     // The preview is exported at multiplier:2, so: pngW = 2 × canvasW.
@@ -616,10 +654,17 @@ export class TicketExportService {
 
       try {
         // White padding for contrast against any background
+        const logoPadH = (logoBuf && logoBuf.length > 0) ? Math.round((qrSide + 6) / LOGO_ASPECT) + 2 : 0;
         doc.save().fillColor('#FFFFFF')
-          .rect(qrX - 3, qrY - 3, qrSide + 6, qrSide + 6)
+          .rect(qrX - 3, qrY - 3, qrSide + 6, qrSide + 6 + logoPadH)
           .fill().restore();
         doc.image(qrBuffer, qrX, qrY, { width: qrSide, height: qrSide });
+        // Powered-by logo immediately below QR
+        if (logoBuf && logoBuf.length > 0) {
+          const logoW = qrSide + 6;
+          const logoH = Math.round(logoW / LOGO_ASPECT);
+          doc.image(logoBuf, qrX - 3, qrY + qrSide + 2, { width: logoW, height: logoH });
+        }
       } catch (e) {
         this.logger.warn(`Failed to draw QR for ticket ${ticket.id}: ${(e as Error).message}`);
       }

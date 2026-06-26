@@ -4,7 +4,7 @@ class AppConstants {
   // API Configuration
   // Dev: Android emulator → 10.0.2.2, iOS simulator → 127.0.0.1
   // For physical device, replace with your machine's local IP.
-  static const String _devBaseUrl = 'http://10.0.2.2:3001/api/v1';
+  static const String _devBaseUrl = 'http://192.168.1.137:3001/api/v1';
   static const String _prodBaseUrl = 'https://api.ticketing-platform.com/api/v1';
   static const bool _isProduction = bool.fromEnvironment('dart.vm.product');
   static String get baseUrl => _isProduction ? _prodBaseUrl : _devBaseUrl;

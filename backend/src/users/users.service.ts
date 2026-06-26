@@ -9,9 +9,11 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { CryptoService } from '../crypto/crypto.service';
+import { StorageService } from '../storage/storage.service';
 import { UpdateUserDto, ChangePasswordDto } from './dto/update-user.dto';
 import { Role } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import * as path from 'path';
 
 @Injectable()
 export class UsersService {
@@ -22,6 +24,7 @@ export class UsersService {
     private readonly redisService: RedisService,
     private readonly cryptoService: CryptoService,
     private readonly configService: ConfigService,
+    private readonly storageService: StorageService,
   ) {}
 
   async findById(id: string) {
@@ -37,6 +40,7 @@ export class UsersService {
         firstName: true,
         lastName: true,
         role: true,
+        avatar: true,
         isEmailVerified: true,
         twoFactorEnabled: true,
         isActive: true,
@@ -97,6 +101,7 @@ export class UsersService {
       data: {
         ...(dto.firstName && { firstName: dto.firstName }),
         ...(dto.lastName && { lastName: dto.lastName }),
+        ...(dto.avatar !== undefined && { avatar: dto.avatar }),
       },
       select: {
         id: true,
@@ -104,6 +109,7 @@ export class UsersService {
         firstName: true,
         lastName: true,
         role: true,
+        avatar: true,
         isEmailVerified: true,
         twoFactorEnabled: true,
         updatedAt: true,
@@ -139,7 +145,7 @@ export class UsersService {
   }
 
   async deactivateAccount(userId: string, requestingUserId: string, requestingUserRole: Role) {
-    if (userId !== requestingUserId && requestingUserRole !== Role.ADMIN) {
+    if (userId !== requestingUserId && requestingUserRole !== Role.ADMIN && requestingUserRole !== Role.SUPER_ADMIN) {
       throw new ForbiddenException('You can only deactivate your own account');
     }
 
@@ -212,6 +218,38 @@ export class UsersService {
 
     this.logger.log(`Key pair rotated for organizer ${organizerId}`);
     return { message: 'Key pair rotated successfully', keyPair: newKeyPair };
+  }
+
+  async uploadAvatar(userId: string, fileBuffer: Buffer, originalName: string, mimeType: string) {
+    this.storageService.validateFileType(mimeType, ['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+    this.storageService.validateFileSize(fileBuffer.length, 5 * 1024 * 1024);
+
+    const ext = path.extname(originalName).toLowerCase() || '.jpg';
+    const result = await this.storageService.uploadBuffer(
+      fileBuffer,
+      `${userId}${ext}`,
+      mimeType,
+      'avatars',
+    );
+
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { avatar: result.url },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        avatar: true,
+        isEmailVerified: true,
+        twoFactorEnabled: true,
+        updatedAt: true,
+      },
+    });
+
+    await this.redisService.cacheDelete(`user:${userId}`);
+    return updated;
   }
 
   async getStats(userId: string) {

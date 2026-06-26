@@ -57,7 +57,7 @@ export class ControllersService {
 
   async findAll(organizerId: string, organizerRole: Role, page: number = 1, limit: number = 20) {
     const skip = (page - 1) * limit;
-    const where = organizerRole === Role.ADMIN ? {} : { organizerId };
+    const where = organizerRole === Role.ADMIN || organizerRole === Role.SUPER_ADMIN ? {} : { organizerId };
 
     const [controllers, total] = await Promise.all([
       this.prisma.controller.findMany({
@@ -100,7 +100,7 @@ export class ControllersService {
 
     if (!controller) throw new NotFoundException('Controller not found');
 
-    if (organizerRole !== Role.ADMIN && controller.organizerId !== organizerId) {
+    if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && controller.organizerId !== organizerId) {
       throw new ForbiddenException('Access denied');
     }
 
@@ -117,7 +117,7 @@ export class ControllersService {
     const controller = await this.prisma.controller.findUnique({ where: { id: controllerId } });
     if (!controller) throw new NotFoundException('Controller not found');
 
-    if (organizerRole !== Role.ADMIN && controller.organizerId !== organizerId) {
+    if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && controller.organizerId !== organizerId) {
       throw new ForbiddenException('Access denied');
     }
 
@@ -137,7 +137,7 @@ export class ControllersService {
     const controller = await this.prisma.controller.findUnique({ where: { id: controllerId } });
     if (!controller) throw new NotFoundException('Controller not found');
 
-    if (organizerRole !== Role.ADMIN && controller.organizerId !== organizerId) {
+    if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && controller.organizerId !== organizerId) {
       throw new ForbiddenException('Access denied');
     }
 
@@ -154,14 +154,14 @@ export class ControllersService {
     const controller = await this.prisma.controller.findUnique({ where: { id: controllerId } });
     if (!controller) throw new NotFoundException('Controller not found');
 
-    if (organizerRole !== Role.ADMIN && controller.organizerId !== organizerId) {
+    if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && controller.organizerId !== organizerId) {
       throw new ForbiddenException('Access denied');
     }
 
     const event = await this.prisma.event.findUnique({ where: { id: dto.eventId } });
     if (!event) throw new NotFoundException('Event not found');
 
-    if (organizerRole !== Role.ADMIN && event.organizerId !== organizerId) {
+    if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && event.organizerId !== organizerId) {
       throw new ForbiddenException('Event does not belong to you');
     }
 
@@ -186,7 +186,7 @@ export class ControllersService {
     const controller = await this.prisma.controller.findUnique({ where: { id: controllerId } });
     if (!controller) throw new NotFoundException('Controller not found');
 
-    if (organizerRole !== Role.ADMIN && controller.organizerId !== organizerId) {
+    if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && controller.organizerId !== organizerId) {
       throw new ForbiddenException('Access denied');
     }
 
@@ -242,7 +242,7 @@ export class ControllersService {
     const controller = await this.prisma.controller.findUnique({ where: { id: controllerId } });
     if (!controller) throw new NotFoundException('Controller not found');
 
-    if (organizerRole !== Role.ADMIN && controller.organizerId !== organizerId) {
+    if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && controller.organizerId !== organizerId) {
       throw new ForbiddenException('Access denied');
     }
 

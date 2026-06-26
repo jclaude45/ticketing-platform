@@ -19,9 +19,19 @@ import type {
   AuditLog,
   FilterState,
   UserSettings,
+  SubscriptionPlan,
+  OrganizerSubscription,
+  OrganizerLimits,
 } from '@/types';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
+const MEDIA_BASE = BASE_URL.replace(/\/api\/v1\/?$/, '');
+
+/** Remplace localhost:PORT par le vrai host du backend (utile en mobile/réseau) */
+export function resolveMediaUrl(url: string | null | undefined): string | undefined {
+  if (!url) return undefined;
+  return url.replace(/^https?:\/\/localhost:\d+/, MEDIA_BASE);
+}
 
 let isRefreshing = false;
 let failedQueue: Array<{
@@ -154,7 +164,12 @@ export const authApi = {
   getProfile: () => apiClient.get<ApiResponse<User>>('/auth/profile'),
 
   updateProfile: (data: Partial<User>) =>
-    apiClient.patch<ApiResponse<User>>('/auth/profile', data),
+    apiClient.patch<ApiResponse<User>>('/users/me', data),
+
+  uploadAvatar: (formData: FormData) =>
+    apiClient.post<ApiResponse<User>>('/users/me/avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
 
   updateSettings: (settings: UserSettings) =>
     apiClient.patch<ApiResponse<UserSettings>>('/auth/settings', settings),
@@ -352,6 +367,210 @@ export const teamApi = {
     apiClient.delete(`/events/${eventId}/team/${memberId}/accreditation`),
   downloadBadge: (eventId: string, memberId: string) =>
     apiClient.get(`/events/${eventId}/team/${memberId}/accreditation/badge`, { responseType: 'arraybuffer' }),
+};
+
+// --- Super Admin API ---
+export const adminApi = {
+  getOverview: () => apiClient.get('/admin/overview'),
+  getOrganizers: (search?: string) => apiClient.get('/admin/organizers', { params: search ? { search } : {} }),
+  getOrganizerDetail: (id: string) => apiClient.get(`/admin/organizers/${id}`),
+  activateOrganizer: (id: string) => apiClient.post(`/admin/organizers/${id}/activate`),
+  deactivateOrganizer: (id: string) => apiClient.post(`/admin/organizers/${id}/deactivate`),
+};
+
+// --- Subscription API ---
+export const subscriptionApi = {
+  // Plans (super admin)
+  listPlans: () => apiClient.get<ApiResponse<SubscriptionPlan[]>>('/subscriptions/plans'),
+  createPlan: (data: Partial<SubscriptionPlan>) => apiClient.post<ApiResponse<SubscriptionPlan>>('/subscriptions/plans', data),
+  updatePlan: (id: string, data: Partial<SubscriptionPlan>) => apiClient.put<ApiResponse<SubscriptionPlan>>(`/subscriptions/plans/${id}`, data),
+  deletePlan: (id: string) => apiClient.delete(`/subscriptions/plans/${id}`),
+
+  // Organizer subscriptions (super admin)
+  listSubscriptions: () => apiClient.get<ApiResponse<OrganizerSubscription[]>>('/subscriptions/organizers'),
+  assignPlan: (organizerId: string, data: { planId: string; expiresAt?: string; notes?: string }) =>
+    apiClient.post<ApiResponse<OrganizerSubscription>>(`/subscriptions/organizers/${organizerId}/assign`, data),
+  updateSubscription: (organizerId: string, data: any) =>
+    apiClient.put<ApiResponse<OrganizerSubscription>>(`/subscriptions/organizers/${organizerId}`, data),
+  resetQuota: (organizerId: string) =>
+    apiClient.post<ApiResponse<OrganizerSubscription>>(`/subscriptions/organizers/${organizerId}/reset-quota`, {}),
+
+  // Current organizer
+  getMySubscription: () =>
+    apiClient.get<ApiResponse<{ subscription: OrganizerSubscription | null; limits: OrganizerLimits }>>('/subscriptions/me'),
+
+  subscribePlan: (planId: string) =>
+    apiClient.post<ApiResponse<OrganizerSubscription>>('/subscriptions/me/subscribe', { planId }),
+};
+
+// --- Project API ---
+export const projectApi = {
+  // Tasks
+  getTasks: (eventId: string) =>
+    apiClient.get(`/events/${eventId}/project/tasks`),
+
+  createTask: (
+    eventId: string,
+    data: {
+      title: string;
+      description?: string;
+      status?: string;
+      priority?: string;
+      category?: string;
+      assigneeName?: string;
+      assigneeIds?: string[];
+      startDate?: string;
+      dueDate?: string;
+    }
+  ) => apiClient.post(`/events/${eventId}/project/tasks`, data),
+
+  updateTask: (
+    eventId: string,
+    taskId: string,
+    data: {
+      title?: string;
+      description?: string;
+      status?: string;
+      priority?: string;
+      category?: string;
+      assigneeName?: string;
+      assigneeIds?: string[];
+      startDate?: string;
+      dueDate?: string;
+    }
+  ) => apiClient.patch(`/events/${eventId}/project/tasks/${taskId}`, data),
+
+  deleteTask: (eventId: string, taskId: string) =>
+    apiClient.delete(`/events/${eventId}/project/tasks/${taskId}`),
+
+  // Budget
+  getBudget: (eventId: string) =>
+    apiClient.get(`/events/${eventId}/project/budget`),
+
+  createLine: (
+    eventId: string,
+    data: { category: string; label: string; plannedAmount: number }
+  ) => apiClient.post(`/events/${eventId}/project/budget/lines`, data),
+
+  updateLine: (
+    eventId: string,
+    lineId: string,
+    data: { category?: string; label?: string; plannedAmount?: number }
+  ) => apiClient.patch(`/events/${eventId}/project/budget/lines/${lineId}`, data),
+
+  deleteLine: (eventId: string, lineId: string) =>
+    apiClient.delete(`/events/${eventId}/project/budget/lines/${lineId}`),
+
+  addExpense: (
+    eventId: string,
+    lineId: string,
+    data: { label: string; amount: number; date?: string; notes?: string }
+  ) =>
+    apiClient.post(
+      `/events/${eventId}/project/budget/lines/${lineId}/expenses`,
+      data
+    ),
+
+  updateExpense: (
+    eventId: string,
+    lineId: string,
+    expenseId: string,
+    data: { label?: string; amount?: number; date?: string; notes?: string }
+  ) =>
+    apiClient.patch(
+      `/events/${eventId}/project/budget/lines/${lineId}/expenses/${expenseId}`,
+      data
+    ),
+
+  deleteExpense: (eventId: string, lineId: string, expenseId: string) =>
+    apiClient.delete(
+      `/events/${eventId}/project/budget/lines/${lineId}/expenses/${expenseId}`
+    ),
+
+  // Members
+  getMembers: (eventId: string) =>
+    apiClient.get(`/events/${eventId}/project/members`),
+
+  inviteMember: (eventId: string, data: { email: string; firstName: string; lastName: string; projectRole?: string }) =>
+    apiClient.post(`/events/${eventId}/project/members/invite`, data),
+
+  removeMember: (eventId: string, memberId: string) =>
+    apiClient.delete(`/events/${eventId}/project/members/${memberId}`),
+};
+
+export const communicationApi = {
+  // Channels
+  getChannelStatus: () =>
+    apiClient.get('/communication/channels/status'),
+
+  // Templates
+  getTemplates: () =>
+    apiClient.get('/communication/templates'),
+  initDefaultTemplates: () =>
+    apiClient.post('/communication/templates/init-defaults'),
+  createTemplate: (data: any) =>
+    apiClient.post('/communication/templates', data),
+  updateTemplate: (id: string, data: any) =>
+    apiClient.put(`/communication/templates/${id}`, data),
+  deleteTemplate: (id: string) =>
+    apiClient.delete(`/communication/templates/${id}`),
+
+  // Campaigns
+  getCampaigns: (eventId: string) =>
+    apiClient.get(`/communication/events/${eventId}/campaigns`),
+  getEventStats: (eventId: string) =>
+    apiClient.get(`/communication/events/${eventId}/stats`),
+  createCampaign: (eventId: string, data: any) =>
+    apiClient.post(`/communication/events/${eventId}/campaigns`, data),
+  setupAutoReminders: (eventId: string) =>
+    apiClient.post(`/communication/events/${eventId}/auto-reminders`),
+  getCampaign: (id: string) =>
+    apiClient.get(`/communication/campaigns/${id}`),
+  updateCampaign: (id: string, data: any) =>
+    apiClient.put(`/communication/campaigns/${id}`, data),
+  deleteCampaign: (id: string) =>
+    apiClient.delete(`/communication/campaigns/${id}`),
+  sendCampaign: (id: string) =>
+    apiClient.post(`/communication/campaigns/${id}/send`),
+  scheduleCampaign: (id: string, scheduledAt: string) =>
+    apiClient.post(`/communication/campaigns/${id}/schedule`, { scheduledAt }),
+  getCampaignStats: (id: string) =>
+    apiClient.get(`/communication/campaigns/${id}/stats`),
+};
+
+export const invitationApi = {
+  getInvitation: (token: string) =>
+    apiClient.get(`/project/invitations/${token}`),
+
+  acceptInvitation: (token: string, data: { password: string }) =>
+    apiClient.post(`/project/invitations/${token}/accept`, data),
+};
+
+export const notificationsApi = {
+  getAll: () => apiClient.get('/notifications'),
+  markRead: (id: string) => apiClient.patch(`/notifications/${id}/read`),
+  markAllRead: () => apiClient.patch('/notifications/read-all'),
+  remove: (id: string) => apiClient.delete(`/notifications/${id}`),
+};
+
+// ─── Public ticketing API (no auth required) ─────────────────────────────────
+
+const publicClient = axios.create({ baseURL: BASE_URL });
+
+export const publicApi = {
+  listEvents: (params?: { page?: number; limit?: number; search?: string; city?: string }) =>
+    publicClient.get('/public/events', { params }),
+  getCities: () =>
+    publicClient.get('/public/events/cities'),
+  getEvent: (id: string) =>
+    publicClient.get(`/public/events/${id}`),
+  purchaseTicket: (eventId: string, data: {
+    holderName: string;
+    holderEmail: string;
+    holderPhone?: string;
+    items: { templateId: string; quantity: number }[];
+  }) =>
+    publicClient.post(`/public/events/${eventId}/register`, data),
 };
 
 export default apiClient;

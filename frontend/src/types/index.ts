@@ -1,5 +1,5 @@
 // User types
-export type UserRole = 'admin' | 'organizer' | 'controller';
+export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'ORGANIZER' | 'CONTROLLER';
 
 export interface User {
   id: string;
@@ -265,6 +265,52 @@ export interface UserSettings {
     language: string;
     timezone: string;
   };
+}
+
+// Subscription types
+export interface SubscriptionPlan {
+  id: string;
+  name: string;
+  description?: string;
+  price: number;
+  maxTickets: number;
+  maxBadges: number;
+  maxEvents: number;
+  showPoweredBy: boolean;
+  allowBulkExport: boolean;
+  allowCommunication: boolean;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type SubscriptionStatus = 'ACTIVE' | 'EXPIRED' | 'CANCELLED' | 'SUSPENDED';
+
+export interface OrganizerSubscription {
+  id: string;
+  organizerId: string;
+  planId: string;
+  status: SubscriptionStatus;
+  ticketsUsed: number;
+  badgesUsed: number;
+  startsAt: string;
+  expiresAt?: string;
+  notes?: string;
+  plan: SubscriptionPlan;
+  organizer?: { id: string; firstName: string; lastName: string; email: string };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OrganizerLimits {
+  maxTickets: number;
+  maxBadges: number;
+  maxEvents: number;
+  showPoweredBy: boolean;
+  allowBulkExport: boolean;
+  allowCommunication: boolean;
+  ticketsUsed: number;
+  badgesUsed: number;
 }
 
 // Ticket editor canvas element types

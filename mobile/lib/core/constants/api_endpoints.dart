@@ -16,7 +16,7 @@ class ApiEndpoints {
 
   // Tickets / Validation
   static String validateTicket(String eventId) =>
-      '/events/$eventId/tickets/validate';
+      '/validation/events/$eventId/scan';
   static String ticketInfo(String ticketCode) => '/tickets/$ticketCode';
 
   // Accreditations (team member badges)

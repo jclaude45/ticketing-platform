@@ -45,7 +45,7 @@ export function TwoFactorSetup() {
   };
 
   const handleCopySecret = () => {
-    copyToClipboard(secret).then(() => toast.success('Secret copied!'));
+    copyToClipboard(secret).then(() => toast.success('Clé copiée !'));
   };
 
   return (
@@ -60,7 +60,7 @@ export function TwoFactorSetup() {
         >
           <div className="text-center">
             <p className="text-white/80 text-sm mb-4">
-              Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)
+              Scannez ce QR code avec votre application d&apos;authentification (Google Authenticator, Authy, etc.)
             </p>
             {setup2FA.isPending ? (
               <div className="w-48 h-48 mx-auto flex items-center justify-center bg-white/10 rounded-xl">
@@ -75,7 +75,7 @@ export function TwoFactorSetup() {
 
           {secret && (
             <div>
-              <p className="text-white/60 text-xs text-center mb-2">Or enter this key manually:</p>
+              <p className="text-white/60 text-xs text-center mb-2">Ou entrez cette clé manuellement :</p>
               <div className="flex items-center gap-2 bg-white/10 rounded-lg px-3 py-2 border border-white/20">
                 <code className="flex-1 text-indigo-300 font-mono text-sm tracking-wider break-all">{secret}</code>
                 <button
@@ -95,7 +95,7 @@ export function TwoFactorSetup() {
             disabled={!qrCode}
             className="w-full py-3 px-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold rounded-lg hover:from-indigo-600 hover:to-purple-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            I&apos;ve scanned the code
+            J&apos;ai scanné le code
           </button>
         </motion.div>
       )}
@@ -111,8 +111,8 @@ export function TwoFactorSetup() {
         >
           <div className="text-center">
             <ShieldCheck className="h-12 w-12 text-indigo-300 mx-auto mb-3" />
-            <p className="text-white font-medium">Verify Setup</p>
-            <p className="text-white/60 text-sm mt-1">Enter the 6-digit code from your authenticator app to confirm setup</p>
+            <p className="text-white font-medium">Vérifier la configuration</p>
+            <p className="text-white/60 text-sm mt-1">Entrez le code à 6 chiffres de votre application pour confirmer</p>
           </div>
 
           <div>
@@ -133,14 +133,14 @@ export function TwoFactorSetup() {
               onClick={() => setStep('scan')}
               className="flex-1 py-2.5 px-4 border border-white/20 text-white/80 rounded-lg hover:bg-white/10 transition-all text-sm"
             >
-              Back
+              Retour
             </button>
             <button
               type="submit"
               disabled={verify2FA.isPending}
               className="flex-1 py-2.5 px-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold rounded-lg hover:from-indigo-600 hover:to-purple-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {verify2FA.isPending ? <><Loader2 className="h-4 w-4 animate-spin" />Verifying...</> : 'Verify'}
+              {verify2FA.isPending ? <><Loader2 className="h-4 w-4 animate-spin" />Vérification...</> : 'Vérifier'}
             </button>
           </div>
         </motion.form>
@@ -155,14 +155,14 @@ export function TwoFactorSetup() {
         >
           <div className="text-center">
             <CheckCircle className="h-16 w-16 text-green-400 mx-auto mb-3" />
-            <h3 className="text-xl font-semibold text-white">2FA Enabled!</h3>
-            <p className="text-white/60 text-sm mt-1">Your account is now protected</p>
+            <h3 className="text-xl font-semibold text-white">Double authentification activée !</h3>
+            <p className="text-white/60 text-sm mt-1">Votre compte est maintenant protégé</p>
           </div>
 
           {backupCodes.length > 0 && (
             <div>
               <p className="text-white/80 text-sm font-medium mb-2">
-                Save these backup codes in a safe place:
+                Enregistrez ces codes de secours dans un endroit sûr :
               </p>
               <div className="bg-white/10 border border-white/20 rounded-lg p-4 grid grid-cols-2 gap-1.5">
                 {backupCodes.map((code, i) => (
@@ -171,7 +171,7 @@ export function TwoFactorSetup() {
                   </code>
                 ))}
               </div>
-              <p className="text-white/40 text-xs mt-2">Each backup code can only be used once.</p>
+              <p className="text-white/40 text-xs mt-2">Chaque code de secours ne peut être utilisé qu&apos;une seule fois.</p>
             </div>
           )}
 
@@ -179,7 +179,7 @@ export function TwoFactorSetup() {
             href="/dashboard"
             className="block w-full py-3 px-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold rounded-lg hover:from-indigo-600 hover:to-purple-700 transition-all text-center"
           >
-            Go to Dashboard
+            Aller au tableau de bord
           </a>
         </motion.div>
       )}

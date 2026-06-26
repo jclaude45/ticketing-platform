@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { apiClient } from '@/lib/api';
+import { UpgradePlanModal } from '@/components/subscription/UpgradePlanModal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,24 @@ interface ExportOptionsProps {
 }
 
 type ExportStatus = 'idle' | 'loading' | 'success' | 'error';
+
+// ─── Decode arraybuffer errors (axios returns buffer when responseType='arraybuffer') ───
+
+function decodeApiError(err: any): string {
+  if (err?.response?.status === 403) {
+    return "L'export en lot n'est pas disponible dans votre abonnement actuel. Contactez votre administrateur pour souscrire à un plan supérieur.";
+  }
+  const data = err?.response?.data;
+  if (data instanceof ArrayBuffer) {
+    try {
+      const json = JSON.parse(new TextDecoder().decode(data));
+      return Array.isArray(json.message) ? json.message.join(' ') : (json.message ?? 'Erreur — réessayez');
+    } catch {
+      /* fall through */
+    }
+  }
+  return data?.message ?? err?.message ?? 'Erreur — réessayez';
+}
 
 // ─── Helper : déclenche le téléchargement d'un blob ──────────────────────────
 
@@ -81,13 +100,15 @@ export function ExportOptions({
   const [open, setOpen] = useState(false);
   const [activeExport, setActiveExport] = useState<string | null>(null);
   const [statusMap, setStatusMap] = useState<Record<string, ExportStatus>>({});
+  const [errorMsgMap, setErrorMsgMap] = useState<Record<string, string>>({});
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
 
   const hasSelection = selectedTicketIds.length > 0;
 
   const setStatus = (id: string, status: ExportStatus) => {
     setStatusMap((prev) => ({ ...prev, [id]: status }));
     if (status !== 'loading') {
-      setTimeout(() => setStatusMap((prev) => ({ ...prev, [id]: 'idle' })), 3000);
+      setTimeout(() => setStatusMap((prev) => ({ ...prev, [id]: 'idle' })), 6000);
     }
   };
 
@@ -98,8 +119,14 @@ export function ExportOptions({
     try {
       await option.action();
       setStatus(option.id, 'success');
-    } catch {
-      setStatus(option.id, 'error');
+    } catch (err: any) {
+      if (err?.response?.status === 403) {
+        setUpgradeOpen(true);
+      } else {
+        const msg = decodeApiError(err);
+        setErrorMsgMap((prev) => ({ ...prev, [option.id]: msg }));
+        setStatus(option.id, 'error');
+      }
     } finally {
       setActiveExport(null);
     }
@@ -238,6 +265,7 @@ export function ExportOptions({
                   const isSuccess = status === 'success';
                   const isError = status === 'error';
                   const isDisabled = !!activeExport && activeExport !== option.id;
+                  const errorMsg = errorMsgMap[option.id];
 
                   return (
                     <li key={option.id}>
@@ -295,13 +323,13 @@ export function ExportOptions({
                               </span>
                             )}
                           </div>
-                          <p className="mt-0.5 text-xs leading-relaxed text-gray-500">
+                          <p className={cn('mt-0.5 text-xs leading-relaxed', isError ? 'text-red-600 font-medium' : 'text-gray-500')}>
                             {isLoading
                               ? 'Génération en cours…'
                               : isSuccess
                               ? 'Téléchargement démarré ✓'
                               : isError
-                              ? 'Erreur — réessayez'
+                              ? (errorMsg ?? 'Erreur — réessayez')
                               : option.description}
                           </p>
                         </div>
@@ -321,6 +349,12 @@ export function ExportOptions({
           </>
         )}
       </AnimatePresence>
+
+      <UpgradePlanModal
+        open={upgradeOpen}
+        onClose={() => setUpgradeOpen(false)}
+        featureName="L'export en lot des billets"
+      />
     </div>
   );
 }

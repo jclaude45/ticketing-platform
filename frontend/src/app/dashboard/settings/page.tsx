@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -8,10 +8,10 @@ import { useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
   User, Lock, Shield, Bell, Key, ChevronRight,
-  Eye, EyeOff, AlertTriangle, CheckCircle2, Loader2, RefreshCw,
+  Eye, EyeOff, AlertTriangle, CheckCircle2, Loader2, RefreshCw, Camera,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { authApi, apiClient } from '@/lib/api';
+import { authApi, apiClient, resolveMediaUrl } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
@@ -49,6 +49,31 @@ export default function SettingsPage() {
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [avatarLoading, setAvatarLoading] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image trop volumineuse (max 5 Mo)');
+      return;
+    }
+    const formData = new FormData();
+    formData.append('avatar', file);
+    setAvatarLoading(true);
+    try {
+      const res = await authApi.uploadAvatar(formData);
+      const updated = (res.data as any)?.data ?? res.data;
+      setUser(updated);
+      toast.success('Photo de profil mise à jour');
+    } catch {
+      toast.error('Erreur lors du téléchargement');
+    } finally {
+      setAvatarLoading(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+    }
+  };
 
   // ── Profile form ─────────────────────────────────────────────────────────
   const profileForm = useForm<ProfileData>({
@@ -61,7 +86,8 @@ export default function SettingsPage() {
   });
 
   const updateProfile = useMutation({
-    mutationFn: (data: ProfileData) => authApi.updateProfile(data),
+    mutationFn: ({ firstName, lastName }: ProfileData) =>
+      authApi.updateProfile({ firstName, lastName }),
     onSuccess: (res) => {
       const updated = (res.data as any)?.data ?? res.data;
       setUser(updated);
@@ -128,10 +154,10 @@ export default function SettingsPage() {
   });
 
   return (
-    <div className="flex flex-col gap-6 p-6 max-w-4xl mx-auto">
+    <div className="flex flex-col gap-6 p-4 sm:p-6 max-w-4xl mx-auto">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Paramètres</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Paramètres</h1>
         <p className="text-sm text-gray-500 mt-0.5">Gérez votre compte et vos préférences</p>
       </div>
 
@@ -172,13 +198,49 @@ export default function SettingsPage() {
 
               {/* Avatar */}
               <div className="flex items-center gap-4 mb-6 pb-6 border-b border-gray-100">
-                <div className="h-16 w-16 rounded-full bg-indigo-100 flex items-center justify-center text-2xl font-bold text-indigo-600">
-                  {user?.firstName?.[0]?.toUpperCase()}{user?.lastName?.[0]?.toUpperCase()}
-                </div>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="hidden"
+                  onChange={handleAvatarChange}
+                />
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={avatarLoading}
+                  className="relative h-16 w-16 rounded-full flex-shrink-0 overflow-hidden group focus:outline-none"
+                  title="Changer la photo de profil"
+                >
+                  {user?.avatar ? (
+                    <img
+                      src={resolveMediaUrl(user.avatar)}
+                      alt="Avatar"
+                      className="h-full w-full object-cover rounded-full"
+                    />
+                  ) : (
+                    <div className="h-full w-full rounded-full bg-indigo-100 flex items-center justify-center text-2xl font-bold text-indigo-600">
+                      {user?.firstName?.[0]?.toUpperCase()}{user?.lastName?.[0]?.toUpperCase()}
+                    </div>
+                  )}
+                  <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    {avatarLoading
+                      ? <Loader2 className="h-5 w-5 text-white animate-spin" />
+                      : <Camera className="h-5 w-5 text-white" />
+                    }
+                  </div>
+                </button>
                 <div>
                   <p className="text-sm font-semibold text-gray-800">{user?.firstName} {user?.lastName}</p>
                   <p className="text-xs text-gray-500">{user?.email}</p>
-                  <p className="text-xs text-indigo-600 mt-1 cursor-pointer hover:underline">Changer l'avatar</p>
+                  <button
+                    type="button"
+                    onClick={() => avatarInputRef.current?.click()}
+                    disabled={avatarLoading}
+                    className="text-xs text-indigo-600 mt-1 hover:underline disabled:opacity-50"
+                  >
+                    {avatarLoading ? 'Chargement...' : 'Changer la photo de profil'}
+                  </button>
                 </div>
               </div>
 
@@ -204,13 +266,12 @@ export default function SettingsPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                   <input
-                    {...profileForm.register('email')}
+                    value={user?.email ?? ''}
+                    readOnly
                     type="email"
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-gray-50 text-gray-500 cursor-not-allowed"
                   />
-                  {profileForm.formState.errors.email && (
-                    <p className="text-xs text-red-500 mt-1">{profileForm.formState.errors.email.message}</p>
-                  )}
+                  <p className="text-xs text-gray-400 mt-1">L'email ne peut pas être modifié ici.</p>
                 </div>
 
                 <div className="pt-2">

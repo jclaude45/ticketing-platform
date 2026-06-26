@@ -46,7 +46,7 @@ export class StorageService {
 
     this.uploadsDir = path.join(process.cwd(), 'public', 'uploads');
     const port = this.configService.get<number>('port') || 3001;
-    this.appBaseUrl = `http://localhost:${port}`;
+    this.appBaseUrl = this.configService.get<string>('APP_BASE_URL') || `http://localhost:${port}`;
   }
 
   private isS3Configured(): boolean {

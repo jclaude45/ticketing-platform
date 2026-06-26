@@ -13,11 +13,11 @@ import { debounce } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 
 const STATUS_OPTIONS = [
-  { value: '', label: 'All Status' },
-  { value: 'DRAFT', label: 'Draft' },
-  { value: 'PUBLISHED', label: 'Published' },
-  { value: 'CANCELLED', label: 'Cancelled' },
-  { value: 'COMPLETED', label: 'Completed' },
+  { value: '', label: 'Tous les statuts' },
+  { value: 'DRAFT', label: 'Brouillon' },
+  { value: 'PUBLISHED', label: 'Publié' },
+  { value: 'CANCELLED', label: 'Annulé' },
+  { value: 'COMPLETED', label: 'Terminé' },
 ];
 
 export default function EventsPage() {
@@ -28,7 +28,7 @@ export default function EventsPage() {
     setFilters({ search: String(value) });
   }, 300);
 
-  if (isLoading && !data) return <PageLoader text="Loading events..." />;
+  if (isLoading && !data) return <PageLoader text="Chargement des événements..." />;
 
   // If the fetch failed and we have no data, show an error state with retry
   if (isError && !data) {
@@ -53,8 +53,8 @@ export default function EventsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Events"
-        description={`${data?.total ?? 0} events total`}
+        title="Événements"
+        description={`${data?.total ?? 0} événement(s) au total`}
         actions={
           <div className="flex items-center gap-2">
             {isFetching && (
@@ -67,7 +67,7 @@ export default function EventsPage() {
               className="btn-primary gap-2"
             >
               <Plus className="h-4 w-4" />
-              Create Event
+              Créer un événement
             </Link>
           </div>
         }
@@ -81,7 +81,7 @@ export default function EventsPage() {
             type="text"
             defaultValue={filters.search}
             onChange={(e) => handleSearch(e.target.value)}
-            placeholder="Search events..."
+            placeholder="Rechercher des événements..."
             className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
           />
         </div>
@@ -123,7 +123,7 @@ export default function EventsPage() {
           {data.totalPages > 1 && (
             <div className="flex items-center justify-between">
               <p className="text-sm text-gray-500">
-                Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, data.total)} of {data.total}
+                Affichage {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, data.total)} sur {data.total}
               </p>
               <div className="flex items-center gap-1">
                 <button
@@ -131,14 +131,14 @@ export default function EventsPage() {
                   disabled={currentPage === 1}
                   className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
-                  Previous
+                  Précédent
                 </button>
                 <button
                   onClick={() => setCurrentPage(currentPage + 1)}
                   disabled={currentPage === data.totalPages}
                   className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
-                  Next
+                  Suivant
                 </button>
               </div>
             </div>
@@ -147,12 +147,12 @@ export default function EventsPage() {
       ) : (
         <EmptyState
           icon={<Calendar className="h-8 w-8" />}
-          title="No events yet"
-          description="Create your first event to start managing tickets and access control."
+          title="Aucun événement"
+          description="Créez votre premier événement pour gérer les billets et le contrôle d'accès."
           action={
             <Link href="/dashboard/events/new" className="btn-primary gap-2">
               <Plus className="h-4 w-4" />
-              Create Event
+              Créer un événement
             </Link>
           }
         />

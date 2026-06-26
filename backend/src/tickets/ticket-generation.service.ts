@@ -11,6 +11,7 @@ import { CryptoService } from '../crypto/crypto.service';
 import { QrcodeService } from '../qrcode/qrcode.service';
 import { GenerateTicketsDto } from './dto/generate-tickets.dto';
 import { Role, TicketStatus } from '@prisma/client';
+import { SubscriptionService } from '../subscription/subscription.service';
 
 @Injectable()
 export class TicketGenerationService {
@@ -21,6 +22,7 @@ export class TicketGenerationService {
     private readonly cryptoService: CryptoService,
     private readonly qrcodeService: QrcodeService,
     private readonly configService: ConfigService,
+    private readonly subscriptionService: SubscriptionService,
   ) {}
 
   async generateTickets(
@@ -36,7 +38,7 @@ export class TicketGenerationService {
     });
     if (!event) throw new NotFoundException('Event not found');
 
-    if (organizerRole !== Role.ADMIN && event.organizerId !== organizerId) {
+    if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && event.organizerId !== organizerId) {
       throw new ForbiddenException('You can only generate tickets for your own events');
     }
 
@@ -65,6 +67,9 @@ export class TicketGenerationService {
         `Cannot generate ${count} tickets. Only ${template.availableCount} available in this template.`,
       );
     }
+
+    // Enforce subscription quota
+    await this.subscriptionService.checkAndIncrementTickets(event.organizerId, count);
 
     // Get the active key pair for the organizer — auto-generate if none exists
     const encKey = this.configService.get<string>('crypto.privateKeyEncryptionKey');
@@ -203,7 +208,7 @@ export class TicketGenerationService {
 
     if (!ticket) throw new NotFoundException('Ticket not found');
 
-    if (organizerRole !== Role.ADMIN && ticket.event.organizerId !== organizerId) {
+    if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && ticket.event.organizerId !== organizerId) {
       throw new ForbiddenException('Access denied');
     }
 

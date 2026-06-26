@@ -28,11 +28,11 @@ export class ValidationController {
   @ApiOperation({ summary: 'Scan and validate a ticket QR code' })
   async scanTicket(
     @Param('eventId') eventId: string,
-    @CurrentUser('id') controllerId: string,
+    @CurrentUser() user: any,
     @Body() dto: ScanTicketDto,
     @Request() req: any,
   ) {
-    return this.validationService.scanTicket(controllerId, eventId, dto, req.ip);
+    return this.validationService.scanTicket(user.id, eventId, dto, req.ip, user.role);
   }
 
   @Post('events/:eventId/sync')

@@ -24,7 +24,7 @@ export class TicketTemplateService {
     const event = await this.prisma.event.findUnique({ where: { id: eventId } });
     if (!event) throw new NotFoundException('Event not found');
 
-    if (organizerRole !== Role.ADMIN && event.organizerId !== organizerId) {
+    if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && event.organizerId !== organizerId) {
       throw new ForbiddenException('You can only add templates to your own events');
     }
 
@@ -64,7 +64,7 @@ export class TicketTemplateService {
     const event = await this.prisma.event.findUnique({ where: { id: eventId } });
     if (!event) throw new NotFoundException('Event not found');
 
-    if (organizerRole !== Role.ADMIN && event.organizerId !== organizerId) {
+    if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && event.organizerId !== organizerId) {
       throw new ForbiddenException('Access denied');
     }
 
@@ -88,7 +88,7 @@ export class TicketTemplateService {
 
     if (!template) throw new NotFoundException('Template not found');
 
-    if (organizerRole !== Role.ADMIN && template.event.organizerId !== organizerId) {
+    if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && template.event.organizerId !== organizerId) {
       throw new ForbiddenException('Access denied');
     }
 
@@ -108,7 +108,7 @@ export class TicketTemplateService {
 
     if (!template) throw new NotFoundException('Template not found');
 
-    if (organizerRole !== Role.ADMIN && template.event.organizerId !== organizerId) {
+    if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && template.event.organizerId !== organizerId) {
       throw new ForbiddenException('Access denied');
     }
 
@@ -161,7 +161,7 @@ export class TicketTemplateService {
 
     if (!template) throw new NotFoundException('Template not found');
 
-    if (organizerRole !== Role.ADMIN && template.event.organizerId !== organizerId) {
+    if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && template.event.organizerId !== organizerId) {
       throw new ForbiddenException('Access denied');
     }
 
