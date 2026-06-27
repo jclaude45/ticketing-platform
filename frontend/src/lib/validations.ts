@@ -49,9 +49,24 @@ export const totpSchema = z.object({
     .regex(/^\d+$/, 'Must be numeric'),
 });
 
+export const EVENT_TYPES = [
+  { value: 'CONCERT',    label: 'Concert / Musique',   emoji: '🎵' },
+  { value: 'CONFERENCE', label: 'Conférence',           emoji: '🎤' },
+  { value: 'FESTIVAL',   label: 'Festival',             emoji: '🎪' },
+  { value: 'SPORT',      label: 'Sport',                emoji: '⚽' },
+  { value: 'PARTY',      label: 'Soirée / Fête',        emoji: '🥂' },
+  { value: 'EXHIBITION', label: 'Exposition',           emoji: '🖼️' },
+  { value: 'THEATER',    label: 'Théâtre / Spectacle',  emoji: '🎭' },
+  { value: 'WORKSHOP',   label: 'Atelier / Formation',  emoji: '🛠️' },
+  { value: 'OTHER',      label: 'Autre',                emoji: '📌' },
+] as const;
+
+export type EventTypeValue = typeof EVENT_TYPES[number]['value'];
+
 export const createEventSchema = z.object({
   name: z.string().min(3, 'Event name must be at least 3 characters').max(200),
   description: z.string().min(10, 'Description must be at least 10 characters').max(2000).optional().or(z.literal('')),
+  type: z.enum(['CONCERT','CONFERENCE','FESTIVAL','SPORT','PARTY','EXHIBITION','THEATER','WORKSHOP','OTHER']).default('OTHER'),
   venue: z.string().min(2, 'Venue is required').max(200),
   address: z.string().max(300).optional(),
   city: z.string().min(1, 'City is required').max(100),

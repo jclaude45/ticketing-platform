@@ -35,11 +35,13 @@ export interface RegisterData {
 
 // Event types
 export type EventStatus = 'DRAFT' | 'PUBLISHED' | 'CANCELLED' | 'COMPLETED';
+export type EventType = 'CONCERT' | 'CONFERENCE' | 'FESTIVAL' | 'SPORT' | 'PARTY' | 'EXHIBITION' | 'THEATER' | 'WORKSHOP' | 'OTHER';
 
 export interface Event {
   id: string;
   name: string;
   description?: string;
+  type?: EventType;
   venue: string;
   address?: string;
   city: string;

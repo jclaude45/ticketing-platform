@@ -60,6 +60,18 @@ enum EventStatus {
   COMPLETED
 }
 
+enum EventType {
+  CONCERT
+  CONFERENCE
+  FESTIVAL
+  SPORT
+  PARTY
+  EXHIBITION
+  THEATER
+  WORKSHOP
+  OTHER
+}
+
 enum ScanResult {
   VALID
   ALREADY_USED
@@ -125,6 +137,7 @@ model Event {
   endDate          DateTime
   totalCapacity    Int
   status           EventStatus @default(DRAFT)
+  type             EventType   @default(OTHER)
   bannerUrl        String?
   organizerId      String
   createdAt        DateTime    @default(now())

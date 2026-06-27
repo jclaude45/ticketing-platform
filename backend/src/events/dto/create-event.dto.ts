@@ -9,7 +9,7 @@ import {
   IsEnum,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { EventStatus } from '@prisma/client';
+import { EventStatus, EventType } from '@prisma/client';
 
 export class CreateEventDto {
   @ApiProperty({ example: 'Annual Tech Conference 2026' })
@@ -65,6 +65,11 @@ export class CreateEventDto {
   @IsOptional()
   @IsEnum(EventStatus)
   status?: EventStatus;
+
+  @ApiPropertyOptional({ enum: EventType, default: EventType.OTHER })
+  @IsOptional()
+  @IsEnum(EventType)
+  type?: EventType;
 
   @ApiPropertyOptional({ example: 'https://example.com/banner.jpg' })
   @IsOptional()
