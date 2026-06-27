@@ -155,11 +155,11 @@ export const authApi = {
   verifyTwoFactor: (code: string) =>
     apiClient.post<ApiResponse<{ backupCodes: string[] }>>(
       '/auth/2fa/verify',
-      { code }
+      { totpCode: code }
     ),
 
   disableTwoFactor: (code: string) =>
-    apiClient.post('/auth/2fa/disable', { code }),
+    apiClient.post('/auth/2fa/disable', { totpCode: code }),
 
   getProfile: () => apiClient.get<ApiResponse<User>>('/auth/profile'),
 
