@@ -138,6 +138,7 @@ model Event {
   totalCapacity    Int
   status           EventStatus @default(DRAFT)
   type             EventType   @default(OTHER)
+  currency         String      @default("USD")
   bannerUrl        String?
   organizerId      String
   createdAt        DateTime    @default(now())

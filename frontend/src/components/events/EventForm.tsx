@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { motion } from 'framer-motion';
 import { Calendar, Loader2, MapPin, Users, Building } from 'lucide-react';
-import { createEventSchema, type CreateEventFormData, EVENT_TYPES } from '@/lib/validations';
+import { createEventSchema, type CreateEventFormData, EVENT_TYPES, EVENT_CURRENCIES } from '@/lib/validations';
 import { useCreateEvent, useUpdateEvent } from '@/hooks/useEvents';
 import { FileUpload } from '@/components/common/FileUpload';
 import { UpgradePlanModal } from '@/components/subscription/UpgradePlanModal';
@@ -69,6 +69,7 @@ export function EventForm({ event, isEdit }: EventFormProps) {
           name: event.name,
           description: event.description,
           type: event.type ?? 'OTHER',
+          currency: (event as any).currency ?? 'USD',
           venue: event.venue,
           address: event.address,
           city: event.city,
@@ -78,11 +79,12 @@ export function EventForm({ event, isEdit }: EventFormProps) {
           totalCapacity: event.totalCapacity,
           bannerUrl: event.bannerUrl,
         }
-      : { totalCapacity: 100, type: 'OTHER' },
+      : { totalCapacity: 100, type: 'OTHER', currency: 'USD' },
   });
 
   const bannerUrl  = watch('bannerUrl');
   const eventType  = watch('type');
+  const currency   = watch('currency');
 
   const onSubmit = (data: CreateEventFormData) => {
     const payload = {
@@ -131,18 +133,43 @@ export function EventForm({ event, isEdit }: EventFormProps) {
                   type="button"
                   onClick={() => setValue('type', t.value as any, { shouldValidate: true })}
                   className={cn(
-                    'flex flex-col items-center gap-1 p-2.5 rounded-xl border text-xs font-medium transition-all',
+                    'py-2 px-3 rounded-xl border text-xs font-medium transition-all text-center',
                     eventType === t.value
                       ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 shadow-sm'
                       : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:border-indigo-300 hover:bg-indigo-50/50',
                   )}
                 >
-                  <span className="text-lg leading-none">{t.emoji}</span>
-                  <span className="text-center leading-tight">{t.label}</span>
+                  {t.label}
                 </button>
               ))}
             </div>
             <input type="hidden" {...register('type')} />
+          </Field>
+
+          <Field label="Devise" error={(errors as any).currency?.message} required>
+            <div className="grid grid-cols-5 gap-2">
+              {EVENT_CURRENCIES.map(c => (
+                <button
+                  key={c.value}
+                  type="button"
+                  onClick={() => setValue('currency', c.value as any, { shouldValidate: true })}
+                  className={cn(
+                    'py-2 px-3 rounded-xl border text-xs font-bold transition-all text-center',
+                    currency === c.value
+                      ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 shadow-sm'
+                      : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:border-indigo-300 hover:bg-indigo-50/50',
+                  )}
+                >
+                  {c.value}
+                </button>
+              ))}
+            </div>
+            {currency && (
+              <p className="mt-1.5 text-xs text-gray-500">
+                {EVENT_CURRENCIES.find(c => c.value === currency)?.label}
+              </p>
+            )}
+            <input type="hidden" {...register('currency' as any)} />
           </Field>
 
           <Field label="Description" error={errors.description?.message}>

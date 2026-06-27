@@ -7,6 +7,7 @@ import {
   Min,
   MaxLength,
   IsEnum,
+  IsIn,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { EventStatus, EventType } from '@prisma/client';
@@ -70,6 +71,12 @@ export class CreateEventDto {
   @IsOptional()
   @IsEnum(EventType)
   type?: EventType;
+
+  @ApiPropertyOptional({ example: 'USD', enum: ['CDF','USD','EUR','XAF','GBP'] })
+  @IsOptional()
+  @IsString()
+  @IsIn(['CDF','USD','EUR','XAF','GBP'])
+  currency?: string;
 
   @ApiPropertyOptional({ example: 'https://example.com/banner.jpg' })
   @IsOptional()

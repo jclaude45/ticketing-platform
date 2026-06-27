@@ -50,15 +50,23 @@ export const totpSchema = z.object({
 });
 
 export const EVENT_TYPES = [
-  { value: 'CONCERT',    label: 'Concert / Musique',   emoji: '🎵' },
-  { value: 'CONFERENCE', label: 'Conférence',           emoji: '🎤' },
-  { value: 'FESTIVAL',   label: 'Festival',             emoji: '🎪' },
-  { value: 'SPORT',      label: 'Sport',                emoji: '⚽' },
-  { value: 'PARTY',      label: 'Soirée / Fête',        emoji: '🥂' },
-  { value: 'EXHIBITION', label: 'Exposition',           emoji: '🖼️' },
-  { value: 'THEATER',    label: 'Théâtre / Spectacle',  emoji: '🎭' },
-  { value: 'WORKSHOP',   label: 'Atelier / Formation',  emoji: '🛠️' },
-  { value: 'OTHER',      label: 'Autre',                emoji: '📌' },
+  { value: 'CONCERT',    label: 'Concert / Musique'  },
+  { value: 'CONFERENCE', label: 'Conférence'          },
+  { value: 'FESTIVAL',   label: 'Festival'            },
+  { value: 'SPORT',      label: 'Sport'               },
+  { value: 'PARTY',      label: 'Soirée / Fête'       },
+  { value: 'EXHIBITION', label: 'Exposition'          },
+  { value: 'THEATER',    label: 'Théâtre / Spectacle' },
+  { value: 'WORKSHOP',   label: 'Atelier / Formation' },
+  { value: 'OTHER',      label: 'Autre'               },
+] as const;
+
+export const EVENT_CURRENCIES = [
+  { value: 'CDF', label: 'CDF — Franc congolais'   },
+  { value: 'USD', label: 'USD — Dollar américain'  },
+  { value: 'EUR', label: 'EUR — Euro'               },
+  { value: 'XAF', label: 'XAF — Franc CFA'         },
+  { value: 'GBP', label: 'GBP — Livre sterling'    },
 ] as const;
 
 export type EventTypeValue = typeof EVENT_TYPES[number]['value'];
@@ -67,6 +75,7 @@ export const createEventSchema = z.object({
   name: z.string().min(3, 'Event name must be at least 3 characters').max(200),
   description: z.string().min(10, 'Description must be at least 10 characters').max(2000).optional().or(z.literal('')),
   type: z.enum(['CONCERT','CONFERENCE','FESTIVAL','SPORT','PARTY','EXHIBITION','THEATER','WORKSHOP','OTHER']).default('OTHER'),
+  currency: z.enum(['CDF','USD','EUR','XAF','GBP']).default('USD'),
   venue: z.string().min(2, 'Venue is required').max(200),
   address: z.string().max(300).optional(),
   city: z.string().min(1, 'City is required').max(100),
