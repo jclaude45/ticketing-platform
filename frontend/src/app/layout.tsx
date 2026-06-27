@@ -21,6 +21,11 @@ export const metadata: Metadata = {
   keywords: ['ticketing', 'events', 'qr code', 'access control'],
   authors: [{ name: 'ZAYA' }],
   creator: 'ZAYA',
+  icons: {
+    icon: '/icon.svg',
+    shortcut: '/icon.svg',
+    apple: '/icon.svg',
+  },
   other: {
     'google': 'notranslate',
   },
