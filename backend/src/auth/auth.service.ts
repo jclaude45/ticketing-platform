@@ -510,7 +510,7 @@ export class AuthService {
 
   private async sendPasswordResetEmail(email: string, firstName: string, token: string) {
     const frontendUrl = this.configService.get<string>('frontend.url');
-    const resetUrl = `${frontendUrl}/reset-password?token=${token}`;
+    const resetUrl = `${frontendUrl}/auth/reset-password?token=${token}`;
 
     try {
       await this.mailerTransport.sendMail({
