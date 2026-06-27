@@ -571,6 +571,19 @@ export const publicApi = {
     items: { templateId: string; quantity: number }[];
   }) =>
     publicClient.post(`/public/events/${eventId}/register`, data),
+
+  initiatePayment: (eventId: string, data: {
+    holderName: string;
+    holderEmail: string;
+    holderPhone?: string;
+    items: { templateId: string; quantity: number }[];
+    paymentMethod: 'mobile_money' | 'card';
+    currency?: string;
+  }) =>
+    publicClient.post(`/public/events/${eventId}/initiate-payment`, data),
+
+  getPaymentStatus: (reference: string) =>
+    publicClient.get(`/public/payments/${reference}/status`),
 };
 
 export default apiClient;

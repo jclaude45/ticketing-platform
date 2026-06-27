@@ -29,6 +29,7 @@ import { ProjectModule } from './project/project.module';
 import { CommunicationModule } from './communication/communication.module';
 import { PublicModule } from './public/public.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { PaymentModule } from './payment/payment.module';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -69,6 +70,7 @@ import { AppService } from './app.service';
     CommunicationModule,
     PublicModule,
     NotificationsModule,
+    PaymentModule,
   ],
   controllers: [AppController],
   providers: [

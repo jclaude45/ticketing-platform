@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -8,7 +8,7 @@ import { publicApi, resolveMediaUrl } from '@/lib/api';
 import {
   ArrowLeft, MapPin, Calendar, Clock, Users, Ticket,
   CheckCircle2, Loader2, X, AlertCircle,
-  Plus, Minus, ShoppingCart, Phone,
+  Plus, Minus, ShoppingCart, Phone, CreditCard, Smartphone,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TicketVisual, ExportPDFButton, type TicketData } from '@/components/billetterie/TicketCard';
@@ -85,6 +85,91 @@ function QtyButton({ onClick, disabled, children }: { onClick: () => void; disab
   );
 }
 
+// ─── Mobile Money waiting screen ─────────────────────────────────────────────
+
+function MobileMoneyWaiting({
+  reference, holderName, holderEmail, total, currency, eventName,
+  onSuccess, onCancel,
+}: {
+  reference: string;
+  holderName: string;
+  holderEmail: string;
+  total: number;
+  currency: string;
+  eventName: string;
+  onSuccess: (result: PurchaseResult) => void;
+  onCancel: () => void;
+}) {
+  const [dots, setDots] = useState('');
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    const dotsInterval = setInterval(() => setDots(d => d.length >= 3 ? '' : d + '.'), 500);
+    return () => clearInterval(dotsInterval);
+  }, []);
+
+  useEffect(() => {
+    const poll = async () => {
+      try {
+        const res = await publicApi.getPaymentStatus(reference);
+        const d = (res.data as any).data ?? res.data;
+        if (d.status === 'COMPLETED') {
+          if (intervalRef.current) clearInterval(intervalRef.current);
+          onSuccess({
+            eventName,
+            holderName,
+            holderEmail,
+            tickets: Array.isArray(d.tickets) ? d.tickets : [],
+            total,
+            currency,
+          });
+        } else if (d.status === 'FAILED' || d.status === 'CANCELLED') {
+          if (intervalRef.current) clearInterval(intervalRef.current);
+          onCancel();
+        }
+      } catch {
+        // ignore transient errors, keep polling
+      }
+    };
+
+    poll();
+    intervalRef.current = setInterval(poll, 5000);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [reference, holderName, holderEmail, total, currency, eventName, onSuccess, onCancel]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div className="bg-gradient-to-br from-indigo-600 to-purple-700 px-6 py-8 text-center space-y-4">
+          <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mx-auto">
+            <Smartphone className="h-8 w-8 text-white" />
+          </div>
+          <h2 className="text-lg font-bold text-white">Validez sur votre téléphone</h2>
+          <p className="text-indigo-100 text-sm">
+            Une demande de paiement de <strong>{total.toFixed(2)} {currency}</strong> a été envoyée à votre numéro Mobile Money.
+          </p>
+        </div>
+        <div className="px-6 py-6 space-y-4 text-center">
+          <div className="flex items-center justify-center gap-2 text-indigo-600 dark:text-indigo-400">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <span className="text-sm font-medium">En attente de confirmation{dots}</span>
+          </div>
+          <p className="text-xs text-gray-500">
+            Ouvrez votre application Mobile Money et confirmez le paiement.
+            Cette page se mettra à jour automatiquement.
+          </p>
+          <button
+            onClick={onCancel}
+            className="text-xs text-gray-400 hover:text-gray-600 underline"
+          >
+            Annuler
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Purchase Modal ───────────────────────────────────────────────────────────
 
 function PurchaseModal({
@@ -100,6 +185,8 @@ function PurchaseModal({
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'mobile_money' | 'card' | null>(null);
+  const [mmWaiting, setMmWaiting] = useState<{ reference: string; total: number; currency: string } | null>(null);
 
   const availableTemplates = event.ticketTemplates.filter(t => t.availableCount > 0);
 
@@ -108,19 +195,13 @@ function PurchaseModal({
       const current = prev[templateId] ?? 0;
       const tpl = event.ticketTemplates.find(t => t.id === templateId)!;
       const next = Math.min(Math.max(0, current + delta), Math.min(tpl.availableCount, 20));
-      if (next === 0) {
-        const copy = { ...prev };
-        delete copy[templateId];
-        return copy;
-      }
+      if (next === 0) { const copy = { ...prev }; delete copy[templateId]; return copy; }
       return { ...prev, [templateId]: next };
     });
   };
 
   const items = useMemo(
-    () => Object.entries(quantities)
-      .filter(([, qty]) => qty > 0)
-      .map(([templateId, quantity]) => ({ templateId, quantity })),
+    () => Object.entries(quantities).filter(([, qty]) => qty > 0).map(([templateId, quantity]) => ({ templateId, quantity })),
     [quantities],
   );
 
@@ -130,23 +211,56 @@ function PurchaseModal({
     return s + (tpl ? tpl.price * i.quantity : 0);
   }, 0);
 
-  const currency = event.ticketTemplates[0]?.currency ?? 'EUR';
+  const currency = event.ticketTemplates[0]?.currency ?? 'USD';
   const totalLabel = totalPrice === 0 ? 'Gratuit' : `${totalPrice.toFixed(2)} ${currency}`;
+  const isPaid = totalPrice > 0;
 
-  const canSubmit = items.length > 0 && name.trim().length >= 2 && email.includes('@');
+  const contactOk = name.trim().length >= 2 && email.includes('@');
+  const phoneRequiredForMM = paymentMethod === 'mobile_money' && !phone.trim();
+  const canSubmit = items.length > 0 && contactOk && (!isPaid || paymentMethod !== null) && !phoneRequiredForMM;
 
   const mutation = useMutation({
-    mutationFn: () => publicApi.purchaseTicket(event.id, {
-      holderName: name.trim(),
-      holderEmail: email.trim(),
-      holderPhone: phone.trim() || undefined,
-      items,
-    }),
+    mutationFn: () => {
+      if (!isPaid) {
+        return publicApi.purchaseTicket(event.id, {
+          holderName: name.trim(), holderEmail: email.trim(), holderPhone: phone.trim() || undefined, items,
+        });
+      }
+      return publicApi.initiatePayment(event.id, {
+        holderName: name.trim(), holderEmail: email.trim(), holderPhone: phone.trim() || undefined,
+        items, paymentMethod: paymentMethod!, currency,
+      });
+    },
     onSuccess: (res) => {
-      const d = (res.data as any);
-      onSuccess(d.data ?? d);
+      const d = (res.data as any).data ?? res.data;
+      if (!isPaid) {
+        onSuccess(d);
+        return;
+      }
+      if (d.paymentMethod === 'card' && d.redirectUrl) {
+        window.location.href = d.redirectUrl;
+        return;
+      }
+      if (d.paymentMethod === 'mobile_money') {
+        setMmWaiting({ reference: d.reference, total: totalPrice, currency });
+      }
     },
   });
+
+  if (mmWaiting) {
+    return (
+      <MobileMoneyWaiting
+        reference={mmWaiting.reference}
+        holderName={name.trim()}
+        holderEmail={email.trim()}
+        total={mmWaiting.total}
+        currency={mmWaiting.currency}
+        eventName={event.name}
+        onSuccess={onSuccess}
+        onCancel={onClose}
+      />
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -194,20 +308,15 @@ function PurchaseModal({
                       </p>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      <QtyButton onClick={() => setQty(t.id, -1)} disabled={qty === 0}>
-                        <Minus className="h-3 w-3" />
-                      </QtyButton>
+                      <QtyButton onClick={() => setQty(t.id, -1)} disabled={qty === 0}><Minus className="h-3 w-3" /></QtyButton>
                       <span className="w-5 text-center text-sm font-bold text-gray-900 dark:text-white">{qty}</span>
-                      <QtyButton onClick={() => setQty(t.id, +1)} disabled={qty >= Math.min(t.availableCount, 20)}>
-                        <Plus className="h-3 w-3" />
-                      </QtyButton>
+                      <QtyButton onClick={() => setQty(t.id, +1)} disabled={qty >= Math.min(t.availableCount, 20)}><Plus className="h-3 w-3" /></QtyButton>
                     </div>
                   </div>
                 );
               })}
             </div>
 
-            {/* Summary bar */}
             {totalCount > 0 && (
               <div className="mt-3 flex items-center justify-between bg-indigo-600 text-white rounded-xl px-4 py-2.5">
                 <div className="flex items-center gap-2 text-sm font-medium">
@@ -229,43 +338,71 @@ function PurchaseModal({
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Nom complet <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="Jean Dupont"
-                  className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                />
+                <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Jean Dupont"
+                  className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Adresse email <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="jean@exemple.fr"
-                  className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                />
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="jean@exemple.com"
+                  className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   <span className="flex items-center gap-1.5">
                     <Phone className="h-3.5 w-3.5 text-gray-400" />
-                    Téléphone <span className="text-gray-400 font-normal">(facultatif)</span>
+                    Téléphone
+                    {paymentMethod === 'mobile_money'
+                      ? <span className="text-red-500">*</span>
+                      : <span className="text-gray-400 font-normal">(facultatif)</span>
+                    }
                   </span>
                 </label>
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={e => setPhone(e.target.value)}
-                  placeholder="+33 6 12 34 56 78"
-                  className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                />
+                <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+243 81 234 5678"
+                  className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
               </div>
             </div>
           </div>
+
+          {/* Step 3: payment method (only for paid tickets) */}
+          {isPaid && totalCount > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
+                3 — Mode de paiement
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                {([
+                  { id: 'mobile_money' as const, icon: <Smartphone className="h-5 w-5" />, label: 'Mobile Money', sub: 'M-Pesa, Airtel, Orange…' },
+                  { id: 'card' as const, icon: <CreditCard className="h-5 w-5" />, label: 'Carte bancaire', sub: 'Visa, Mastercard' },
+                ] as const).map(m => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setPaymentMethod(m.id)}
+                    className={cn(
+                      'flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-center transition-all',
+                      paymentMethod === m.id
+                        ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
+                        : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600',
+                    )}
+                  >
+                    {m.icon}
+                    <div>
+                      <p className="text-sm font-semibold">{m.label}</p>
+                      <p className="text-xs opacity-70 mt-0.5">{m.sub}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              {paymentMethod === 'mobile_money' && !phone.trim() && (
+                <p className="mt-2 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                  <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                  Veuillez saisir votre numéro de téléphone ci-dessus.
+                </p>
+              )}
+            </div>
+          )}
 
           {mutation.isError && (
             <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded-xl p-3">
@@ -288,10 +425,15 @@ function PurchaseModal({
           >
             {mutation.isPending
               ? <><Loader2 className="h-4 w-4 animate-spin" /> Traitement…</>
-              : <><Ticket className="h-4 w-4" />
+              : <>
+                  <Ticket className="h-4 w-4" />
                   {totalCount === 0
                     ? 'Sélectionnez des billets'
-                    : `Obtenir ${totalCount} billet${totalCount > 1 ? 's' : ''} — ${totalLabel}`
+                    : isPaid && !paymentMethod
+                      ? 'Choisissez un mode de paiement'
+                      : isPaid
+                        ? `Payer ${totalLabel} — ${totalCount} billet${totalCount > 1 ? 's' : ''}`
+                        : `Obtenir ${totalCount} billet${totalCount > 1 ? 's' : ''} — Gratuit`
                   }
                 </>
             }

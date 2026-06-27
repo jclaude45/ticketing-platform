@@ -141,6 +141,7 @@ model Event {
   projectInvitations ProjectInvitation[]
   projectMembers     ProjectMember[]
   campaigns          NotificationCampaign[]
+  payments           Payment[]
 }
 
 model TeamMember {
@@ -488,4 +489,36 @@ model Notification {
 
   @@index([userId, read])
   @@index([userId, createdAt])
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  reference     String        @unique
+  orderNumber   String?
+  eventId       String
+  holderName    String
+  holderEmail   String
+  holderPhone   String?
+  amount        Decimal       @db.Decimal(10, 2)
+  currency      String        @default("USD")
+  paymentMethod String
+  status        PaymentStatus @default(PENDING)
+  items         Json
+  providerRef   String?
+  ticketsData   Json?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id])
+
+  @@index([reference])
+  @@index([orderNumber])
+  @@index([status])
 }

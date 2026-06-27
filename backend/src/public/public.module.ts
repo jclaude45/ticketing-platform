@@ -8,5 +8,6 @@ import { TicketsModule } from '../tickets/tickets.module';
   imports: [PrismaModule, TicketsModule],
   controllers: [PublicController],
   providers: [PublicService],
+  exports: [PublicService],
 })
 export class PublicModule {}

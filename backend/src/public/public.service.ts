@@ -229,7 +229,7 @@ export class PublicService {
     };
   }
 
-  private async sendConfirmationEmail(
+  async sendConfirmationEmail(
     dto: PurchaseTicketDto,
     event: { id: string; name: string; startDate: Date; endDate: Date; city: string; venue: string },
     tickets: { ticketId: string; serialNumber: string; templateName: string; price: number; currency: string; qrCode: string | null }[],
