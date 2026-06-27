@@ -466,7 +466,7 @@ export class AuthService {
 
   private async sendVerificationEmail(email: string, firstName: string, token: string) {
     const frontendUrl = this.configService.get<string>('frontend.url');
-    const verifyUrl = `${frontendUrl}/verify-email?token=${token}`;
+    const verifyUrl = `${frontendUrl}/auth/verify-email?token=${token}`;
 
     try {
       await this.mailerTransport.sendMail({
