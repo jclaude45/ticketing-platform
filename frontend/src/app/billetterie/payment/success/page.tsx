@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { Suspense, useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { CheckCircle2, Loader2, Ticket, AlertCircle } from 'lucide-react';
@@ -8,7 +8,7 @@ import { publicApi } from '@/lib/api';
 
 type Status = 'checking' | 'completed' | 'failed';
 
-export default function PaymentSuccessPage() {
+function SuccessContent() {
   const params = useSearchParams();
   const reference = params.get('reference');
   const [status, setStatus] = useState<Status>('checking');
@@ -87,5 +87,17 @@ export default function PaymentSuccessPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function PaymentSuccessPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+      </div>
+    }>
+      <SuccessContent />
+    </Suspense>
   );
 }
