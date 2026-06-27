@@ -355,6 +355,7 @@ export class PublicService {
       <!-- Top banner -->
       <tr>
         <td align="center" style="background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%);padding:28px 32px 24px;">
+          <img src="https://zaya.live/email-logo.png" width="52" height="52" alt="ZAYA" style="display:block;margin:0 auto 14px;border-radius:12px;border:2px solid rgba(255,255,255,0.25);" />
           <h1 style="margin:0 0 6px;color:#ffffff;font-size:22px;font-weight:700;">&#10003; Inscription confirmée</h1>
           <p style="margin:0;color:rgba(255,255,255,0.8);font-size:14px;">${event.name}</p>
         </td>

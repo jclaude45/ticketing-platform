@@ -472,16 +472,36 @@ export class AuthService {
       await this.mailerTransport.sendMail({
         from: this.configService.get<string>('email.from'),
         to: email,
-        subject: 'Verify your email address',
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2>Welcome, ${firstName}!</h2>
-            <p>Thank you for registering with the Ticketing Platform. Please verify your email address by clicking the link below:</p>
-            <a href="${verifyUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 4px;">Verify Email</a>
-            <p>This link will expire in 24 hours.</p>
-            <p>If you did not create this account, please ignore this email.</p>
-          </div>
-        `,
+        subject: '✉️ Confirmez votre adresse email — ZAYA',
+        html: `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="fr">
+<head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/></head>
+<body style="margin:0;padding:0;background:#f0f0f5;font-family:Arial,Helvetica,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f0f0f5">
+  <tr><td align="center" style="padding:32px 16px;">
+    <table role="presentation" width="520" cellpadding="0" cellspacing="0" border="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 2px 20px rgba(0,0,0,0.07);max-width:520px;">
+      <tr><td align="center" style="background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%);padding:32px 32px 28px;">
+        <img src="https://zaya.live/email-logo.png" width="56" height="56" alt="ZAYA" style="display:block;margin:0 auto 16px;border-radius:14px;border:2px solid rgba(255,255,255,0.25);"/>
+        <h1 style="margin:0 0 4px;color:#fff;font-size:22px;font-weight:700;font-family:Arial,sans-serif;">Bienvenue sur ZAYA</h1>
+        <p style="margin:0;color:rgba(255,255,255,0.8);font-size:14px;font-family:Arial,sans-serif;">Confirmez votre adresse email pour commencer</p>
+      </td></tr>
+      <tr><td style="padding:32px;">
+        <p style="margin:0 0 16px;font-size:15px;color:#374151;font-family:Arial,sans-serif;">Bonjour <strong>${firstName}</strong>,</p>
+        <p style="margin:0 0 28px;font-size:14px;color:#6b7280;line-height:1.7;font-family:Arial,sans-serif;">Merci de vous être inscrit sur ZAYA. Cliquez sur le bouton ci-dessous pour vérifier votre adresse email et activer votre compte.</p>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 28px;">
+          <tr><td align="center" style="background:linear-gradient(135deg,#4f46e5,#7c3aed);border-radius:10px;">
+            <a href="${verifyUrl}" style="display:inline-block;padding:14px 36px;color:#ffffff;font-family:Arial,sans-serif;font-size:15px;font-weight:700;text-decoration:none;">Vérifier mon email</a>
+          </td></tr>
+        </table>
+        <p style="margin:0;font-size:12px;color:#9ca3af;font-family:Arial,sans-serif;text-align:center;">Ce lien expire dans 24 heures. Si vous n'avez pas créé ce compte, ignorez cet email.</p>
+      </td></tr>
+      <tr><td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:14px 32px;text-align:center;">
+        <p style="margin:0;font-size:11px;color:#9ca3af;font-family:Arial,sans-serif;">Propulsé par <strong>ZAYA</strong> — Plateforme de billetterie</p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>`,
       });
     } catch (error) {
       this.logger.error(`Failed to send verification email to ${email}`, error);
@@ -496,17 +516,36 @@ export class AuthService {
       await this.mailerTransport.sendMail({
         from: this.configService.get<string>('email.from'),
         to: email,
-        subject: 'Reset your password',
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2>Password Reset Request</h2>
-            <p>Hi ${firstName},</p>
-            <p>We received a request to reset your password. Click the button below to create a new password:</p>
-            <a href="${resetUrl}" style="display: inline-block; padding: 12px 24px; background-color: #2196F3; color: white; text-decoration: none; border-radius: 4px;">Reset Password</a>
-            <p>This link will expire in 1 hour.</p>
-            <p>If you didn't request a password reset, please ignore this email. Your account remains secure.</p>
-          </div>
-        `,
+        subject: '🔐 Réinitialisation de mot de passe — ZAYA',
+        html: `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="fr">
+<head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/></head>
+<body style="margin:0;padding:0;background:#f0f0f5;font-family:Arial,Helvetica,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f0f0f5">
+  <tr><td align="center" style="padding:32px 16px;">
+    <table role="presentation" width="520" cellpadding="0" cellspacing="0" border="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 2px 20px rgba(0,0,0,0.07);max-width:520px;">
+      <tr><td align="center" style="background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%);padding:32px 32px 28px;">
+        <img src="https://zaya.live/email-logo.png" width="56" height="56" alt="ZAYA" style="display:block;margin:0 auto 16px;border-radius:14px;border:2px solid rgba(255,255,255,0.25);"/>
+        <h1 style="margin:0 0 4px;color:#fff;font-size:22px;font-weight:700;font-family:Arial,sans-serif;">Réinitialisation du mot de passe</h1>
+        <p style="margin:0;color:rgba(255,255,255,0.8);font-size:14px;font-family:Arial,sans-serif;">Créez un nouveau mot de passe pour votre compte</p>
+      </td></tr>
+      <tr><td style="padding:32px;">
+        <p style="margin:0 0 16px;font-size:15px;color:#374151;font-family:Arial,sans-serif;">Bonjour <strong>${firstName}</strong>,</p>
+        <p style="margin:0 0 28px;font-size:14px;color:#6b7280;line-height:1.7;font-family:Arial,sans-serif;">Nous avons reçu une demande de réinitialisation de mot de passe pour votre compte ZAYA. Cliquez sur le bouton ci-dessous pour créer un nouveau mot de passe.</p>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 28px;">
+          <tr><td align="center" style="background:linear-gradient(135deg,#4f46e5,#7c3aed);border-radius:10px;">
+            <a href="${resetUrl}" style="display:inline-block;padding:14px 36px;color:#ffffff;font-family:Arial,sans-serif;font-size:15px;font-weight:700;text-decoration:none;">Réinitialiser mon mot de passe</a>
+          </td></tr>
+        </table>
+        <p style="margin:0;font-size:12px;color:#9ca3af;font-family:Arial,sans-serif;text-align:center;">Ce lien expire dans 1 heure. Si vous n'avez pas fait cette demande, ignorez cet email — votre compte reste sécurisé.</p>
+      </td></tr>
+      <tr><td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:14px 32px;text-align:center;">
+        <p style="margin:0;font-size:11px;color:#9ca3af;font-family:Arial,sans-serif;">Propulsé par <strong>ZAYA</strong> — Plateforme de billetterie</p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>`,
       });
     } catch (error) {
       this.logger.error(`Failed to send password reset email to ${email}`, error);
