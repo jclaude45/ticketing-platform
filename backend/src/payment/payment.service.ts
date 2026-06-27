@@ -76,7 +76,7 @@ export class PaymentService {
     }
 
     const reference = `ZAYA-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
-    const apiBase = this.config.get<string>('frontend.url') || 'https://zaya.live';
+    const apiBase = this.config.get<string>('frontend.publicUrl') || 'https://zaya.live';
     const apiBackend = this.config.get<string>('BACKEND_URL') || 'https://api.zaya.live';
 
     const payment = await this.prisma.payment.create({

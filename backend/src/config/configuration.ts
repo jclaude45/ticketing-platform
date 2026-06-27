@@ -32,6 +32,7 @@ export default () => ({
   },
   frontend: {
     url: process.env.FRONTEND_URL || 'http://localhost:3000',
+    publicUrl: process.env.PUBLIC_URL || 'http://localhost:3000',
   },
   throttle: {
     ttl: parseInt(process.env.THROTTLE_TTL, 10) || 60,
