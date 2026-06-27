@@ -131,12 +131,20 @@ export function useVerify2FA() {
   return useMutation({
     mutationFn: (code: string) => authApi.verifyTwoFactor(code),
     onSuccess: async () => {
-      toast.success('Two-factor authentication enabled!');
-      const res = await authApi.getProfile();
-      setUser(res.data.data);
-      queryClient.setQueryData(['auth', 'profile'], res.data.data);
+      toast.success('Authentification à deux facteurs activée !');
+      // Refresh profile separately — failure here must not trigger onError
+      try {
+        const res = await authApi.getProfile();
+        const user = res.data?.data ?? res.data;
+        if (user) {
+          setUser(user);
+          queryClient.setQueryData(['auth', 'profile'], user);
+        }
+      } catch {
+        queryClient.invalidateQueries({ queryKey: ['auth', 'profile'] });
+      }
       router.push('/dashboard');
     },
-    onError: () => toast.error('Invalid 2FA code'),
+    onError: () => toast.error('Code 2FA invalide. Réessayez.'),
   });
 }
