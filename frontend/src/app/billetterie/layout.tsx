@@ -20,13 +20,7 @@ export default function BilletterieLayout({ children }: { children: React.ReactN
           <Link href="/billetterie" className="flex items-center gap-2.5 flex-shrink-0">
             <img src="/zaya-logo.svg" alt="ZAYA" className="w-8 h-8 rounded-lg" />
             <span className="text-base font-extrabold text-gray-900 dark:text-white tracking-tight">ZAYA</span>
-            <span className="hidden sm:block text-xs font-medium text-gray-400 border border-gray-200 dark:border-gray-700 rounded-full px-2 py-0.5">Billetterie</span>
           </Link>
-
-          {/* Nav links */}
-          <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-gray-500 dark:text-gray-400">
-            <Link href="/billetterie" className="hover:text-gray-900 dark:hover:text-white transition-colors">Événements</Link>
-          </nav>
 
           {/* CTA */}
           <a

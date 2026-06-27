@@ -185,11 +185,6 @@ export default function BilletteriePage() {
         }} />
 
         <div className="relative max-w-4xl mx-auto px-4 sm:px-6 py-16 sm:py-24 text-center space-y-6">
-          <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-4 py-1.5 text-sm text-indigo-200 font-medium">
-            <Ticket className="h-4 w-4" />
-            Billetterie en ligne
-          </div>
-
           <h1 className="text-3xl sm:text-5xl font-extrabold text-white leading-tight tracking-tight">
             Trouvez votre<br />
             <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-300 to-purple-300">
