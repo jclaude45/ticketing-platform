@@ -176,17 +176,25 @@ export default function EventDetailPage() {
 
           <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed mb-6">{event.description}</p>
 
-          {/* Warning: no ticket templates */}
-          {event.status === 'DRAFT' && !hasTemplates && (
+          {/* DRAFT banner */}
+          {event.status === 'DRAFT' && (
             <div className="flex items-start gap-3 mb-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
               <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
               <div className="text-sm text-amber-800 dark:text-amber-300">
-                <span className="font-medium">Template requis pour publier.</span>{' '}
-                Crée d'abord un{' '}
-                <Link href={`/dashboard/events/${id}/tickets/template`} className="underline hover:no-underline">
-                  template de ticket
-                </Link>
-                .
+                {!hasTemplates ? (
+                  <>
+                    <span className="font-medium">Au moins un tarif est requis pour publier.</span>{' '}
+                    Modifiez l&apos;événement pour ajouter des tarifs, ou créez directement un{' '}
+                    <Link href={`/dashboard/events/${id}/tickets/template`} className="underline hover:no-underline">
+                      modèle de billet
+                    </Link>.
+                  </>
+                ) : (
+                  <>
+                    <span className="font-medium">Cet événement est en brouillon.</span>{' '}
+                    Cliquez sur <span className="font-semibold">Publier</span> pour qu&apos;il apparaisse sur la billetterie publique.
+                  </>
+                )}
               </div>
             </div>
           )}

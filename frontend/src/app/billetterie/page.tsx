@@ -157,12 +157,18 @@ export default function BilletteriePage() {
 
   const handleSearch = useCallback((v: string) => { setSearch(v); setPage(1); }, []);
 
-  const { data, isLoading, isFetching } = useQuery({
+  const { data, isLoading, isFetching, isError } = useQuery({
     queryKey: ['public-events', page, search, city],
-    queryFn: () => publicApi.listEvents({ page, limit: 12, search: search || undefined, city: city || undefined })
-      .then(r => (r.data as any).data as { data: PublicEvent[]; meta: any }),
+    queryFn: async () => {
+      const r = await publicApi.listEvents({ page, limit: 12, search: search || undefined, city: city || undefined });
+      const payload = (r.data as any);
+      // Handle both direct { data, meta } and wrapped { success, data: { data, meta } }
+      const inner = payload?.data ?? payload;
+      return inner as { data: PublicEvent[]; meta: any };
+    },
     staleTime: 30_000,
     placeholderData: prev => prev,
+    retry: 1,
   });
 
   const { data: citiesData } = useQuery({
@@ -283,7 +289,17 @@ export default function BilletteriePage() {
         )}
 
         {/* Loading */}
-        {isLoading ? (
+        {isError ? (
+          <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
+            <div className="w-16 h-16 rounded-2xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center">
+              <span className="text-3xl">⚠️</span>
+            </div>
+            <div>
+              <p className="font-bold text-gray-700 dark:text-gray-300">Impossible de charger les événements</p>
+              <p className="text-sm text-gray-400 mt-1">Vérifiez votre connexion et réessayez.</p>
+            </div>
+          </div>
+        ) : isLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="rounded-2xl bg-gray-200 dark:bg-gray-800 animate-pulse h-80" />

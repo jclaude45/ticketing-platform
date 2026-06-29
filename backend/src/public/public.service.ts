@@ -409,7 +409,7 @@ export class PublicService {
     });
   }
 
-  private buildTicketPdf(
+  buildTicketPdf(
     ticket: { serialNumber: string; templateName: string; price: number; currency: string; qrCode: string | null },
     event: { name: string; startDate: Date; city: string; venue: string },
     holderName: string,

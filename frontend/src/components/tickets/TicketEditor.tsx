@@ -15,7 +15,7 @@ import {
   Italic, Layers, Loader2, Minus, Move, Plus, QrCode, RotateCcw, Save,
   Settings2, Square, Trash2, Type, Hash, UserRound,
 } from 'lucide-react';
-import { useSaveTicketTemplate } from '@/hooks/useTickets';
+import { useSaveTicketTemplate, useTicketTemplates } from '@/hooks/useTickets';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -96,6 +96,10 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
     quantity: initialMeta?.quantity ?? 100,
     color: initialMeta?.color ?? '#4f46e5',
   });
+
+  // For "new" templates: the user picks an existing tariff to associate the canvas to
+  const [selectedTariffId, setSelectedTariffId] = useState<string | undefined>(templateId);
+  const { data: eventTariffs = [] } = useTicketTemplates(eventId);
 
   const saveTemplate = useSaveTicketTemplate(eventId);
 
@@ -628,7 +632,7 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
     // qrBounds/serialBounds are in screen canvas coordinate space (pageDims.w × pageDims.h).
     // The export service uses these stored dims to scale bounds into PDF strip coordinates.
     saveTemplate.mutate({
-      templateId,
+      templateId: selectedTariffId,
       meta,
       customFields: {
         canvas: json,
@@ -643,11 +647,14 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
       },
     }, {
       onSuccess: (data: any) => {
-        const savedId = data?.id ?? templateId;
-        if (savedId && onSaved) onSaved(savedId as string);
+        const savedId = data?.id ?? selectedTariffId;
+        if (savedId) {
+          setSelectedTariffId(savedId as string);
+          if (onSaved) onSaved(savedId as string);
+        }
       },
     });
-  }, [saveTemplate, preset, templateId, meta, onSaved]);
+  }, [saveTemplate, preset, selectedTariffId, meta, onSaved]);
 
   const exportPNG = useCallback(() => {
     const c = fabricRef.current; if (!c) return;
@@ -781,39 +788,66 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Propriétés</p>
               </div>
               <div className="overflow-y-auto h-full pb-20">
-                {/* Tarif metadata — always visible */}
-                <div className="p-3 space-y-3 border-b border-gray-100 dark:border-gray-800">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tarif</p>
-                  <div>
-                    <label className="text-xs text-gray-400">Nom</label>
-                    <input type="text" value={meta.name} onChange={e => setMeta(m => ({ ...m, name: e.target.value }))}
-                      className="w-full mt-0.5 px-2 py-1.5 text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500" />
-                  </div>
-                  <div className="flex gap-2">
-                    <div className="flex-1">
-                      <label className="text-xs text-gray-400">Prix</label>
-                      <input type="number" min={0} step={0.01} value={meta.price} onChange={e => setMeta(m => ({ ...m, price: Number(e.target.value) }))}
-                        className="w-full mt-0.5 px-2 py-1.5 text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                {/* Tarif — select from existing tariffs or display read-only */}
+                <div className="p-3 space-y-2 border-b border-gray-100 dark:border-gray-800">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tarif associé</p>
+
+                  {templateId ? (
+                    /* Editing an existing template — show info as read-only */
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: meta.color ?? '#4f46e5' }} />
+                        <span className="text-xs font-medium text-gray-800 dark:text-gray-200 truncate">{meta.name}</span>
+                      </div>
+                      <div className="flex gap-3 text-xs text-gray-500">
+                        <span>{meta.price > 0 ? `${meta.price} ${meta.currency}` : 'Gratuit'}</span>
+                        <span>·</span>
+                        <span>{meta.quantity} places</span>
+                      </div>
+                      <p className="text-[10px] text-gray-400">Modifiez le tarif depuis la fiche événement.</p>
                     </div>
-                    <div className="w-[72px]">
-                      <label className="text-xs text-gray-400">Devise</label>
-                      <select value={meta.currency} onChange={e => setMeta(m => ({ ...m, currency: e.target.value }))}
-                        className="w-full mt-0.5 px-1 py-1.5 text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500">
-                        {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  ) : eventTariffs.length === 0 ? (
+                    /* No tariffs yet — invite user to create them */
+                    <p className="text-xs text-amber-600 dark:text-amber-400 leading-relaxed">
+                      Aucun tarif disponible. Créez d&apos;abord des tarifs dans la fiche de l&apos;événement, puis revenez ici pour concevoir le design.
+                    </p>
+                  ) : (
+                    /* New template — dropdown to pick a tariff */
+                    <div className="space-y-2">
+                      <select
+                        value={selectedTariffId ?? ''}
+                        onChange={e => {
+                          const tid = e.target.value;
+                          setSelectedTariffId(tid || undefined);
+                          const found = (eventTariffs as any[]).find((t: any) => t.id === tid);
+                          if (found) {
+                            setMeta({
+                              name: found.name,
+                              price: Number(found.price),
+                              currency: found.currency ?? 'USD',
+                              quantity: found.availableCount ?? found.quantity,
+                              color: found.color ?? '#4f46e5',
+                            });
+                          }
+                        }}
+                        className="w-full px-2 py-1.5 text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      >
+                        <option value="">— Choisir un tarif —</option>
+                        {(eventTariffs as any[]).map((t: any) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name} · {t.price > 0 ? `${t.price} ${t.currency}` : 'Gratuit'}
+                          </option>
+                        ))}
                       </select>
+
+                      {selectedTariffId && (
+                        <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-gray-50 dark:bg-gray-800">
+                          <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: meta.color ?? '#4f46e5' }} />
+                          <span className="text-xs text-gray-600 dark:text-gray-400">{meta.quantity} places</span>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-400">Quantité</label>
-                    <input type="number" min={1} max={100000} value={meta.quantity} onChange={e => setMeta(m => ({ ...m, quantity: Number(e.target.value) }))}
-                      className="w-full mt-0.5 px-2 py-1.5 text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs text-gray-400">Couleur</label>
-                    <input type="color" value={meta.color ?? '#4f46e5'} onChange={e => setMeta(m => ({ ...m, color: e.target.value }))}
-                      className="w-8 h-7 rounded border border-gray-200 cursor-pointer p-0.5" />
-                    <span className="text-xs font-mono text-gray-500">{meta.color ?? '#4f46e5'}</span>
-                  </div>
+                  )}
                 </div>
 
                 {/* Object properties — only when an object is selected */}

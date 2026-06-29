@@ -67,16 +67,26 @@ export default function TicketTemplatesListPage() {
         <div className="flex flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed border-gray-200 py-16 text-center">
           <Palette className="h-12 w-12 text-gray-300" />
           <div>
-            <p className="text-sm font-medium text-gray-600">Aucun modèle de billet</p>
-            <p className="text-xs text-gray-400 mt-1">Créez un premier modèle pour commencer</p>
+            <p className="text-sm font-medium text-gray-600">Aucun tarif défini</p>
+            <p className="text-xs text-gray-400 mt-1 max-w-xs mx-auto">
+              Ajoutez d&apos;abord des tarifs depuis la fiche événement (Modifier), puis revenez ici pour concevoir leurs designs.
+            </p>
           </div>
-          <button
-            onClick={() => router.push(`/dashboard/events/${eventId}/tickets/template/new`)}
-            className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            Créer un modèle
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => router.push(`/dashboard/events/${eventId}/edit`)}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              Modifier l&apos;événement
+            </button>
+            <button
+              onClick={() => router.push(`/dashboard/events/${eventId}/tickets/template/new`)}
+              className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              Concevoir un modèle
+            </button>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -97,8 +107,9 @@ export default function TicketTemplatesListPage() {
                       className="h-full w-full object-cover"
                     />
                   ) : (
-                    <div className="flex h-full items-center justify-center">
+                    <div className="flex h-full flex-col items-center justify-center gap-1">
                       <Palette className="h-10 w-10 text-gray-300" />
+                      <span className="text-[10px] text-gray-400">Pas encore de design</span>
                     </div>
                   )}
                   {/* Color indicator */}
@@ -106,6 +117,12 @@ export default function TicketTemplatesListPage() {
                     className="absolute left-3 top-3 h-3 w-3 rounded-full ring-2 ring-white shadow"
                     style={{ backgroundColor: tpl.color ?? '#4f46e5' }}
                   />
+                  {/* No-design badge */}
+                  {!preview && (
+                    <span className="absolute right-2 top-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                      Concevoir →
+                    </span>
+                  )}
                 </div>
 
                 {/* Info */}

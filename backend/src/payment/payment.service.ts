@@ -175,6 +175,24 @@ export class PaymentService {
     }
   }
 
+  async getTicketPdf(reference: string, ticketId: string): Promise<{ buffer: Buffer; serialNumber: string }> {
+    const payment = await this.prisma.payment.findUnique({ where: { reference } });
+    if (!payment || payment.status !== 'COMPLETED') throw new Error('Billet introuvable');
+
+    const tickets = (payment.ticketsData ?? []) as any[];
+    const ticket = tickets.find(t => t.ticketId === ticketId);
+    if (!ticket) throw new Error('Billet introuvable');
+
+    const event = await this.prisma.event.findUnique({
+      where: { id: payment.eventId },
+      select: { name: true, startDate: true, city: true, venue: true },
+    });
+    if (!event) throw new Error('Événement introuvable');
+
+    const buffer = await this.publicService.buildTicketPdf(ticket, event, payment.holderName);
+    return { buffer, serialNumber: ticket.serialNumber };
+  }
+
   async handleCallback(body: any) {
     this.logger.log(`FlexPay callback: code=${body.code} ref=${body.reference} order=${body.orderNumber}`);
 

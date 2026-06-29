@@ -22,8 +22,19 @@ async function bootstrap() {
   const port = configService.get<number>('port');
   const isProduction = configService.get('NODE_ENV') === 'production';
 
+  const publicUrl = configService.get<string>('frontend.publicUrl');
+  const allowedOrigins = [
+    frontendUrl || 'http://localhost:3000',
+    publicUrl || 'http://localhost:3000',
+  ].filter(Boolean);
+
   app.enableCors({
-    origin: frontendUrl || 'http://localhost:3000',
+    origin: (origin, callback) => {
+      // Allow server-to-server / curl / Postman (no origin)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      callback(new Error(`CORS blocked: ${origin}`));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],

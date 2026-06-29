@@ -262,33 +262,31 @@ export const ticketsApi = {
       `/events/${eventId}/templates/${templateId}`
     ),
 
-  createTemplate: (eventId: string, payload: TemplatePayload) =>
-    apiClient.post<ApiResponse<TicketTemplate>>(
-      `/events/${eventId}/templates`,
-      {
-        name: payload.meta.name,
-        description: payload.meta.description,
-        price: payload.meta.price,
-        currency: payload.meta.currency,
-        quantity: payload.meta.quantity,
-        color: payload.meta.color,
-        customFields: payload.customFields,
-      }
-    ),
+  createTemplate: (eventId: string, payload: TemplatePayload) => {
+    const body: Record<string, any> = {
+      name: payload.meta.name,
+      description: payload.meta.description,
+      price: payload.meta.price,
+      currency: payload.meta.currency,
+      quantity: payload.meta.quantity,
+      color: payload.meta.color,
+    };
+    if (payload.customFields) body.customFields = payload.customFields;
+    return apiClient.post<ApiResponse<TicketTemplate>>(`/events/${eventId}/templates`, body);
+  },
 
-  updateTemplate: (eventId: string, templateId: string, payload: TemplatePayload) =>
-    apiClient.patch<ApiResponse<TicketTemplate>>(
-      `/events/${eventId}/templates/${templateId}`,
-      {
-        name: payload.meta.name,
-        description: payload.meta.description,
-        price: payload.meta.price,
-        currency: payload.meta.currency,
-        quantity: payload.meta.quantity,
-        color: payload.meta.color,
-        customFields: payload.customFields,
-      }
-    ),
+  updateTemplate: (eventId: string, templateId: string, payload: TemplatePayload) => {
+    const body: Record<string, any> = {
+      name: payload.meta.name,
+      description: payload.meta.description,
+      price: payload.meta.price,
+      currency: payload.meta.currency,
+      quantity: payload.meta.quantity,
+      color: payload.meta.color,
+    };
+    if (payload.customFields) body.customFields = payload.customFields;
+    return apiClient.patch<ApiResponse<TicketTemplate>>(`/events/${eventId}/templates/${templateId}`, body);
+  },
 
   deleteTemplate: (eventId: string, templateId: string) =>
     apiClient.delete<ApiResponse<{ message: string }>>(
@@ -554,8 +552,10 @@ export const notificationsApi = {
 };
 
 // ─── Public ticketing API (no auth required) ─────────────────────────────────
+// Always routes through the Next.js /api/public proxy (same origin, no CORS).
+// The proxy (/api/public/[...path]/route.ts) forwards server-side to INTERNAL_API_URL.
 
-const publicClient = axios.create({ baseURL: BASE_URL });
+const publicClient = axios.create({ baseURL: '/api' });
 
 export const publicApi = {
   listEvents: (params?: { page?: number; limit?: number; search?: string; city?: string }) =>
