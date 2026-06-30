@@ -383,6 +383,20 @@ export class TicketExportService {
       : true;
     const logoBuf = showLogo ? await this._getLogoBuffer() : Buffer.alloc(0);
 
+    // Pre-compute design image Buffers once per template.
+    // Passing the SAME Buffer reference to pdfkit lets it deduplicate the image XObject
+    // instead of embedding a full copy for every ticket (500 × 1MB = 500 MB PDF otherwise).
+    const designBufferMap = new Map<string, Buffer>();
+    for (const [templateId, cf] of templateMap) {
+      const preview = (cf as any)?.preview as string | undefined;
+      if (preview?.startsWith('data:image/')) {
+        designBufferMap.set(
+          templateId,
+          Buffer.from(preview.replace(/^data:image\/\w+;base64,/, ''), 'base64'),
+        );
+      }
+    }
+
     // Group tickets by templateId so each tariff is rendered with its own canvas layout.
     // The Map preserves insertion order (tickets are already sorted by templateId then serialNumber).
     const groups = new Map<string, typeof tickets>();
@@ -449,7 +463,7 @@ export class TicketExportService {
             const row    = Math.floor(i / cols);
             const cx     = offX + col * (tileW + STRIP_GAP);
             const cy     = offY + row * (tileH + STRIP_GAP);
-            this.drawTicketCell(doc, ticket, cx, cy, tileW, tileH, qrBufferMap.get(ticket.id), logoBuf);
+            this.drawTicketCell(doc, ticket, cx, cy, tileW, tileH, qrBufferMap.get(ticket.id), logoBuf, designBufferMap.get(ticket.templateId ?? ''));
           }
 
           // Dashed cut marks between rows
@@ -496,16 +510,17 @@ export class TicketExportService {
    *   200..215 — ligne de coupe en tirets
    *   215..395 — pied : ID billet + mention légale
    */
-  /** Dispatcher: uses canvas design if available, otherwise generic strip */
-  private drawTicketCell(doc: any, ticket: any, cx: number, cy: number, tileW: number, tileH: number, qrBuffer?: Buffer, logoBuf?: Buffer): void {
+  /** Dispatcher: uses canvas design if available, otherwise generic strip.
+   *  previewBuffer — pre-decoded Buffer for the canvas PNG (same reference = pdfkit deduplication). */
+  private drawTicketCell(doc: any, ticket: any, cx: number, cy: number, tileW: number, tileH: number, qrBuffer?: Buffer, logoBuf?: Buffer, previewBuffer?: Buffer): void {
     const cf = ticket.template?.customFields as any;
     const preview: string | undefined = cf?.preview;
     const qrBounds = cf?.qrBounds as { left: number; top: number; width: number; height: number } | undefined;
     const serialBounds = cf?.serialBounds as { left: number; top: number; width: number; height: number; fontSize?: number; fontWeight?: string; fill?: string } | undefined;
     const nameBounds = cf?.nameBounds as { left: number; top: number; width: number; height: number; fontSize: number; fontFamily: string; fontWeight: string; fill: string; textAlign: string } | undefined;
 
-    if (preview && preview.startsWith('data:image/')) {
-      this.drawDesignCell(doc, ticket, cx, cy, preview, qrBounds, serialBounds, nameBounds, tileW, tileH, qrBuffer, logoBuf);
+    if (previewBuffer || (preview && preview.startsWith('data:image/'))) {
+      this.drawDesignCell(doc, ticket, cx, cy, previewBuffer, preview, qrBounds, serialBounds, nameBounds, tileW, tileH, qrBuffer, logoBuf);
       return;
     }
 
@@ -642,7 +657,8 @@ export class TicketExportService {
     ticket: any,
     cx: number,
     cy: number,
-    preview: string,
+    previewBuffer: Buffer | undefined,
+    preview: string | undefined,
     qrBounds: { left: number; top: number; width: number; height: number } | undefined,
     serialBounds: { left: number; top: number; width: number; height: number; fontSize?: number; fontWeight?: string; fill?: string } | undefined,
     nameBounds: { left: number; top: number; width: number; height: number; fontSize: number; fontFamily: string; fontWeight: string; fill: string; textAlign: string } | undefined,
@@ -655,7 +671,9 @@ export class TicketExportService {
     // The preview is exported at multiplier:2, so: pngW = 2 × canvasW.
     // This avoids relying on the stored designW/designH which may be incorrect (legacy saves
     // stored the full-resolution preset size rather than the actual screen canvas size).
-    const imgBuffer = Buffer.from(preview.replace(/^data:image\/\w+;base64,/, ''), 'base64');
+    // Use the pre-computed buffer when available (same reference → pdfkit XObject deduplication).
+    // Fallback: decode from the base64 string (single-ticket export path).
+    const imgBuffer = previewBuffer ?? Buffer.from((preview ?? '').replace(/^data:image\/\w+;base64,/, ''), 'base64');
     const pngW = imgBuffer.readUInt32BE(16); // PNG IHDR width  (bytes 16–19)
     const pngH = imgBuffer.readUInt32BE(20); // PNG IHDR height (bytes 20–23)
     const actualW = pngW / 2;               // canvas was exported at 2× multiplier
