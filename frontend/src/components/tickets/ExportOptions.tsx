@@ -9,10 +9,9 @@ import {
   Grid2x2,
   ChevronDown,
   Loader2,
-  CheckCircle2,
-  AlertCircle,
   Printer,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import { apiClient } from '@/lib/api';
 import { UpgradePlanModal } from '@/components/subscription/UpgradePlanModal';
@@ -38,7 +37,7 @@ interface ExportOptionsProps {
   className?: string;
 }
 
-type ExportStatus = 'idle' | 'loading' | 'success' | 'error';
+type ExportStatus = 'idle' | 'loading';
 
 // ─── Decode arraybuffer errors (axios returns buffer when responseType='arraybuffer') ───
 
@@ -99,33 +98,24 @@ export function ExportOptions({
 }: ExportOptionsProps) {
   const [open, setOpen] = useState(false);
   const [activeExport, setActiveExport] = useState<string | null>(null);
-  const [statusMap, setStatusMap] = useState<Record<string, ExportStatus>>({});
-  const [errorMsgMap, setErrorMsgMap] = useState<Record<string, string>>({});
   const [upgradeOpen, setUpgradeOpen] = useState(false);
 
   const hasSelection = selectedTicketIds.length > 0;
 
-  const setStatus = (id: string, status: ExportStatus) => {
-    setStatusMap((prev) => ({ ...prev, [id]: status }));
-    if (status !== 'loading') {
-      setTimeout(() => setStatusMap((prev) => ({ ...prev, [id]: 'idle' })), 6000);
-    }
-  };
-
   const runExport = async (option: ExportOption) => {
     if (activeExport) return;
     setActiveExport(option.id);
-    setStatus(option.id, 'loading');
+    const toastId = toast.loading(`Export en cours — ${option.label}…`);
     try {
       await option.action();
-      setStatus(option.id, 'success');
+      toast.success('Téléchargement démarré !', { id: toastId });
     } catch (err: any) {
       if (err?.response?.status === 403) {
+        toast.dismiss(toastId);
         setUpgradeOpen(true);
       } else {
         const msg = decodeApiError(err);
-        setErrorMsgMap((prev) => ({ ...prev, [option.id]: msg }));
-        setStatus(option.id, 'error');
+        toast.error(msg, { id: toastId, duration: 8000 });
       }
     } finally {
       setActiveExport(null);
@@ -260,77 +250,46 @@ export function ExportOptions({
               {/* Options list */}
               <ul className="divide-y divide-gray-50 p-2">
                 {options.map((option) => {
-                  const status = statusMap[option.id] ?? 'idle';
-                  const isLoading = status === 'loading';
-                  const isSuccess = status === 'success';
-                  const isError = status === 'error';
-                  const isDisabled = !!activeExport && activeExport !== option.id;
-                  const errorMsg = errorMsgMap[option.id];
+                  const isActive = activeExport === option.id;
+                  const isDisabled = !!activeExport && !isActive;
 
                   return (
                     <li key={option.id}>
                       <button
                         onClick={() => {
-                          runExport(option);
                           setOpen(false);
+                          runExport(option);
                         }}
-                        disabled={isLoading || isDisabled}
+                        disabled={!!activeExport}
                         className={cn(
                           'flex w-full items-start gap-3 rounded-lg px-3 py-3 text-left',
                           'transition-all duration-150',
                           isDisabled
                             ? 'cursor-not-allowed opacity-50'
                             : 'hover:bg-gray-50 active:bg-gray-100',
-                          isLoading && 'bg-indigo-50',
+                          isActive && 'bg-indigo-50',
                         )}
                       >
-                        {/* Icon */}
-                        <span
-                          className={cn(
-                            'mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg',
-                            isSuccess
-                              ? 'bg-green-100 text-green-600'
-                              : isError
-                              ? 'bg-red-100 text-red-600'
-                              : 'bg-gray-100 text-gray-600',
-                          )}
-                        >
-                          {isLoading ? (
-                            <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
-                          ) : isSuccess ? (
-                            <CheckCircle2 className="h-4 w-4" />
-                          ) : isError ? (
-                            <AlertCircle className="h-4 w-4" />
-                          ) : (
-                            option.icon
-                          )}
+                        <span className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">
+                          {isActive
+                            ? <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
+                            : option.icon}
                         </span>
 
-                        {/* Text */}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-gray-900">
-                              {option.label}
-                            </span>
+                            <span className="text-sm font-medium text-gray-900">{option.label}</span>
                             {option.badge && (
-                              <span
-                                className={cn(
-                                  'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
-                                  option.badgeColor ?? 'bg-gray-100 text-gray-600',
-                                )}
-                              >
+                              <span className={cn(
+                                'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
+                                option.badgeColor ?? 'bg-gray-100 text-gray-600',
+                              )}>
                                 {option.badge}
                               </span>
                             )}
                           </div>
-                          <p className={cn('mt-0.5 text-xs leading-relaxed', isError ? 'text-red-600 font-medium' : 'text-gray-500')}>
-                            {isLoading
-                              ? 'Génération en cours…'
-                              : isSuccess
-                              ? 'Téléchargement démarré ✓'
-                              : isError
-                              ? (errorMsg ?? 'Erreur — réessayez')
-                              : option.description}
+                          <p className="mt-0.5 text-xs leading-relaxed text-gray-500">
+                            {isActive ? 'Génération en cours…' : option.description}
                           </p>
                         </div>
                       </button>
