@@ -70,6 +70,7 @@ async function downloadBlob(
     url,
     data: body,
     responseType: 'arraybuffer',
+    timeout: 300_000, // 5 min — bulk exports can be slow for large events
   });
 
   const blob = new Blob([response.data], {
