@@ -43,6 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 position="top-right"
                 toastOptions={{
                   duration: 4000,
+                  loading: { duration: Infinity },
                   style: {
                     background: 'hsl(var(--card))',
                     color: 'hsl(var(--foreground))',

@@ -110,12 +110,13 @@ export function ExportOptions({
       await option.action();
       toast.success('Téléchargement démarré !', { id: toastId });
     } catch (err: any) {
+      console.error('[ExportOptions] export failed:', err?.response?.status, err?.message, err?.response?.data);
       if (err?.response?.status === 403) {
         toast.dismiss(toastId);
         setUpgradeOpen(true);
       } else {
         const msg = decodeApiError(err);
-        toast.error(msg, { id: toastId, duration: 8000 });
+        toast.error(msg || 'Erreur export — voir console', { id: toastId, duration: 20000 });
       }
     } finally {
       setActiveExport(null);
