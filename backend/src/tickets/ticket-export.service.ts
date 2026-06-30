@@ -113,7 +113,13 @@ export class TicketExportService {
   async generateTicketPDF(ticketId: string): Promise<Buffer> {
     const ticket = await this.prisma.ticket.findUnique({
       where: { id: ticketId },
-      include: {
+      select: {
+        id: true,
+        serialNumber: true,
+        holderName: true,
+        holderEmail: true,
+        status: true,
+        templateId: true,
         event: {
           select: {
             name: true,
@@ -126,7 +132,6 @@ export class TicketExportService {
             organizerId: true,
           },
         },
-        // customFields must be included so drawTicketCell can use the canvas design.
         template: {
           select: { name: true, color: true, price: true, currency: true, customFields: true },
         },
@@ -171,7 +176,31 @@ export class TicketExportService {
   }
 
   async generateBulkTicketsPDF(ticketIds: string[]): Promise<Buffer> {
-    return new Promise(async (resolve, reject) => {
+    // Batch-fetch without qrCode (can be 50KB+ per ticket — causes Prisma conversion errors).
+    // QR codes are re-generated from the ticket id/serialNumber below.
+    const tickets = await this.prisma.ticket.findMany({
+      where: { id: { in: ticketIds } },
+      select: {
+        id: true,
+        serialNumber: true,
+        holderName: true,
+        status: true,
+        event: { select: { name: true, venue: true, city: true, startDate: true } },
+        template: { select: { name: true, color: true, price: true, currency: true } },
+      },
+      orderBy: [{ templateId: 'asc' }, { serialNumber: 'asc' }],
+    });
+
+    const qrBuffers = await Promise.all(
+      tickets.map((t) =>
+        (QRCode as any).toBuffer(
+          JSON.stringify({ id: t.id, sn: t.serialNumber, v: '2' }),
+          { errorCorrectionLevel: 'L', type: 'png', margin: 2, width: 250 },
+        ),
+      ),
+    );
+
+    return new Promise((resolve, reject) => {
       const chunks: Buffer[] = [];
       const doc = new PDFDocument({ size: 'A4', margin: 40, autoFirstPage: false });
 
@@ -179,41 +208,25 @@ export class TicketExportService {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      for (let i = 0; i < ticketIds.length; i++) {
-        const ticket = await this.prisma.ticket.findUnique({
-          where: { id: ticketIds[i] },
-          include: {
-            event: { select: { name: true, venue: true, city: true, country: true, startDate: true } },
-            template: { select: { name: true, color: true, price: true, currency: true } },
-          },
-        });
-
-        if (!ticket) continue;
-
+      tickets.forEach((ticket, i) => {
         doc.addPage();
 
-        const color = ticket.template.color || '#1a1a2e';
+        const color = ticket.template?.color || '#1a1a2e';
         doc.rect(0, 0, 595, 120).fill(color);
         doc.fillColor('#FFFFFF').fontSize(22).font('Helvetica-Bold').text(ticket.event.name, 40, 30, { width: 515 });
-        doc.fontSize(13).font('Helvetica').text(ticket.template.name, 40, 65);
+        doc.fontSize(13).font('Helvetica').text(ticket.template?.name ?? '', 40, 65);
         doc.fontSize(10).text(`Serial: ${ticket.serialNumber}`, 40, 88);
 
-        doc.fillColor('#000000');
-        doc.fontSize(10).font('Helvetica');
-
-        const startDate = new Date(ticket.event.startDate).toLocaleDateString();
+        doc.fillColor('#000000').fontSize(10).font('Helvetica');
+        const startDate = new Date(ticket.event.startDate).toLocaleDateString('fr-FR');
         doc.text(`Date: ${startDate}`, 40, 140);
-        doc.text(`Venue: ${ticket.event.venue}, ${ticket.event.city}`, 40, 156);
-        if (ticket.holderName) doc.text(`Holder: ${ticket.holderName}`, 40, 172);
-        doc.text(`Price: ${ticket.template.currency} ${Number(ticket.template.price).toFixed(2)}`, 40, 188);
-        doc.text(`Status: ${ticket.status}`, 40, 204);
+        doc.text(`Lieu: ${ticket.event.venue}, ${ticket.event.city}`, 40, 156);
+        if (ticket.holderName) doc.text(`Titulaire: ${ticket.holderName}`, 40, 172);
+        doc.text(`Prix: ${ticket.template?.currency} ${Number(ticket.template?.price ?? 0).toFixed(2)}`, 40, 188);
+        doc.text(`Statut: ${ticket.status}`, 40, 204);
 
-        if (ticket.qrCode) {
-          const base64Data = ticket.qrCode.replace(/^data:image\/png;base64,/, '');
-          const qrBuffer = Buffer.from(base64Data, 'base64');
-          doc.image(qrBuffer, 400, 130, { width: 140, height: 140 });
-        }
-      }
+        doc.image(qrBuffers[i], 400, 130, { width: 140, height: 140 });
+      });
 
       doc.end();
     });
@@ -305,9 +318,16 @@ export class TicketExportService {
 
     // Fetch all tickets in one query for performance.
     // Order by templateId then serialNumber so each tariff's tickets are grouped together.
+    // qrCode is excluded — it can be 50KB+ per ticket; QR codes are re-generated below.
     const tickets = await this.prisma.ticket.findMany({
       where: { id: { in: ids } },
-      include: {
+      select: {
+        id: true,
+        serialNumber: true,
+        holderName: true,
+        holderEmail: true,
+        status: true,
+        templateId: true,
         event: {
           select: {
             name: true,
