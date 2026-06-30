@@ -316,10 +316,10 @@ export class TicketExportService {
       throw new BadRequestException('No valid tickets found for this event');
     }
 
-    // Fetch all tickets in one query for performance.
-    // Order by templateId then serialNumber so each tariff's tickets are grouped together.
-    // qrCode is excluded — it can be 50KB+ per ticket; QR codes are re-generated below.
-    const tickets = await this.prisma.ticket.findMany({
+    // Step 1 — fetch lightweight ticket rows (no qrCode, no template.customFields).
+    // customFields stores the canvas preview as a base64 PNG (~1-2MB per template).
+    // Returning it once per ticket (×500) would send ~1GB through Prisma → napi crash.
+    const ticketRows = await this.prisma.ticket.findMany({
       where: { id: { in: ids } },
       select: {
         id: true,
@@ -339,11 +339,27 @@ export class TicketExportService {
           },
         },
         template: {
-          select: { name: true, color: true, price: true, currency: true, customFields: true },
+          select: { name: true, color: true, price: true, currency: true },
         },
       },
       orderBy: [{ templateId: 'asc' }, { serialNumber: 'asc' }],
     });
+
+    // Step 2 — fetch customFields once per unique template (not once per ticket).
+    const uniqueTemplateIds = [...new Set(ticketRows.map((t) => t.templateId).filter(Boolean))] as string[];
+    const templateDetails = await this.prisma.ticketTemplate.findMany({
+      where: { id: { in: uniqueTemplateIds } },
+      select: { id: true, customFields: true },
+    });
+    const templateMap = new Map(templateDetails.map((t) => [t.id, t.customFields]));
+
+    // Merge customFields back onto each ticket row.
+    const tickets = ticketRows.map((t) => ({
+      ...t,
+      template: t.template
+        ? { ...t.template, customFields: templateMap.get(t.templateId ?? '') ?? null }
+        : null,
+    }));
 
     // Pre-generate all QR code buffers (compact V2 format, 'L' error correction for max printability)
     const qrBufferMap = new Map<string, Buffer>();
