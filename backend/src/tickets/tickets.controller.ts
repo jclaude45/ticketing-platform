@@ -186,6 +186,28 @@ export class TicketsController {
     res.end(zipBuffer);
   }
 
+  // ── Export bulk : 1 billet par page ─────────────────────────────────────────
+
+  @Get('tickets/export/pdf-bulk')
+  @Roles(Role.ORGANIZER, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Export all valid tickets — 1 per A4 page' })
+  async exportBulkPDF(
+    @Param('eventId') eventId: string,
+    @CurrentUser() user: any,
+    @Res() res: Response,
+  ) {
+    await this.ticketsService.findAllForEvent(eventId, user.id, user.role, 1, 1);
+    await this.subscriptionService.checkBulkExport(user.id);
+    const pdfBuffer = await this.exportService.generateBulkEventTicketsPDF(eventId);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="billets-${eventId}.pdf"`,
+      'Content-Length': pdfBuffer.length,
+      'Cache-Control': 'no-store',
+    });
+    res.end(pdfBuffer);
+  }
+
   // ── Export groupé : 4 billets par page ──────────────────────────────────────
 
   @Get('tickets/export/pdf-grouped')

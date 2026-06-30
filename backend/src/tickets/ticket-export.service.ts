@@ -263,6 +263,14 @@ export class TicketExportService {
     return this.generateTicketsZip(ticketIds);
   }
 
+  async generateBulkEventTicketsPDF(eventId: string): Promise<Buffer> {
+    const tickets = await this.prisma.ticket.findMany({
+      where: { eventId, status: { not: 'CANCELLED' } },
+      select: { id: true },
+    });
+    return this.generateBulkTicketsPDF(tickets.map((t) => t.id));
+  }
+
   // ---------------------------------------------------------------------------
   // 4 TICKETS PER PAGE — main grouped export
   // ---------------------------------------------------------------------------
