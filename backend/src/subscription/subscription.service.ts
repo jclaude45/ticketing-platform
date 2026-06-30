@@ -4,8 +4,8 @@ import { CreatePlanDto, UpdatePlanDto, AssignPlanDto, UpdateSubscriptionDto } fr
 
 const FREE_PLAN_DEFAULTS = {
   name: 'Gratuit',
-  maxTickets: 200,
-  maxBadges: 50,
+  maxTickets: -1,
+  maxBadges: -1,
   maxEvents: -1,
   showPoweredBy: true,
   allowBulkExport: true,
