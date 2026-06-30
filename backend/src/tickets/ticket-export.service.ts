@@ -361,21 +361,24 @@ export class TicketExportService {
         : null,
     }));
 
-    // Pre-generate all QR code buffers (compact V2 format, 'L' error correction for max printability)
+    // Pre-generate QR code buffers in batches of 20 to avoid memory spikes.
     const qrBufferMap = new Map<string, Buffer>();
-    await Promise.all(
-      tickets.map(async (ticket) => {
-        const content = JSON.stringify({ id: ticket.id, sn: ticket.serialNumber, v: '2' });
-        const buf = await (QRCode as any).toBuffer(content, {
-          errorCorrectionLevel: 'L',
-          type: 'png',
-          margin: 2,
-          width: 250,
-          color: { dark: '#000000', light: '#FFFFFF' },
-        });
-        qrBufferMap.set(ticket.id, buf);
-      }),
-    );
+    const BATCH = 20;
+    for (let i = 0; i < tickets.length; i += BATCH) {
+      await Promise.all(
+        tickets.slice(i, i + BATCH).map(async (ticket) => {
+          const content = JSON.stringify({ id: ticket.id, sn: ticket.serialNumber, v: '2' });
+          const buf = await (QRCode as any).toBuffer(content, {
+            errorCorrectionLevel: 'L',
+            type: 'png',
+            margin: 2,
+            width: 250,
+            color: { dark: '#000000', light: '#FFFFFF' },
+          });
+          qrBufferMap.set(ticket.id, buf);
+        }),
+      );
+    }
 
     const organizerIdForLogo = (tickets[0]?.event as any)?.organizerId;
     const showLogo = organizerIdForLogo
