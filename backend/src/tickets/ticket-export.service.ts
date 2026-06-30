@@ -820,4 +820,56 @@ export class TicketExportService {
     }
     return this.generateGroupedTicketsPDF(eventId, ticketIds);
   }
+
+  /**
+   * Exporte tous les billets d'un événement en lots de `batchSize` (défaut 200).
+   * Chaque lot devient un PDF séparé dans un ZIP.
+   * Utilisé quand le nombre de billets dépasse la limite d'un export PDF direct.
+   */
+  async generateBatchedExportZip(eventId: string, batchSize = 200): Promise<{ buffer: Buffer; totalTickets: number; batches: number }> {
+    // Fetch all valid ticket IDs ordered consistently
+    const rows = await this.prisma.ticket.findMany({
+      where: { eventId, status: { not: 'CANCELLED' } },
+      select: { id: true },
+      orderBy: [{ templateId: 'asc' }, { serialNumber: 'asc' }],
+    });
+
+    if (rows.length === 0) {
+      throw new BadRequestException('Aucun billet valide trouvé pour cet événement');
+    }
+
+    const ids = rows.map((r) => r.id);
+    const chunks: string[][] = [];
+    for (let i = 0; i < ids.length; i += batchSize) {
+      chunks.push(ids.slice(i, i + batchSize));
+    }
+
+    return new Promise(async (resolve, reject) => {
+      try {
+        const zipChunks: Buffer[] = [];
+        const archive = archiver('zip', { zlib: { level: 6 } });
+        const passThrough = new PassThrough();
+
+        passThrough.on('data', (c) => zipChunks.push(c));
+        passThrough.on('end', () =>
+          resolve({ buffer: Buffer.concat(zipChunks), totalTickets: ids.length, batches: chunks.length }),
+        );
+        passThrough.on('error', reject);
+        archive.on('error', reject);
+        archive.pipe(passThrough);
+
+        for (let i = 0; i < chunks.length; i++) {
+          this.logger.log(`Generating batch ${i + 1}/${chunks.length} (${chunks[i].length} tickets)…`);
+          const pdfBuffer = await this.generateGroupedTicketsPDF(eventId, chunks[i]);
+          const from = i * batchSize + 1;
+          const to   = Math.min((i + 1) * batchSize, ids.length);
+          archive.append(pdfBuffer, { name: `billets-lot-${i + 1}-${from}-${to}.pdf` });
+        }
+
+        await archive.finalize();
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
 }

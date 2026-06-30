@@ -213,13 +213,9 @@ export class TicketsController {
   @Get('tickets/export/pdf-grouped')
   @Roles(Role.ORGANIZER, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
-    summary: 'Export all valid tickets — 4 per A4 page (2×2 grid)',
-    description:
-      "Génère un PDF avec 4 billets par page en disposition 2×2. " +
-      "Chaque billet affiche : en-tête colorée, QR code signé, détails de l'événement " +
-      "et une ligne de découpe. Idéal pour l'impression en masse.",
+    summary: 'Export all valid tickets — 4 per A4 page. Auto-batches into ZIP when > 200 tickets.',
   })
-  @ApiResponse({ status: 200, description: 'PDF généré avec succès' })
+  @ApiResponse({ status: 200, description: 'PDF ou ZIP généré avec succès' })
   async exportGroupedPDF(
     @Param('eventId') eventId: string,
     @CurrentUser() user: any,
@@ -228,15 +224,28 @@ export class TicketsController {
     await this.ticketsService.findAllForEvent(eventId, user.id, user.role, 1, 1);
     await this.subscriptionService.checkBulkExport(user.id);
 
-    const pdfBuffer = await this.exportService.generateGroupedEventTicketsPDF(eventId);
+    const count = await this.ticketsService.countValidTickets(eventId);
 
-    res.set({
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="billets-groupes-${eventId}.pdf"`,
-      'Content-Length': pdfBuffer.length,
-      'Cache-Control': 'no-store',
-    });
-    res.end(pdfBuffer);
+    if (count > 200) {
+      // Large event: split into 200-ticket PDF batches inside a ZIP
+      const { buffer, batches } = await this.exportService.generateBatchedExportZip(eventId, 200);
+      res.set({
+        'Content-Type': 'application/zip',
+        'Content-Disposition': `attachment; filename="billets-${batches}-lots-${eventId}.zip"`,
+        'Content-Length': buffer.length,
+        'Cache-Control': 'no-store',
+      });
+      res.end(buffer);
+    } else {
+      const pdfBuffer = await this.exportService.generateGroupedEventTicketsPDF(eventId);
+      res.set({
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="billets-groupes-${eventId}.pdf"`,
+        'Content-Length': pdfBuffer.length,
+        'Cache-Control': 'no-store',
+      });
+      res.end(pdfBuffer);
+    }
   }
 
   @Post('tickets/export/pdf-grouped/selection')

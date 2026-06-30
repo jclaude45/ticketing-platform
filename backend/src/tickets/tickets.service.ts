@@ -198,4 +198,10 @@ export class TicketsService {
 
     return results;
   }
+
+  async countValidTickets(eventId: string): Promise<number> {
+    return this.prisma.ticket.count({
+      where: { eventId, status: { not: 'CANCELLED' } },
+    });
+  }
 }

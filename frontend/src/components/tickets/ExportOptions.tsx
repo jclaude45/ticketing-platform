@@ -61,7 +61,7 @@ function decodeApiError(err: any): string {
 
 async function downloadBlob(
   url: string,
-  filename: string,
+  fallbackFilename: string,
   method: 'GET' | 'POST' = 'GET',
   body?: unknown,
 ): Promise<void> {
@@ -70,15 +70,24 @@ async function downloadBlob(
     url,
     data: body,
     responseType: 'arraybuffer',
-    timeout: 300_000, // 5 min — bulk exports can be slow for large events
+    timeout: 600_000, // 10 min — large batched exports can take several minutes
   });
 
-  const blob = new Blob([response.data], {
-    type: method === 'GET' && filename.endsWith('.zip')
-      ? 'application/zip'
-      : 'application/pdf',
-  });
+  // Use Content-Type from server (may be PDF or ZIP depending on ticket count)
+  const contentType = (response.headers['content-type'] as string | undefined)
+    ?? 'application/pdf';
 
+  // Derive filename from Content-Disposition header when available
+  const disposition = response.headers['content-disposition'] as string | undefined;
+  let filename = fallbackFilename;
+  if (disposition) {
+    const match = /filename="?([^";\n]+)"?/i.exec(disposition);
+    if (match?.[1]) filename = match[1];
+  } else if (contentType.includes('zip') && !filename.endsWith('.zip')) {
+    filename = filename.replace(/\.pdf$/, '.zip');
+  }
+
+  const blob = new Blob([response.data], { type: contentType });
   const objectUrl = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = objectUrl;
@@ -131,7 +140,9 @@ export function ExportOptions({
     {
       id: 'grouped-all',
       label: '4 billets par page',
-      description: `Tous les billets (${totalTickets}) en grille 2×2 sur A4 — idéal pour l'impression en masse`,
+      description: totalTickets > 200
+        ? `${totalTickets} billets → ZIP de ${Math.ceil(totalTickets / 200)} lots de 200 (PDF par lot)`
+        : `${totalTickets} billets en grille 2×2 sur A4 — idéal pour l'impression en masse`,
       badge: 'Recommandé',
       badgeColor: 'bg-indigo-100 text-indigo-700',
       icon: <Grid2x2 className="h-5 w-5" />,
