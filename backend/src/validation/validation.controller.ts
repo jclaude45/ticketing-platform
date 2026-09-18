@@ -11,9 +11,11 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { ValidationService } from './validation.service';
 import { ScanTicketDto, OfflineScanDto } from './dto/scan-ticket.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { ThrottlerByUserGuard } from './throttler-by-user.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @ApiTags('Validation')
@@ -25,6 +27,8 @@ export class ValidationController {
 
   @Post('events/:eventId/scan')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(ThrottlerByUserGuard)
+  @Throttle({ default: { limit: 120, ttl: 60000 } })
   @ApiOperation({ summary: 'Scan and validate a ticket QR code' })
   async scanTicket(
     @Param('eventId') eventId: string,

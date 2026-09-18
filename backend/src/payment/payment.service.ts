@@ -198,16 +198,61 @@ export class PaymentService {
 
     if (!body.reference) return { received: true };
 
-    const payment = await this.prisma.payment.findUnique({ where: { reference: body.reference } });
-    if (!payment) { this.logger.warn(`Payment not found for ref ${body.reference}`); return { received: true }; }
-    if (payment.status !== 'PENDING') return { received: true };
+    // Atomic claim: only the first callback can change PENDING→FAILED.
+    // Concurrent/duplicate callbacks see count=0 and exit immediately.
+    const claimed = await this.prisma.payment.updateMany({
+      where: { reference: body.reference, status: 'PENDING' },
+      data: { status: 'FAILED' },
+    });
 
-    if (String(body.code) === '0') {
-      await this.generateTicketsForPayment(payment, body.provider_reference);
-    } else {
-      await this.prisma.payment.update({ where: { id: payment.id }, data: { status: 'FAILED' } });
+    if (claimed.count === 0) {
+      this.logger.warn(`Payment ${body.reference} already processed — ignoring duplicate callback`);
+      return { received: true };
     }
 
+    if (String(body.code) !== '0') {
+      this.logger.log(`FlexPay callback reported failure for ${body.reference}: code=${body.code}`);
+      return { received: true };
+    }
+
+    const payment = await this.prisma.payment.findUnique({ where: { reference: body.reference } });
+    if (!payment) return { received: true };
+
+    // Re-verify the transaction with FlexPay before generating tickets
+    const verifyRef = payment.orderNumber || body.orderNumber;
+    if (!verifyRef) {
+      this.logger.warn(`No orderNumber to verify for ${body.reference} — rejecting`);
+      return { received: true };
+    }
+
+    try {
+      const res = await axios.get(
+        `${this.FLEXPAY_CHECK_URL}/${verifyRef}`,
+        { headers: { Authorization: `Bearer ${this.FLEXPAY_TOKEN}` }, timeout: 10000 },
+      );
+      const data = res.data;
+
+      if (data.code !== '0' || data.transaction?.status !== '0') {
+        this.logger.warn(`FlexPay re-verification failed for ${body.reference}: ${JSON.stringify(data)}`);
+        return { received: true };
+      }
+
+      const verifiedAmount = parseFloat(data.transaction?.amount || '0');
+      const expectedAmount = Number(payment.amount);
+      if (Math.abs(verifiedAmount - expectedAmount) > 0.01) {
+        this.logger.warn(
+          `Amount mismatch for ${body.reference}: expected ${expectedAmount}, FlexPay returned ${verifiedAmount}`,
+        );
+        return { received: true };
+      }
+    } catch (err) {
+      // FlexPay API unreachable — revert to PENDING so retry is possible
+      await this.prisma.payment.update({ where: { reference: body.reference }, data: { status: 'PENDING' } });
+      this.logger.warn(`Cannot verify payment ${body.reference} (FlexPay unavailable): ${err.message}`);
+      return { received: true };
+    }
+
+    await this.generateTicketsForPayment(payment, body.provider_reference || body.provider_ref);
     return { received: true };
   }
 

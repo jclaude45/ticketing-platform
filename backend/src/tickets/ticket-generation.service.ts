@@ -143,19 +143,23 @@ export class TicketGenerationService {
       });
     }
 
-    // Batch insert tickets
+    // Batch insert tickets + atomic stock decrement in one transaction.
+    // updateMany with gte condition is the critical section: prevents overselling
+    // even when concurrent requests both passed the pre-flight check above.
     const createdTickets = await this.prisma.$transaction(async (tx) => {
+      const reserved = await tx.ticketTemplate.updateMany({
+        where: { id: dto.templateId, availableCount: { gte: count } },
+        data: { availableCount: { decrement: count } },
+      });
+      if (reserved.count === 0) {
+        throw new BadRequestException(`Stock épuisé : plus assez de places disponibles pour ce type de billet.`);
+      }
+
       const tickets = [];
       for (const ticketData of ticketsData) {
         const ticket = await tx.ticket.create({ data: ticketData });
         tickets.push(ticket);
       }
-
-      // Update available count on template.
-      await tx.ticketTemplate.update({
-        where: { id: dto.templateId },
-        data: { availableCount: { decrement: count } },
-      });
 
       return tickets;
     });

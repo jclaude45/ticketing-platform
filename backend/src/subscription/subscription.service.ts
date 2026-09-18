@@ -2,13 +2,15 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException 
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePlanDto, UpdatePlanDto, AssignPlanDto, UpdateSubscriptionDto } from './dto/subscription.dto';
 
+const isDev = process.env.NODE_ENV !== 'production';
+
 const FREE_PLAN_DEFAULTS = {
   name: 'Gratuit',
-  maxTickets: -1,
-  maxBadges: -1,
+  maxTickets: isDev ? -1 : 200,
+  maxBadges: isDev ? -1 : 50,
   maxEvents: -1,
   showPoweredBy: true,
-  allowBulkExport: true,
+  allowBulkExport: isDev ? true : false,
   allowCommunication: false,
 };
 
