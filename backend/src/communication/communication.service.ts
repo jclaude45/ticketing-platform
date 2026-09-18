@@ -1,8 +1,8 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
-import { NotificationChannel, CampaignStatus, CampaignType, RecipientStatus } from '@prisma/client';
+import { NotificationChannel, CampaignStatus, CampaignType, RecipientStatus, Role } from '@prisma/client';
 import * as nodemailer from 'nodemailer';
 import { Twilio } from 'twilio';
 import { CreateCampaignDto, UpdateCampaignDto, ScheduleCampaignDto } from './dto/create-campaign.dto';
@@ -48,6 +48,27 @@ export class CommunicationService {
       sms: !!this.twilioClient && !!this.twilioFrom,
       whatsapp: !!this.twilioClient && !!this.twilioWhatsAppFrom,
     };
+  }
+
+  // ─── Access helpers ───────────────────────────────────────────
+
+  private async assertEventAccess(eventId: string, userId: string, role: Role) {
+    const event = await this.prisma.event.findUnique({ where: { id: eventId }, select: { organizerId: true } });
+    if (!event) throw new NotFoundException('Événement introuvable');
+    if (role !== Role.ADMIN && role !== Role.SUPER_ADMIN && event.organizerId !== userId) {
+      throw new ForbiddenException('Accès refusé');
+    }
+  }
+
+  private async assertCampaignAccess(campaignId: string, userId: string, role: Role) {
+    const c = await this.prisma.notificationCampaign.findUnique({
+      where: { id: campaignId },
+      select: { event: { select: { organizerId: true } } },
+    });
+    if (!c) throw new NotFoundException('Campagne introuvable');
+    if (role !== Role.ADMIN && role !== Role.SUPER_ADMIN && c.event.organizerId !== userId) {
+      throw new ForbiddenException('Accès refusé');
+    }
   }
 
   // ─── TEMPLATES ────────────────────────────────────────────────
@@ -118,7 +139,8 @@ export class CommunicationService {
 
   // ─── CAMPAIGNS ────────────────────────────────────────────────
 
-  async getCampaigns(eventId: string) {
+  async getCampaigns(eventId: string, userId: string, role: Role) {
+    await this.assertEventAccess(eventId, userId, role);
     return this.prisma.notificationCampaign.findMany({
       where: { eventId },
       include: {
@@ -129,7 +151,8 @@ export class CommunicationService {
     });
   }
 
-  async getCampaign(campaignId: string) {
+  async getCampaign(campaignId: string, userId: string, role: Role) {
+    await this.assertCampaignAccess(campaignId, userId, role);
     const c = await this.prisma.notificationCampaign.findUnique({
       where: { id: campaignId },
       include: {
@@ -142,9 +165,12 @@ export class CommunicationService {
     return c;
   }
 
-  async createCampaign(eventId: string, userId: string, dto: CreateCampaignDto) {
+  async createCampaign(eventId: string, userId: string, role: Role, dto: CreateCampaignDto) {
     const event = await this.prisma.event.findUnique({ where: { id: eventId } });
     if (!event) throw new NotFoundException('Événement introuvable');
+    if (role !== Role.ADMIN && role !== Role.SUPER_ADMIN && event.organizerId !== userId) {
+      throw new ForbiddenException('Accès refusé');
+    }
 
     return this.prisma.notificationCampaign.create({
       data: {
@@ -162,7 +188,8 @@ export class CommunicationService {
     });
   }
 
-  async updateCampaign(campaignId: string, dto: UpdateCampaignDto) {
+  async updateCampaign(campaignId: string, userId: string, role: Role, dto: UpdateCampaignDto) {
+    await this.assertCampaignAccess(campaignId, userId, role);
     const c = await this.prisma.notificationCampaign.findUnique({ where: { id: campaignId } });
     if (!c) throw new NotFoundException('Campagne introuvable');
     if (c.status === CampaignStatus.SENT || c.status === CampaignStatus.SENDING) {
@@ -171,13 +198,15 @@ export class CommunicationService {
     return this.prisma.notificationCampaign.update({ where: { id: campaignId }, data: dto });
   }
 
-  async deleteCampaign(campaignId: string) {
+  async deleteCampaign(campaignId: string, userId: string, role: Role) {
+    await this.assertCampaignAccess(campaignId, userId, role);
     const c = await this.prisma.notificationCampaign.findUnique({ where: { id: campaignId } });
     if (!c) throw new NotFoundException('Campagne introuvable');
     await this.prisma.notificationCampaign.delete({ where: { id: campaignId } });
   }
 
-  async scheduleCampaign(campaignId: string, dto: ScheduleCampaignDto) {
+  async scheduleCampaign(campaignId: string, userId: string, role: Role, dto: ScheduleCampaignDto) {
+    await this.assertCampaignAccess(campaignId, userId, role);
     const c = await this.prisma.notificationCampaign.findUnique({ where: { id: campaignId } });
     if (!c) throw new NotFoundException('Campagne introuvable');
     return this.prisma.notificationCampaign.update({
@@ -186,7 +215,12 @@ export class CommunicationService {
     });
   }
 
-  async sendCampaign(campaignId: string) {
+  async sendCampaign(campaignId: string, userId: string, role: Role) {
+    await this.assertCampaignAccess(campaignId, userId, role);
+    return this._sendCampaignInternal(campaignId);
+  }
+
+  private async _sendCampaignInternal(campaignId: string) {
     const campaign = await this.prisma.notificationCampaign.findUnique({
       where: { id: campaignId },
       include: { event: true },
@@ -211,7 +245,8 @@ export class CommunicationService {
     return { message: 'Envoi lancé', recipientCount: recipients.length };
   }
 
-  async getCampaignStats(campaignId: string) {
+  async getCampaignStats(campaignId: string, userId: string, role: Role) {
+    await this.assertCampaignAccess(campaignId, userId, role);
     const c = await this.prisma.notificationCampaign.findUnique({
       where: { id: campaignId },
       include: {
@@ -243,7 +278,8 @@ export class CommunicationService {
 
   // ─── EVENT OVERVIEW ───────────────────────────────────────────
 
-  async getEventStats(eventId: string) {
+  async getEventStats(eventId: string, userId: string, role: Role) {
+    await this.assertEventAccess(eventId, userId, role);
     const campaigns = await this.prisma.notificationCampaign.findMany({
       where: { eventId },
       select: { channel: true, totalSent: true, totalFailed: true, status: true },
@@ -262,7 +298,8 @@ export class CommunicationService {
 
   // ─── AUTO-REMINDERS ───────────────────────────────────────────
 
-  async setupAutoReminders(eventId: string, userId: string) {
+  async setupAutoReminders(eventId: string, userId: string, role: Role) {
+    await this.assertEventAccess(eventId, userId, role);
     const event = await this.prisma.event.findUnique({ where: { id: eventId } });
     if (!event) throw new NotFoundException('Événement introuvable');
 

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
@@ -87,6 +87,7 @@ async function fetchImageBuffer(url: string): Promise<Buffer | null> {
 
 @Injectable()
 export class TeamService {
+  private readonly logger = new Logger(TeamService.name);
   private _logoBuffer: Buffer | null = null;
 
   constructor(
@@ -106,7 +107,8 @@ export class TeamService {
     try {
       const svgRaw = fs.readFileSync(LOGO_SVG_PATH, 'utf-8');
       this._logoBuffer = await (sharp as any)(Buffer.from(svgRaw, 'utf-8')).resize(600, Math.round(600 / LOGO_ASPECT)).png().toBuffer();
-    } catch {
+    } catch (err) {
+      this.logger.warn('Logo SVG load failed — badges will render without logo', (err as Error)?.message);
       this._logoBuffer = Buffer.alloc(0);
     }
     return this._logoBuffer!;
@@ -478,7 +480,7 @@ export class TeamService {
         doc.circle(px + photoSize / 2, py + photoSize / 2, photoSize / 2)
           .lineWidth(1.5).stroke(cfg.primaryColor);
         contentX = px + photoSize + 10;
-      } catch { /* photo load error — skip */ }
+      } catch (err) { this.logger.warn('Badge photo render failed — skipping photo', (err as Error)?.message); }
     }
 
     // Event name
@@ -509,7 +511,7 @@ export class TeamService {
           doc.save().fillColor('#FFFFFF').roundedRect(qrX, logoY - 2, logoW, logoH + 4, 2).fill().restore();
           doc.image(logoBuf, qrX, logoY, { width: logoW, height: logoH });
         }
-      } catch {}
+      } catch (err) { this.logger.warn('Badge QR render failed (horizontal)', (err as Error)?.message); }
     }
 
     // Zones
@@ -573,7 +575,7 @@ export class TeamService {
         doc.restore();
         doc.circle(cx, cy, r).lineWidth(2.5).stroke(cfg.primaryColor);
         currentY = cy + r + 10;
-      } catch { /* skip */ }
+      } catch (err) { this.logger.warn('Badge photo render failed (vertical)', (err as Error)?.message); }
     } else {
       // Initials placeholder
       const r = 30;
@@ -641,7 +643,7 @@ export class TeamService {
           doc.image(logoBuf, qrX, currentY, { width: logoW, height: logoH });
           currentY += logoH + 4;
         }
-      } catch {}
+      } catch (err) { this.logger.warn('Badge QR render failed (vertical)', (err as Error)?.message); }
     }
 
     // Code

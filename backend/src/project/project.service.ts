@@ -354,7 +354,7 @@ export class ProjectService {
   }
 
   async createBudgetLine(eventId: string, userId: string, role: Role, dto: CreateBudgetLineDto) {
-    await this.checkEventAccess(eventId, userId, role);
+    await this.checkBudgetAccess(eventId, userId, role);
     return this.prisma.budgetLine.create({
       data: { ...dto, eventId },
       include: { expenses: true },
@@ -368,7 +368,7 @@ export class ProjectService {
     role: Role,
     dto: UpdateBudgetLineDto,
   ) {
-    await this.checkEventAccess(eventId, userId, role);
+    await this.checkBudgetAccess(eventId, userId, role);
     const line = await this.prisma.budgetLine.findFirst({ where: { id: lineId, eventId } });
     if (!line) throw new NotFoundException('Budget line not found');
     return this.prisma.budgetLine.update({
@@ -379,7 +379,7 @@ export class ProjectService {
   }
 
   async deleteBudgetLine(eventId: string, lineId: string, userId: string, role: Role) {
-    await this.checkEventAccess(eventId, userId, role);
+    await this.checkBudgetAccess(eventId, userId, role);
     const line = await this.prisma.budgetLine.findFirst({ where: { id: lineId, eventId } });
     if (!line) throw new NotFoundException('Budget line not found');
     await this.prisma.budgetLine.delete({ where: { id: lineId } });
@@ -393,7 +393,7 @@ export class ProjectService {
     role: Role,
     dto: CreateExpenseDto,
   ) {
-    await this.checkEventAccess(eventId, userId, role);
+    await this.checkBudgetAccess(eventId, userId, role);
     const line = await this.prisma.budgetLine.findFirst({ where: { id: lineId, eventId } });
     if (!line) throw new NotFoundException('Budget line not found');
     return this.prisma.budgetExpense.create({
@@ -413,7 +413,7 @@ export class ProjectService {
     role: Role,
     dto: UpdateExpenseDto,
   ) {
-    await this.checkEventAccess(eventId, userId, role);
+    await this.checkBudgetAccess(eventId, userId, role);
     const exp = await this.prisma.budgetExpense.findFirst({
       where: { id: expId, budgetLineId: lineId },
     });
@@ -439,7 +439,7 @@ export class ProjectService {
     userId: string,
     role: Role,
   ) {
-    await this.checkEventAccess(eventId, userId, role);
+    await this.checkBudgetAccess(eventId, userId, role);
     const exp = await this.prisma.budgetExpense.findFirst({
       where: { id: expId, budgetLineId: lineId },
     });
@@ -635,7 +635,7 @@ export class ProjectService {
           <p style="color:#9ca3af;font-size:12px">Ce lien expire dans 7 jours.</p>
         </div>`,
       });
-    } catch (_e) { /* silent */ }
+    } catch (err) { this.logger.warn('sendInvitationEmail failed', (err as Error)?.message); }
   }
 
   private async sendTaskStatusChangeEmail(
@@ -665,7 +665,7 @@ export class ProjectService {
           <a href="${frontendUrl}/dashboard" style="display:inline-block;padding:12px 24px;background:#6366f1;color:white;text-decoration:none;border-radius:8px">Voir le projet</a>
         </div>`,
       });
-    } catch (_e) { /* silent */ }
+    } catch (err) { this.logger.warn('sendTaskStatusChangeEmail failed', (err as Error)?.message); }
   }
 
   private async sendTaskUpdateEmail(
@@ -688,7 +688,7 @@ export class ProjectService {
           <a href="${url}" style="display:inline-block;padding:12px 24px;background:#6366f1;color:white;text-decoration:none;border-radius:8px">Voir le projet</a>
         </div>`,
       });
-    } catch (_e) { /* silent */ }
+    } catch (err) { this.logger.warn('sendTaskUpdateEmail failed', (err as Error)?.message); }
   }
 
   private async sendTaskAssignmentEmail(
@@ -712,6 +712,6 @@ export class ProjectService {
           <a href="${url}" style="display:inline-block;padding:12px 24px;background:#6366f1;color:white;text-decoration:none;border-radius:8px">Voir le projet</a>
         </div>`,
       });
-    } catch (_e) { /* silent */ }
+    } catch (err) { this.logger.warn('sendTaskAssignmentEmail failed', (err as Error)?.message); }
   }
 }

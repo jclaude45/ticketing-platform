@@ -68,23 +68,32 @@ export class CommunicationController {
   // ─── CAMPAIGNS ────────────────────────────────────────────────
 
   @Get('events/:eventId/campaigns')
-  getCampaigns(@Param('eventId') eventId: string) {
-    return this.service.getCampaigns(eventId);
+  getCampaigns(
+    @Param('eventId') eventId: string,
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.service.getCampaigns(eventId, userId, role as any);
   }
 
   @Get('events/:eventId/stats')
-  getEventStats(@Param('eventId') eventId: string) {
-    return this.service.getEventStats(eventId);
+  getEventStats(
+    @Param('eventId') eventId: string,
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.service.getEventStats(eventId, userId, role as any);
   }
 
   @Post('events/:eventId/campaigns')
   async createCampaign(
     @Param('eventId') eventId: string,
     @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: string,
     @Body() dto: CreateCampaignDto,
   ) {
     await this.subscriptionService.checkAllowCommunication(userId);
-    return this.service.createCampaign(eventId, userId, dto);
+    return this.service.createCampaign(eventId, userId, role as any, dto);
   }
 
   @Post('events/:eventId/auto-reminders')
@@ -92,39 +101,53 @@ export class CommunicationController {
   async setupAutoReminders(
     @Param('eventId') eventId: string,
     @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: string,
   ) {
     await this.subscriptionService.checkAllowCommunication(userId);
-    return this.service.setupAutoReminders(eventId, userId);
+    return this.service.setupAutoReminders(eventId, userId, role as any);
   }
 
   @Get('campaigns/:id')
-  getCampaign(@Param('id') id: string) {
-    return this.service.getCampaign(id);
+  getCampaign(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.service.getCampaign(id, userId, role as any);
   }
 
   @Put('campaigns/:id')
   async updateCampaign(
     @Param('id') id: string,
     @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: string,
     @Body() dto: UpdateCampaignDto,
   ) {
     await this.subscriptionService.checkAllowCommunication(userId);
-    return this.service.updateCampaign(id, dto);
+    return this.service.updateCampaign(id, userId, role as any, dto);
   }
 
   @Delete('campaigns/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async deleteCampaign(@Param('id') id: string, @CurrentUser('id') userId: string) {
+  async deleteCampaign(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
     await this.subscriptionService.checkAllowCommunication(userId);
-    return this.service.deleteCampaign(id);
+    return this.service.deleteCampaign(id, userId, role as any);
   }
 
   @Post('campaigns/:id/send')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send campaign immediately to all ticket holders' })
-  async sendCampaign(@Param('id') id: string, @CurrentUser('id') userId: string) {
+  async sendCampaign(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
     await this.subscriptionService.checkAllowCommunication(userId);
-    return this.service.sendCampaign(id);
+    return this.service.sendCampaign(id, userId, role as any);
   }
 
   @Post('campaigns/:id/schedule')
@@ -132,14 +155,19 @@ export class CommunicationController {
   async scheduleCampaign(
     @Param('id') id: string,
     @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: string,
     @Body() dto: ScheduleCampaignDto,
   ) {
     await this.subscriptionService.checkAllowCommunication(userId);
-    return this.service.scheduleCampaign(id, dto);
+    return this.service.scheduleCampaign(id, userId, role as any, dto);
   }
 
   @Get('campaigns/:id/stats')
-  getCampaignStats(@Param('id') id: string) {
-    return this.service.getCampaignStats(id);
+  getCampaignStats(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.service.getCampaignStats(id, userId, role as any);
   }
 }
