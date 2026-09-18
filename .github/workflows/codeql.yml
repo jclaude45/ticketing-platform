@@ -30,19 +30,7 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
-          queries: security-and-quality
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install backend dependencies
-        run: npm ci --ignore-scripts
-        working-directory: backend
-
-      - name: Install frontend dependencies
-        run: npm ci --ignore-scripts
-        working-directory: frontend
+          queries: security-extended
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@v3
