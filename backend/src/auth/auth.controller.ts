@@ -115,8 +115,8 @@ export class AuthController {
         // Mobile clients store tokens in SecureStorage — return both in body
         return result;
       }
-      // Web clients use httpOnly cookies — strip tokens from body
-      const { refreshToken: _r, accessToken: _a, ...safeResult } = result as any;
+      // Web: refreshToken in httpOnly cookie only; accessToken in cookie AND body (for memory store)
+      const { refreshToken: _r, ...safeResult } = result as any;
       return safeResult;
     }
     return result;

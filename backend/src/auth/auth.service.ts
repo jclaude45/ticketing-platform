@@ -89,7 +89,7 @@ export class AuthService {
     // Generate Ed25519 key pair for organizers — private key encrypted at rest (AES-256-GCM)
     if (user.role === Role.ORGANIZER) {
       try {
-        const encKey = this.configService.get<string>('crypto.privateKeyEncryptionKey');
+        const encKey = this.cryptoService.resolveEncKey();
         const keyPair = await this.cryptoService.generateEd25519KeyPair();
         const encryptedPrivateKey = this.cryptoService.encryptAES(keyPair.privateKey, encKey);
         await this.prisma.keyPair.create({

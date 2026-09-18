@@ -72,7 +72,8 @@ export class TicketGenerationService {
     await this.subscriptionService.checkAndIncrementTickets(event.organizerId, count);
 
     // Get the active key pair for the organizer — auto-generate if none exists
-    const encKey = this.configService.get<string>('crypto.privateKeyEncryptionKey');
+    // resolveEncKey() returns the KMS-decrypted DEK (or raw env var as fallback)
+    const encKey = this.cryptoService.resolveEncKey();
     let keyPair = await this.prisma.keyPair.findFirst({
       where: { organizerId: event.organizerId, isActive: true },
       orderBy: { createdAt: 'desc' },

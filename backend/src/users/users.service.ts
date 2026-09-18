@@ -197,9 +197,9 @@ export class UsersService {
       data: { isActive: false },
     });
 
-    // Generate new key pair — private key encrypted at rest (AES-256-GCM)
-    const encKey = this.configService.get<string>('crypto.privateKeyEncryptionKey');
-    const keyPair = await this.cryptoService.generateRSA4096KeyPair();
+    // Generate new key pair — private key encrypted at rest (AES-256-GCM), DEK from KMS or env
+    const encKey = this.cryptoService.resolveEncKey();
+    const keyPair = await this.cryptoService.generateEd25519KeyPair();
     const encryptedPrivateKey = this.cryptoService.encryptAES(keyPair.privateKey, encKey);
     const newKeyPair = await this.prisma.keyPair.create({
       data: {

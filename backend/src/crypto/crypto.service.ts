@@ -1,4 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { KMSClient, DecryptCommand } from '@aws-sdk/client-kms';
 import * as forge from 'node-forge';
 import * as crypto from 'crypto';
 
@@ -15,8 +16,50 @@ export interface SignatureResult {
 }
 
 @Injectable()
-export class CryptoService {
+export class CryptoService implements OnModuleInit {
   private readonly logger = new Logger(CryptoService.name);
+
+  // Resolved plaintext DEK — populated on module init via KMS or direct env
+  private resolvedEncKey: string | null = null;
+
+  async onModuleInit() {
+    const kmsKeyId = process.env.KMS_KEY_ID;
+    const encryptedDek = process.env.PRIVATE_KEY_ENCRYPTION_KEY;
+
+    if (!encryptedDek) {
+      this.logger.warn('PRIVATE_KEY_ENCRYPTION_KEY is not set — private keys cannot be encrypted');
+      return;
+    }
+
+    if (!kmsKeyId) {
+      // No KMS configured — use env var directly (development / non-KMS environments)
+      this.resolvedEncKey = encryptedDek;
+      return;
+    }
+
+    // KMS envelope decryption: PRIVATE_KEY_ENCRYPTION_KEY is a base64-encoded KMS ciphertext
+    try {
+      const kms = new KMSClient({ region: process.env.AWS_REGION || 'us-east-1' });
+      const { Plaintext } = await kms.send(
+        new DecryptCommand({
+          KeyId: kmsKeyId,
+          CiphertextBlob: Buffer.from(encryptedDek, 'base64'),
+        }),
+      );
+      if (!Plaintext) throw new Error('KMS returned empty plaintext');
+      this.resolvedEncKey = Buffer.from(Plaintext).toString('utf-8');
+      this.logger.log('PRIVATE_KEY_ENCRYPTION_KEY decrypted via AWS KMS');
+    } catch (err) {
+      this.logger.error(`KMS decryption failed — falling back to raw env key: ${err.message}`);
+      this.resolvedEncKey = encryptedDek;
+    }
+  }
+
+  // Returns the resolved key (KMS-decrypted DEK or raw env var).
+  // Falls back to the argument when called before onModuleInit (e.g., unit tests passing a key directly).
+  resolveEncKey(fallback?: string): string {
+    return this.resolvedEncKey ?? fallback ?? '';
+  }
 
   // Ed25519: ~100× faster key generation than RSA-4096, 64-byte signatures vs 512 bytes.
   // New organizers always get Ed25519 keys. Existing RSA-4096 keys are supported for
