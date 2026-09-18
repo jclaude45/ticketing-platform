@@ -25,9 +25,8 @@ export function middleware(request: NextRequest) {
   const isPublicHost = host === PUBLIC_HOST || (!isAppHost && !host.startsWith('localhost'));
   const isLocalhost = host.startsWith('localhost') || host.startsWith('127.');
 
-  // Local development: no subdomain enforcement
+  // Local development: no subdomain enforcement — show landing page at /
   if (isLocalhost) {
-    if (pathname === '/') return NextResponse.redirect(new URL('/dashboard', request.url));
     return NextResponse.next();
   }
 
@@ -50,10 +49,7 @@ export function middleware(request: NextRequest) {
     if (APP_PREFIXES.some(p => pathname.startsWith(p))) {
       return NextResponse.redirect(`https://${APP_HOST}${pathname}${request.nextUrl.search}`);
     }
-    // Root → billetterie
-    if (pathname === '/') {
-      return NextResponse.redirect(new URL('/billetterie', request.url));
-    }
+    // Root → landing page (page.tsx handles it directly)
     return NextResponse.next();
   }
 
