@@ -1,5 +1,6 @@
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { BullModule } from '@nestjs/bullmq';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -48,6 +49,18 @@ import { AppService } from './app.service';
         limit: 100,
       },
     ]),
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        connection: {
+          host: config.get<string>('redis.host') || 'localhost',
+          port: config.get<number>('redis.port') || 6379,
+          password: config.get<string>('redis.password') || undefined,
+          db: config.get<number>('redis.db') || 0,
+        },
+      }),
+    }),
     ScheduleModule.forRoot(),
     PrismaModule,
     RedisModule,

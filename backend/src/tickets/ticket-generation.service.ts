@@ -78,8 +78,8 @@ export class TicketGenerationService {
       orderBy: { createdAt: 'desc' },
     });
     if (!keyPair) {
-      this.logger.log(`Auto-generating RSA key pair for organizer ${event.organizerId}`);
-      const generated = await this.cryptoService.generateRSA4096KeyPair();
+      this.logger.log(`Auto-generating Ed25519 key pair for organizer ${event.organizerId}`);
+      const generated = await this.cryptoService.generateEd25519KeyPair();
       const encryptedPrivKey = this.cryptoService.encryptAES(generated.privateKey, encKey);
       keyPair = await this.prisma.keyPair.create({
         data: {

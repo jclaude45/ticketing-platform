@@ -10,6 +10,7 @@ import {
   Res,
   HttpCode,
   HttpStatus,
+  NotFoundException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -19,6 +20,8 @@ import {
   ApiQuery,
   ApiParam,
 } from '@nestjs/swagger';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { Response } from 'express';
 import { TicketsService } from './tickets.service';
 import { TicketTemplateService } from './ticket-template.service';
@@ -32,6 +35,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Role, TicketStatus } from '@prisma/client';
+import { EXPORT_QUEUE, ExportJobData, ExportJobType } from './export-queue.constants';
 
 @ApiTags('Tickets')
 @ApiBearerAuth('JWT-auth')
@@ -44,6 +48,7 @@ export class TicketsController {
     private readonly generationService: TicketGenerationService,
     private readonly exportService: TicketExportService,
     private readonly subscriptionService: SubscriptionService,
+    @InjectQueue(EXPORT_QUEUE) private readonly exportQueue: Queue<ExportJobData>,
   ) {}
 
   // ===== TICKET TEMPLATE ENDPOINTS =====
@@ -279,5 +284,50 @@ export class TicketsController {
       'Cache-Control': 'no-store',
     });
     res.end(pdfBuffer);
+  }
+
+  // ── Async export (BullMQ) ───────────────────────────────────────────────────
+
+  @Post('tickets/export/async')
+  @Roles(Role.ORGANIZER, Role.ADMIN, Role.SUPER_ADMIN)
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({
+    summary: 'Enqueue an async export job — returns a jobId to poll for the download URL',
+    description: 'Use exportType: "pdf-bulk" | "pdf-grouped" | "zip". Poll GET /export/async/:jobId for status.',
+  })
+  async enqueueExport(
+    @Param('eventId') eventId: string,
+    @CurrentUser() user: any,
+    @Body('exportType') exportType: string,
+  ) {
+    await this.ticketsService.findAllForEvent(eventId, user.id, user.role, 1, 1);
+    const type = (exportType as ExportJobType) || ExportJobType.PDF_GROUPED;
+    const job = await this.exportQueue.add(
+      type,
+      { eventId, userId: user.id, userRole: user.role, exportType: type },
+      { attempts: 2, backoff: { type: 'exponential', delay: 5000 } },
+    );
+    return { jobId: job.id, status: 'queued', message: 'Export job enqueued — poll /export/async/' + job.id };
+  }
+
+  @Get('tickets/export/async/:jobId')
+  @Roles(Role.ORGANIZER, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Poll async export job status — returns downloadUrl when complete' })
+  async getExportJobStatus(
+    @Param('eventId') eventId: string,
+    @Param('jobId') jobId: string,
+    @CurrentUser() user: any,
+  ) {
+    const job = await this.exportQueue.getJob(jobId);
+    if (!job) throw new NotFoundException('Export job not found');
+
+    const state = await job.getState();
+    if (state === 'completed') {
+      return { jobId, status: 'completed', ...job.returnvalue };
+    }
+    if (state === 'failed') {
+      return { jobId, status: 'failed', error: job.failedReason };
+    }
+    return { jobId, status: state };
   }
 }

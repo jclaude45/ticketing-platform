@@ -211,11 +211,25 @@ export class ValidationService {
       };
     }
 
-    // Mark ticket as used
-    await this.prisma.ticket.update({
-      where: { id: ticket.id },
-      data: { status: TicketStatus.USED, checkedInAt: new Date() },
+    // Atomic claim: only one scanner (online or offline-sync) can mark this ticket USED.
+    // updateMany with status filter prevents a second concurrent scan from double-using.
+    const checkedInAt = new Date();
+    const claimed = await this.prisma.ticket.updateMany({
+      where: { id: ticket.id, status: { in: [TicketStatus.VALID, TicketStatus.PENDING] } },
+      data: { status: TicketStatus.USED, checkedInAt },
     });
+
+    if (claimed.count === 0) {
+      // A concurrent scan (e.g. two offline scanners syncing simultaneously) beat us
+      const scanRecord = await this.recordScan(controllerId, ticket.id, ScanResult.ALREADY_USED, dto, ipAddress);
+      await this.broadcastScanResult(eventId, ScanResult.ALREADY_USED, ticket, scanRecord.id);
+      return {
+        result: ScanResult.ALREADY_USED,
+        message: 'Ticket has already been used',
+        scanId: scanRecord.id,
+        checkedInAt: ticket.checkedInAt,
+      };
+    }
 
     const scanRecord = await this.recordScan(controllerId, ticket.id, ScanResult.VALID, dto, ipAddress);
 
@@ -234,7 +248,7 @@ export class ValidationService {
         holderName: ticket.holderName,
         holderEmail: ticket.holderEmail,
         templateName: ticket.template.name,
-        checkedInAt: new Date(),
+        checkedInAt,
       },
     };
   }

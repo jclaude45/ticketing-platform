@@ -18,6 +18,18 @@ export interface SignatureResult {
 export class CryptoService {
   private readonly logger = new Logger(CryptoService.name);
 
+  // Ed25519: ~100× faster key generation than RSA-4096, 64-byte signatures vs 512 bytes.
+  // New organizers always get Ed25519 keys. Existing RSA-4096 keys are supported for
+  // backward compatibility (V1 legacy QR codes) until all events have rotated.
+  async generateEd25519KeyPair(): Promise<KeyPairResult> {
+    const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519', {
+      publicKeyEncoding: { type: 'spki', format: 'pem' },
+      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+    });
+    return { publicKey, privateKey };
+  }
+
+  /** @deprecated Use generateEd25519KeyPair() for new keys */
   async generateRSA4096KeyPair(): Promise<KeyPairResult> {
     return new Promise((resolve, reject) => {
       forge.pki.rsa.generateKeyPair({ bits: 4096, workers: -1 }, (err, keypair) => {
@@ -33,21 +45,30 @@ export class CryptoService {
     });
   }
 
+  // Auto-detects key type: Ed25519 PKCS8 PEM has no "RSA" header.
   signData(data: string, privateKeyPem: string): string {
+    if (!privateKeyPem.includes('RSA')) {
+      const key = crypto.createPrivateKey(privateKeyPem);
+      return crypto.sign(null, Buffer.from(data, 'utf8'), key).toString('base64');
+    }
+    // Legacy RSA-4096 (node-forge)
     const privateKey = forge.pki.privateKeyFromPem(privateKeyPem);
     const md = forge.md.sha256.create();
     md.update(data, 'utf8');
-    const signature = privateKey.sign(md);
-    return forge.util.encode64(signature);
+    return forge.util.encode64(privateKey.sign(md));
   }
 
   verifySignature(data: string, signature: string, publicKeyPem: string): boolean {
     try {
+      if (!publicKeyPem.includes('RSA')) {
+        const key = crypto.createPublicKey(publicKeyPem);
+        return crypto.verify(null, Buffer.from(data, 'utf8'), key, Buffer.from(signature, 'base64'));
+      }
+      // Legacy RSA-4096 (node-forge)
       const publicKey = forge.pki.publicKeyFromPem(publicKeyPem);
       const md = forge.md.sha256.create();
       md.update(data, 'utf8');
-      const signatureBytes = forge.util.decode64(signature);
-      return publicKey.verify(md.digest().bytes(), signatureBytes);
+      return publicKey.verify(md.digest().bytes(), forge.util.decode64(signature));
     } catch (error) {
       this.logger.error('Signature verification failed', error);
       return false;
