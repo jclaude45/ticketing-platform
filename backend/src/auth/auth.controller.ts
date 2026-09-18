@@ -31,7 +31,9 @@ import { Throttle } from '@nestjs/throttler';
 import { ConfigService } from '@nestjs/config';
 
 const REFRESH_COOKIE = 'refresh_token';
+const ACCESS_COOKIE = 'access_token';
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days
+const ACCESS_MAX_AGE = 15 * 60 * 1000; // 15 minutes
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -52,8 +54,23 @@ export class AuthController {
     });
   }
 
+  private setAccessCookie(res: ExpressResponse, token: string) {
+    const isProduction = this.configService.get('NODE_ENV') === 'production';
+    res.cookie(ACCESS_COOKIE, token, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'strict',
+      path: '/api/v1',
+      maxAge: ACCESS_MAX_AGE,
+    });
+  }
+
   private clearRefreshCookie(res: ExpressResponse) {
     res.clearCookie(REFRESH_COOKIE, { path: '/api/v1/auth/refresh' });
+  }
+
+  private clearAccessCookie(res: ExpressResponse) {
+    res.clearCookie(ACCESS_COOKIE, { path: '/api/v1' });
   }
 
   @Public()
@@ -91,12 +108,15 @@ export class AuthController {
     const isMobile = req.headers['x-platform'] === 'mobile';
     if ('refreshToken' in result && result.refreshToken) {
       this.setRefreshCookie(res, result.refreshToken as string);
+      if ('accessToken' in result && result.accessToken) {
+        this.setAccessCookie(res, result.accessToken as string);
+      }
       if (isMobile) {
-        // Mobile clients store refreshToken in SecureStorage — return it in body
+        // Mobile clients store tokens in SecureStorage — return both in body
         return result;
       }
-      // Web clients use the httpOnly cookie — strip from body
-      const { refreshToken: _, ...safeResult } = result as any;
+      // Web clients use httpOnly cookies — strip tokens from body
+      const { refreshToken: _r, accessToken: _a, ...safeResult } = result as any;
       return safeResult;
     }
     return result;
@@ -128,6 +148,7 @@ export class AuthController {
     await this.authService.updateRefreshToken(req.user.id, hashedRefreshToken);
 
     this.setRefreshCookie(res, result.refreshToken);
+    this.setAccessCookie(res, result.accessToken);
     const isMobileRefresh = req.headers['x-platform'] === 'mobile';
     return isMobileRefresh
       ? { accessToken: result.accessToken, refreshToken: result.refreshToken }
@@ -145,8 +166,9 @@ export class AuthController {
     @Request() req: any,
     @Response({ passthrough: true }) res: ExpressResponse,
   ) {
-    const token = req.headers.authorization?.split(' ')[1];
+    const token = req.headers.authorization?.split(' ')[1] ?? req.cookies?.access_token;
     this.clearRefreshCookie(res);
+    this.clearAccessCookie(res);
     return this.authService.logout(userId, token);
   }
 

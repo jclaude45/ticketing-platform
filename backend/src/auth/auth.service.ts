@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ConflictException,
   NotFoundException,
+  ForbiddenException,
   Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -14,7 +15,7 @@ import { CryptoService } from '../crypto/crypto.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcryptjs';
-import * as speakeasy from 'speakeasy';
+import { authenticator } from 'otplib';
 import * as QRCode from 'qrcode';
 import { Role } from '@prisma/client';
 import * as nodemailer from 'nodemailer';
@@ -85,11 +86,11 @@ export class AuthService {
       },
     });
 
-    // Generate RSA key pair for organizers — private key encrypted at rest (AES-256-GCM)
+    // Generate Ed25519 key pair for organizers — private key encrypted at rest (AES-256-GCM)
     if (user.role === Role.ORGANIZER) {
       try {
         const encKey = this.configService.get<string>('crypto.privateKeyEncryptionKey');
-        const keyPair = await this.cryptoService.generateRSA4096KeyPair();
+        const keyPair = await this.cryptoService.generateEd25519KeyPair();
         const encryptedPrivateKey = this.cryptoService.encryptAES(keyPair.privateKey, encKey);
         await this.prisma.keyPair.create({
           data: {
@@ -145,6 +146,13 @@ export class AuthService {
       throw new UnauthorizedException('Please verify your email before logging in');
     }
 
+    // 2FA mandatory for ADMIN/SUPER_ADMIN — they cannot log in until it is set up
+    if ((user.role === Role.ADMIN || user.role === Role.SUPER_ADMIN) && !user.twoFactorEnabled) {
+      throw new ForbiddenException(
+        'La double authentification est obligatoire pour les comptes administrateurs. Configurez le 2FA avant de vous connecter.',
+      );
+    }
+
     // Check 2FA
     if (user.twoFactorEnabled) {
       if (!dto.totpCode) {
@@ -164,12 +172,8 @@ export class AuthService {
       if (await this.redisService.get(replayKey)) {
         throw new UnauthorizedException('TOTP code already used — wait for the next code');
       }
-      const isValid = speakeasy.totp.verify({
-        secret: fullUser.twoFactorSecret,
-        encoding: 'base32',
-        token: dto.totpCode,
-        window: 1,
-      });
+      const totp = authenticator.create({ window: 1 });
+      const isValid = totp.verify({ token: dto.totpCode, secret: fullUser.twoFactorSecret });
       if (!isValid) {
         throw new UnauthorizedException('Invalid two-factor authentication code');
       }
@@ -273,20 +277,17 @@ export class AuthService {
       throw new BadRequestException('Two-factor authentication is already enabled');
     }
 
-    const secret = speakeasy.generateSecret({
-      name: `${this.configService.get<string>('totp.issuer')} (${user.email})`,
-      issuer: this.configService.get<string>('totp.issuer'),
-      length: 20,
-    });
+    const issuer = this.configService.get<string>('totp.issuer') || 'ZAYA';
+    const secret = authenticator.generateSecret(20); // 20 bytes = 160 bits base32
+    const otpAuthUrl = authenticator.keyuri(user.email, issuer, secret);
 
     // Temporarily store secret in Redis until verified
-    await this.redisService.set(`2fa_setup:${userId}`, secret.base32, 600); // 10 min expiry
+    await this.redisService.set(`2fa_setup:${userId}`, secret, 600); // 10 min expiry
 
-    const otpAuthUrl = secret.otpauth_url;
     const qrCodeDataUrl = await QRCode.toDataURL(otpAuthUrl);
 
     return {
-      secret: secret.base32,
+      secret,
       otpAuthUrl,
       qrCode: qrCodeDataUrl,
       message: 'Scan the QR code with your authenticator app, then verify with a TOTP code',
@@ -300,13 +301,7 @@ export class AuthService {
       throw new BadRequestException('No 2FA setup in progress. Please start setup again.');
     }
 
-    const isValid = speakeasy.totp.verify({
-      secret: tempSecret,
-      encoding: 'base32',
-      token: totpCode,
-      window: 1,
-    });
-
+    const isValid = authenticator.create({ window: 1 }).verify({ token: totpCode, secret: tempSecret });
     if (!isValid) {
       throw new UnauthorizedException('Invalid TOTP code');
     }
@@ -327,20 +322,19 @@ export class AuthService {
   async disable2FA(userId: string, totpCode: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { twoFactorSecret: true, twoFactorEnabled: true },
+      select: { role: true, twoFactorSecret: true, twoFactorEnabled: true },
     });
 
     if (!user || !user.twoFactorEnabled) {
       throw new BadRequestException('Two-factor authentication is not enabled');
     }
 
-    const isValid = speakeasy.totp.verify({
-      secret: user.twoFactorSecret,
-      encoding: 'base32',
-      token: totpCode,
-      window: 1,
-    });
+    // ADMIN/SUPER_ADMIN cannot disable 2FA — it is permanently mandatory
+    if (user.role === Role.ADMIN || user.role === Role.SUPER_ADMIN) {
+      throw new ForbiddenException('La double authentification ne peut pas être désactivée pour les comptes administrateurs.');
+    }
 
+    const isValid = authenticator.create({ window: 1 }).verify({ token: totpCode, secret: user.twoFactorSecret });
     if (!isValid) {
       throw new UnauthorizedException('Invalid TOTP code');
     }
