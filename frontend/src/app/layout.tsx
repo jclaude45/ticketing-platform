@@ -4,6 +4,8 @@ import { Toaster } from 'react-hot-toast';
 import { QueryProvider } from '@/providers/QueryProvider';
 import { AuthProvider } from '@/providers/AuthProvider';
 import { SocketProvider } from '@/providers/SocketProvider';
+import { CookieBanner } from '@/components/CookieBanner';
+import { Analytics } from '@/components/Analytics';
 import './globals.css';
 
 const inter = Inter({
@@ -56,6 +58,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   },
                 }}
               />
+              <CookieBanner />
+              <Analytics />
             </SocketProvider>
           </AuthProvider>
         </QueryProvider>

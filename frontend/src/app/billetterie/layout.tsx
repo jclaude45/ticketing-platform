@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export const metadata: Metadata = {
   title: 'ZAYA Billetterie — Vos billets en ligne',
@@ -18,7 +19,7 @@ export default function BilletterieLayout({ children }: { children: React.ReactN
 
           {/* Logo */}
           <Link href="/billetterie" className="flex items-center gap-2.5 flex-shrink-0">
-            <img src="/zaya-logo.svg" alt="ZAYA" className="w-8 h-8 rounded-lg" />
+            <Image src="/zaya-logo.svg" alt="ZAYA" width={32} height={32} className="rounded-lg" />
             <span className="text-base font-extrabold text-gray-900 dark:text-white tracking-tight">ZAYA</span>
           </Link>
 
@@ -42,7 +43,7 @@ export default function BilletterieLayout({ children }: { children: React.ReactN
 
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <img src="/zaya-logo.svg" alt="ZAYA" className="w-7 h-7 rounded-lg" />
+                <Image src="/zaya-logo.svg" alt="ZAYA" width={28} height={28} className="rounded-lg" />
                 <span className="font-extrabold text-gray-900 dark:text-white">ZAYA</span>
               </div>
               <p className="text-sm text-gray-500 leading-relaxed">
@@ -66,8 +67,12 @@ export default function BilletterieLayout({ children }: { children: React.ReactN
             </div>
           </div>
 
-          <div className="border-t border-gray-100 dark:border-gray-800 pt-6 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <div className="border-t border-gray-100 dark:border-gray-800 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
             <p className="text-xs text-gray-400">© {new Date().getFullYear()} ZAYA. Tous droits réservés.</p>
+            <div className="flex items-center gap-4 text-xs text-gray-400">
+              <Link href="/cgu" className="hover:text-indigo-600 transition-colors">CGU</Link>
+              <Link href="/politique-de-confidentialite" className="hover:text-indigo-600 transition-colors">Confidentialité</Link>
+            </div>
             <p className="text-xs text-gray-400">Paiements sécurisés via FlexPay</p>
           </div>
         </div>

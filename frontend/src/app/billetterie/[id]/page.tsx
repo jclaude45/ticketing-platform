@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import Link from 'next/link';
+import Image from 'next/image';
 import { publicApi, resolveMediaUrl } from '@/lib/api';
 import {
   ArrowLeft, MapPin, Calendar, Clock, Users, Ticket,
@@ -185,6 +186,7 @@ function PurchaseModal({
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [honeypot, setHoneypot] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'mobile_money' | 'card' | null>(null);
   const [mmWaiting, setMmWaiting] = useState<{ reference: string; total: number; currency: string } | null>(null);
 
@@ -217,7 +219,7 @@ function PurchaseModal({
 
   const contactOk = name.trim().length >= 2 && email.includes('@');
   const phoneRequiredForMM = paymentMethod === 'mobile_money' && !phone.trim();
-  const canSubmit = items.length > 0 && contactOk && (!isPaid || paymentMethod !== null) && !phoneRequiredForMM;
+  const canSubmit = items.length > 0 && contactOk && (!isPaid || paymentMethod !== null) && !phoneRequiredForMM && !honeypot;
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -362,6 +364,17 @@ function PurchaseModal({
                 <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+243 81 234 5678"
                   className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
               </div>
+              {/* honeypot — hidden from real users, bots fill it and get blocked */}
+              <input
+                type="text"
+                name="website"
+                value={honeypot}
+                onChange={e => setHoneypot(e.target.value)}
+                tabIndex={-1}
+                autoComplete="off"
+                aria-hidden="true"
+                style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }}
+              />
             </div>
           </div>
 
@@ -593,8 +606,8 @@ export default function EventDetailPage() {
         </Link>
 
         {event.bannerUrl && (
-          <div className="rounded-2xl overflow-hidden shadow-md h-64 sm:h-80">
-            <img src={resolveMediaUrl(event.bannerUrl)} alt={event.name} className="w-full h-full object-cover" />
+          <div className="rounded-2xl overflow-hidden shadow-md h-64 sm:h-80 relative">
+            <Image src={resolveMediaUrl(event.bannerUrl)!} alt={event.name} fill className="object-cover" />
           </div>
         )}
 
