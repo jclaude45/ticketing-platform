@@ -38,7 +38,7 @@
     "react-color": "^2.19.3",
     "react-dom": "^18.2.0",
     "react-dropzone": "^14.2.3",
-    "react-hook-form": "^7.50.1",
+    "react-hook-form": "^7.88.0",
     "react-hot-toast": "^2.4.1",
     "recharts": "^2.12.1",
     "socket.io-client": "^4.7.4",
