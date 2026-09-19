@@ -72,7 +72,7 @@
 		<false/>
 		<key>NSExceptionDomains</key>
 		<dict>
-			<key>api.ticketing-platform.com</key>
+			<key>zaya.live</key>
 			<dict>
 				<key>NSExceptionAllowsInsecureHTTPLoads</key>
 				<false/>
