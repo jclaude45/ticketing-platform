@@ -54,4 +54,7 @@ export default () => ({
     whatsappFrom: process.env.TWILIO_WHATSAPP_FROM || 'whatsapp:+14155238886',
   },
   APP_BASE_URL: process.env.APP_BASE_URL || '',
+  accreditation: {
+    hmacSecret: process.env.ACCREDITATION_HMAC_SECRET,
+  },
 });

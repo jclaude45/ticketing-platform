@@ -87,8 +87,8 @@ export class TeamController {
   @Get('import/template')
   @Roles(Role.ORGANIZER, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Download Excel import template' })
-  downloadTemplate(@Res() res: Response) {
-    const buffer = this.teamService.generateExcelTemplate();
+  async downloadTemplate(@Res() res: Response) {
+    const buffer = await this.teamService.generateExcelTemplate();
     res.set({
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': 'attachment; filename="import-membres-template.xlsx"',

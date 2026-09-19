@@ -14,8 +14,9 @@ import * as PDFDocument from 'pdfkit';
 import * as QRCode from 'qrcode';
 import * as sharp from 'sharp';
 import * as fs from 'fs';
+import { Readable } from 'stream';
 import * as path from 'path';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 const LOGO_SVG_PATH = path.join(__dirname, '../../assets/powered-logo.svg');
 const LOGO_ASPECT = 1109 / 300;
@@ -99,7 +100,14 @@ export class TeamService {
   ) {}
 
   private get qrSecret(): string {
-    return this.config.get<string>('jwt.secret') ?? 'fallback-dev-secret';
+    // Dedicated secret for accreditation HMAC — must NOT share the JWT secret.
+    // If ACCREDITATION_HMAC_SECRET is absent, falls back to a derived key so the
+    // app still boots in dev, but logs a warning so it's never missed in prod.
+    const secret = this.config.get<string>('accreditation.hmacSecret');
+    if (!secret) {
+      this.logger.warn('ACCREDITATION_HMAC_SECRET is not set — using derived fallback (NOT safe for production)');
+    }
+    return secret ?? `acc-hmac-${this.config.get<string>('jwt.secret') ?? 'fallback'}`;
   }
 
   private async _getLogoBuffer(): Promise<Buffer> {
@@ -185,18 +193,33 @@ export class TeamService {
       notes:      ['notes', 'note', 'remarques', 'commentaires'],
     };
 
-    let workbook: XLSX.WorkBook;
+    const workbook = new ExcelJS.Workbook();
     try {
-      workbook = XLSX.read(file.buffer, { type: 'buffer' });
+      await workbook.xlsx.read(Readable.from(file.buffer));
     } catch {
       throw new BadRequestException('Fichier Excel invalide ou corrompu');
     }
 
-    const sheetName = workbook.SheetNames[0];
-    const rows: Record<string, any>[] = XLSX.utils.sheet_to_json(
-      workbook.Sheets[sheetName],
-      { defval: '' },
-    );
+    const worksheet = workbook.worksheets[0];
+    if (!worksheet) throw new BadRequestException('Le fichier est vide');
+
+    // Build header map from row 1
+    const headerRow = worksheet.getRow(1);
+    const headers: Record<number, string> = {};
+    headerRow.eachCell({ includeEmpty: true }, (cell, col) => {
+      headers[col] = String(cell.value ?? '');
+    });
+
+    // Build rows as plain objects keyed by header name
+    const rows: Record<string, string>[] = [];
+    worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const obj: Record<string, string> = {};
+      row.eachCell({ includeEmpty: true }, (cell, col) => {
+        if (headers[col]) obj[headers[col]] = String(cell.value ?? '');
+      });
+      rows.push(obj);
+    });
 
     if (rows.length === 0) throw new BadRequestException('Le fichier est vide');
     if (rows.length > 500) throw new BadRequestException('Maximum 500 membres par import');
@@ -258,21 +281,27 @@ export class TeamService {
     };
   }
 
-  generateExcelTemplate(): Buffer {
-    const headers = [['Nom *', 'Email', 'Téléphone', 'Rôle', 'Département', 'Notes']];
-    const example = [['Marie Dupont', 'marie@example.com', '+33612345678', 'STAFF', 'Production', '']];
-    const roles = [['Rôles valides :'], ['MANAGER'], ['STAFF'], ['VOLUNTEER'], ['SECURITY'], ['PRESS'], ['VIP'], ['ARTIST'], ['SPONSOR']];
+  async generateExcelTemplate(): Promise<Buffer> {
+    const wb = new ExcelJS.Workbook();
 
-    const wb = XLSX.utils.book_new();
+    const wsMembers = wb.addWorksheet('Membres');
+    wsMembers.columns = [
+      { header: 'Nom *',       key: 'nom',         width: 20 },
+      { header: 'Email',       key: 'email',        width: 25 },
+      { header: 'Téléphone',   key: 'telephone',    width: 16 },
+      { header: 'Rôle',        key: 'role',         width: 12 },
+      { header: 'Département', key: 'departement',  width: 16 },
+      { header: 'Notes',       key: 'notes',        width: 20 },
+    ];
+    wsMembers.addRow(['Marie Dupont', 'marie@example.com', '+33612345678', 'STAFF', 'Production', '']);
 
-    const wsMembers = XLSX.utils.aoa_to_sheet([...headers, ...example]);
-    wsMembers['!cols'] = [{ wch: 20 }, { wch: 25 }, { wch: 16 }, { wch: 12 }, { wch: 16 }, { wch: 20 }];
-    XLSX.utils.book_append_sheet(wb, wsMembers, 'Membres');
+    const wsRoles = wb.addWorksheet('Rôles valides');
+    wsRoles.addRows([
+      ['Rôles valides :'], ['MANAGER'], ['STAFF'], ['VOLUNTEER'],
+      ['SECURITY'], ['PRESS'], ['VIP'], ['ARTIST'], ['SPONSOR'],
+    ]);
 
-    const wsRoles = XLSX.utils.aoa_to_sheet(roles);
-    XLSX.utils.book_append_sheet(wb, wsRoles, 'Rôles valides');
-
-    return Buffer.from(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+    return Buffer.from(await wb.xlsx.writeBuffer());
   }
 
   async uploadPhoto(eventId: string, memberId: string, organizerId: string, organizerRole: Role, file: Express.Multer.File) {
