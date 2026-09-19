@@ -20,8 +20,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Scan filesystem for vulnerabilities
-        uses: aquasecurity/trivy-action@master
+      - name: Scan filesystem — table output (fails on CRITICAL)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          severity: CRITICAL
+          exit-code: '1'
+
+      - name: Scan filesystem — SARIF upload (optional)
+        uses: aquasecurity/trivy-action@0.28.0
+        if: always()
         with:
           scan-type: fs
           scan-ref: .
@@ -33,6 +43,7 @@ jobs:
       - name: Upload SARIF to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         if: always()
+        continue-on-error: true
         with:
           sarif_file: trivy-fs.sarif
           category: trivy-filesystem
@@ -50,18 +61,28 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build backend Docker image
-        uses: docker/build-push-action@v5
+      - name: Build backend Docker image (production stage)
+        uses: docker/build-push-action@v6
         with:
           context: ./backend
+          target: production
           push: false
           load: true
           tags: zaya-backend:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Scan backend image with Trivy
-        uses: aquasecurity/trivy-action@master
+      - name: Scan image — table output (fails on CRITICAL)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: zaya-backend:${{ github.sha }}
+          format: table
+          severity: CRITICAL
+          exit-code: '1'
+
+      - name: Scan image — SARIF upload (optional)
+        uses: aquasecurity/trivy-action@0.28.0
+        if: always()
         with:
           image-ref: zaya-backend:${{ github.sha }}
           format: sarif
@@ -72,6 +93,7 @@ jobs:
       - name: Upload image scan SARIF
         uses: github/codeql-action/upload-sarif@v3
         if: always()
+        continue-on-error: true
         with:
           sarif_file: trivy-image.sarif
           category: trivy-docker-backend
