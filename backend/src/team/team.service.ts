@@ -405,8 +405,8 @@ export class TeamService {
       valid: true,
       code: acc.code,
       member: acc.teamMember.name,
-      role: result.payload.r,
-      zones: result.payload.z,
+      role: acc.teamMember.role,      // authoritative DB value, not QR payload
+      zones: acc.zones as string[],   // authoritative DB value, not QR payload
       photoUrl: acc.teamMember.photoUrl,
     };
   }

@@ -1,4 +1,4 @@
-import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
+import { Module, MiddlewareConsumer, NestModule, RequestMethod } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
@@ -34,6 +34,7 @@ import { PaymentModule } from './payment/payment.module';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { SecurityMiddleware } from './common/middleware/security.middleware';
 
 @Module({
   imports: [
@@ -96,6 +97,8 @@ import { AppService } from './app.service';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    // Middleware configuration can be added here if needed
+    consumer
+      .apply(SecurityMiddleware)
+      .forRoutes({ path: '*', method: RequestMethod.ALL });
   }
 }

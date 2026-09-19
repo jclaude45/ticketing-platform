@@ -5,6 +5,7 @@ import { TicketGenerationService } from '../tickets/ticket-generation.service';
 import { PublicService } from '../public/public.service';
 import { Role } from '@prisma/client';
 import axios from 'axios';
+import * as crypto from 'crypto';
 
 export type PaymentMethod = 'mobile_money' | 'card';
 
@@ -75,7 +76,7 @@ export class PaymentService {
       });
     }
 
-    const reference = `ZAYA-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+    const reference = `ZAYA-${crypto.randomBytes(16).toString('hex').toUpperCase()}`;
     const apiBase = this.config.get<string>('frontend.publicUrl') || 'https://zaya.live';
     const apiBackend = this.config.get<string>('BACKEND_URL') || 'https://api.zaya.live';
 

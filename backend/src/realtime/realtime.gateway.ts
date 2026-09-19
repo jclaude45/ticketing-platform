@@ -15,7 +15,9 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from '../redis/redis.service';
 
-// M3: CORS restricted to the known frontend origin — not wildcard
+// CORS restricted to the known frontend origin — not wildcard.
+// maxHttpBufferSize: 1MB cap to prevent memory exhaustion (CVE socket.io-parser DoS).
+// connectTimeout: 10s to reject slow/incomplete handshakes.
 @WebSocketGateway({
   cors: {
     origin: process.env.FRONTEND_URL || 'http://localhost:3000',
@@ -23,6 +25,8 @@ import { RedisService } from '../redis/redis.service';
   },
   namespace: '/realtime',
   transports: ['websocket', 'polling'],
+  maxHttpBufferSize: 1e6,
+  connectTimeout: 10000,
 })
 export class RealtimeGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect

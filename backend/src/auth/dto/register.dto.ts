@@ -1,4 +1,4 @@
-import { IsEmail, IsString, MinLength, MaxLength, IsOptional, IsEnum } from 'class-validator';
+import { IsEmail, IsString, MinLength, MaxLength, IsOptional, IsIn } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 
@@ -25,8 +25,10 @@ export class RegisterDto {
   @MaxLength(50)
   lastName: string;
 
-  @ApiPropertyOptional({ enum: Role, default: Role.ORGANIZER })
+  // Self-registration is restricted to ORGANIZER only.
+  // ADMIN, SUPER_ADMIN, CONTROLLER, STAFF, BUYER are assigned by admins only.
+  @ApiPropertyOptional({ enum: [Role.ORGANIZER], default: Role.ORGANIZER })
   @IsOptional()
-  @IsEnum(Role)
+  @IsIn([Role.ORGANIZER])
   role?: Role;
 }

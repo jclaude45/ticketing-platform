@@ -319,8 +319,9 @@ export class TicketExportService {
     // Step 1 — fetch lightweight ticket rows (no qrCode, no template.customFields).
     // customFields stores the canvas preview as a base64 PNG (~1-2MB per template).
     // Returning it once per ticket (×500) would send ~1GB through Prisma → napi crash.
+    // eventId constraint is mandatory to prevent cross-organizer IDOR via supplied ticketIds.
     const ticketRows = await this.prisma.ticket.findMany({
-      where: { id: { in: ids } },
+      where: { id: { in: ids }, eventId },
       select: {
         id: true,
         serialNumber: true,

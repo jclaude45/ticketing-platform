@@ -1,5 +1,13 @@
 version: '3.9'
 
+# DÉVELOPPEMENT UNIQUEMENT — NE PAS UTILISER EN PRODUCTION.
+# Les valeurs par défaut (ticketing_secret, redis_secret, etc.) sont volontairement
+# faibles pour faciliter le démarrage local sans .env.
+# En production, toujours utiliser l'overlay :
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# et s'assurer que le fichier .env contient des secrets forts générés par
+# scripts/generate-prod-secrets.sh
+
 services:
   postgres:
     image: postgres:16-alpine

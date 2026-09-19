@@ -101,6 +101,10 @@
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.3.3"
   },
+  "overrides": {
+    "socket.io-parser": ">=4.2.7",
+    "postcss": ">=8.5.0"
+  },
   "jest": {
     "moduleFileExtensions": [
       "js",
