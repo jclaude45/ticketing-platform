@@ -1,292 +1,370 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # =============================================================================
-# Ticketing Platform - Production Deployment Script
+# ZAYA — Script de déploiement production
 # =============================================================================
-# Usage: ./scripts/deploy.sh [--branch main] [--skip-backup] [--skip-migrate]
+# Usage :
+#   bash scripts/deploy.sh               → mise à jour normale
+#   bash scripts/deploy.sh --first-run   → premier déploiement (SSL + seed)
+#   bash scripts/deploy.sh --skip-backup → sans sauvegarde préalable
+#   bash scripts/deploy.sh --skip-build  → sans rebuild des images
 # =============================================================================
 set -euo pipefail
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-NC='\033[0m'
-
-# Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-DEPLOY_BRANCH="${DEPLOY_BRANCH:-main}"
-BACKUP_DIR="${BACKUP_DIR:-/opt/backups/ticketing}"
-LOG_FILE="/var/log/ticketing-deploy-$(date +%Y%m%d-%H%M%S).log"
-DOCKER_COMPOSE_CMD="docker compose"
+COMPOSE="docker compose -f ${PROJECT_ROOT}/docker-compose.yml -f ${PROJECT_ROOT}/docker-compose.prod.yml"
+LOG_FILE="/var/log/zaya-deploy-$(date +%Y%m%d-%H%M%S).log"
 
-log_info()    { echo -e "${BLUE}[$(date '+%H:%M:%S')] [INFO]${NC} $1" | tee -a "$LOG_FILE"; }
-log_success() { echo -e "${GREEN}[$(date '+%H:%M:%S')] [SUCCESS]${NC} $1" | tee -a "$LOG_FILE"; }
-log_warn()    { echo -e "${YELLOW}[$(date '+%H:%M:%S')] [WARN]${NC} $1" | tee -a "$LOG_FILE"; }
-log_error()   { echo -e "${RED}[$(date '+%H:%M:%S')] [ERROR]${NC} $1" | tee -a "$LOG_FILE"; }
+# ── Couleurs ─────────────────────────────────────────────────────────────────
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
+BLUE='\033[0;34m'; CYAN='\033[0;36m'; NC='\033[0m'
+log_info()    { echo -e "${BLUE}[$(date +%H:%M:%S)][INFO]${NC}    $1" | tee -a "$LOG_FILE"; }
+log_success() { echo -e "${GREEN}[$(date +%H:%M:%S)][OK]${NC}      $1" | tee -a "$LOG_FILE"; }
+log_warn()    { echo -e "${YELLOW}[$(date +%H:%M:%S)][WARN]${NC}    $1" | tee -a "$LOG_FILE"; }
+log_error()   { echo -e "${RED}[$(date +%H:%M:%S)][ERROR]${NC}   $1" | tee -a "$LOG_FILE"; exit 1; }
+log_section() { echo -e "\n${CYAN}══ $1${NC}" | tee -a "$LOG_FILE"; }
 
-# Parse arguments
+# ── Arguments ─────────────────────────────────────────────────────────────────
+FIRST_RUN=false
 SKIP_BACKUP=false
+SKIP_BUILD=false
 SKIP_MIGRATE=false
-SKIP_PULL=false
 
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --branch) DEPLOY_BRANCH="$2"; shift 2;;
-        --skip-backup) SKIP_BACKUP=true; shift;;
-        --skip-migrate) SKIP_MIGRATE=true; shift;;
-        --skip-pull) SKIP_PULL=true; shift;;
-        *) log_warn "Unknown argument: $1"; shift;;
-    esac
+for arg in "$@"; do
+  case $arg in
+    --first-run)    FIRST_RUN=true ;;
+    --skip-backup)  SKIP_BACKUP=true ;;
+    --skip-build)   SKIP_BUILD=true ;;
+    --skip-migrate) SKIP_MIGRATE=true ;;
+    *) log_warn "Argument inconnu : $arg" ;;
+  esac
 done
 
-echo ""
-echo -e "${CYAN}=============================================${NC}"
-echo -e "${CYAN}  Ticketing Platform - Production Deploy${NC}"
-echo -e "${CYAN}=============================================${NC}"
-echo "  Branch: ${DEPLOY_BRANCH}"
-echo "  Skip Backup: ${SKIP_BACKUP}"
-echo "  Skip Migrate: ${SKIP_MIGRATE}"
-echo "  Time: $(date)"
-echo ""
+mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || LOG_FILE="/tmp/zaya-deploy-$(date +%Y%m%d-%H%M%S).log"
+
+echo "" | tee -a "$LOG_FILE"
+echo -e "${CYAN}╔═══════════════════════════════════════════════╗${NC}" | tee -a "$LOG_FILE"
+echo -e "${CYAN}║        ZAYA — Déploiement production           ║${NC}" | tee -a "$LOG_FILE"
+echo -e "${CYAN}╚═══════════════════════════════════════════════╝${NC}" | tee -a "$LOG_FILE"
+echo "  Mode    : $([ "$FIRST_RUN" = true ] && echo 'PREMIER DÉPLOIEMENT' || echo 'Mise à jour')" | tee -a "$LOG_FILE"
+echo "  Commit  : $(git -C "$PROJECT_ROOT" rev-parse --short HEAD 2>/dev/null || echo 'N/A')" | tee -a "$LOG_FILE"
+echo "  Date    : $(date)" | tee -a "$LOG_FILE"
+echo "" | tee -a "$LOG_FILE"
 
 # =============================================================================
-# Pre-flight Checks
+# ÉTAPE 0 — Vérifications préalables
 # =============================================================================
-log_info "Running pre-flight checks..."
+log_section "0. Vérifications préalables"
 
-# Check we're in the right directory
-if [ ! -f "${PROJECT_ROOT}/docker-compose.yml" ]; then
-    log_error "docker-compose.yml not found. Run from project root."
-    exit 1
-fi
-
-# Check .env exists
-if [ ! -f "${PROJECT_ROOT}/.env" ]; then
-    log_error ".env file not found. Copy .env.example and fill in production values."
-    exit 1
-fi
-
-# Check critical env vars
-source "${PROJECT_ROOT}/.env"
-for var in JWT_SECRET JWT_REFRESH_SECRET POSTGRES_PASSWORD REDIS_PASSWORD; do
-    if [ -z "${!var:-}" ]; then
-        log_error "Required environment variable $var is not set in .env"
-        exit 1
-    fi
-    if [[ "${!var}" == *"change-me"* ]] || [[ "${!var}" == *"your-"* ]]; then
-        log_error "$var appears to still be a placeholder value. Update it for production!"
-        exit 1
-    fi
-done
-
-# Check Docker is running
-if ! docker info &>/dev/null 2>&1; then
-    log_error "Docker daemon is not running."
-    exit 1
-fi
-
-# Check RSA keys exist
-if [ ! -f "${PROJECT_ROOT}/keys/private.pem" ]; then
-    log_error "RSA private key not found. Run: ./scripts/generate-keys.sh"
-    exit 1
-fi
-
-log_success "Pre-flight checks passed"
-
-# =============================================================================
-# Step 1: Database Backup
-# =============================================================================
-if [ "$SKIP_BACKUP" = false ]; then
-    log_info "Creating database backup..."
-    mkdir -p "$BACKUP_DIR"
-
-    BACKUP_FILE="${BACKUP_DIR}/ticketing_db_$(date +%Y%m%d_%H%M%S).sql.gz"
-
-    if $DOCKER_COMPOSE_CMD -f docker-compose.yml -f docker-compose.prod.yml \
-        exec -T postgres pg_dump -U "${POSTGRES_USER:-ticketing}" "${POSTGRES_DB:-ticketing_db}" \
-        | gzip > "$BACKUP_FILE" 2>/dev/null; then
-        log_success "Database backup saved: $BACKUP_FILE"
-    else
-        log_warn "Database backup failed - continuing anyway (service may not be running yet)"
-    fi
-
-    # Keep only last 10 backups
-    ls -t "${BACKUP_DIR}"/*.sql.gz 2>/dev/null | tail -n +11 | xargs rm -f 2>/dev/null || true
-    log_info "Keeping last 10 backups. Older ones pruned."
-else
-    log_warn "Skipping database backup (--skip-backup)"
-fi
-
-# =============================================================================
-# Step 2: Pull Latest Code
-# =============================================================================
-if [ "$SKIP_PULL" = false ]; then
-    log_info "Pulling latest code from branch: ${DEPLOY_BRANCH}..."
-    cd "$PROJECT_ROOT"
-    git fetch origin
-    git checkout "$DEPLOY_BRANCH"
-    git pull origin "$DEPLOY_BRANCH"
-    log_success "Code updated to latest $(git rev-parse --short HEAD)"
-else
-    log_warn "Skipping git pull (--skip-pull)"
-fi
-
-# =============================================================================
-# Step 3: Build Docker Images
-# =============================================================================
-log_info "Building Docker images..."
 cd "$PROJECT_ROOT"
 
-$DOCKER_COMPOSE_CMD \
-    -f docker-compose.yml \
-    -f docker-compose.prod.yml \
-    build --no-cache --parallel
+# Docker disponible
+docker info &>/dev/null || log_error "Docker daemon non démarré."
 
-log_success "Docker images built"
+# .env présent
+[ -f "${PROJECT_ROOT}/.env" ] || log_error ".env introuvable. Lance : bash scripts/generate-prod-secrets.sh >> .env"
+
+# Charger les variables d'env
+set -a; source "${PROJECT_ROOT}/.env"; set +a
+
+# Variables critiques obligatoires
+REQUIRED_VARS=(
+  JWT_SECRET JWT_REFRESH_SECRET
+  POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB
+  REDIS_PASSWORD
+  PRIVATE_KEY_ENCRYPTION_KEY
+  ACCREDITATION_HMAC_SECRET
+  FLEXPAY_TOKEN
+  FRONTEND_URL APP_BASE_URL
+)
+MISSING=0
+for var in "${REQUIRED_VARS[@]}"; do
+  val="${!var:-}"
+  if [ -z "$val" ]; then
+    log_warn "Variable manquante : ${var}"
+    MISSING=$((MISSING + 1))
+  elif echo "$val" | grep -qiE "(change.me|placeholder|your-|generate-with|<)"; then
+    log_warn "Variable non configurée (valeur par défaut) : ${var}"
+    MISSING=$((MISSING + 1))
+  fi
+done
+[ "$MISSING" -gt 0 ] && log_error "${MISSING} variable(s) manquante(s) ou non configurée(s) dans .env"
+
+# Entropie minimale des secrets critiques (>= 20 caractères)
+for var in JWT_SECRET JWT_REFRESH_SECRET PRIVATE_KEY_ENCRYPTION_KEY ACCREDITATION_HMAC_SECRET; do
+  val="${!var}"
+  [ "${#val}" -ge 20 ] || log_error "${var} trop court (${#val} chars < 20). Régénère avec openssl rand -hex 32"
+done
+
+# Vérifier que JWT_SECRET ≠ ACCREDITATION_HMAC_SECRET (isolation des secrets)
+[ "${JWT_SECRET}" != "${ACCREDITATION_HMAC_SECRET}" ] \
+  || log_error "JWT_SECRET et ACCREDITATION_HMAC_SECRET sont identiques — ils doivent être différents"
+
+log_success "Toutes les vérifications préalables sont OK"
 
 # =============================================================================
-# Step 4: Rolling Update - Backend
+# ÉTAPE 1 — Sauvegarde de la base (sauf premier déploiement)
 # =============================================================================
-log_info "Deploying backend..."
+log_section "1. Sauvegarde de la base de données"
 
-$DOCKER_COMPOSE_CMD \
-    -f docker-compose.yml \
-    -f docker-compose.prod.yml \
-    up -d --no-deps backend
+if [ "$SKIP_BACKUP" = true ] || [ "$FIRST_RUN" = true ]; then
+  log_warn "Sauvegarde ignorée (${FIRST_RUN} && first-run || --skip-backup)"
+else
+  BACKUP_DIR="/opt/zaya/backups"
+  mkdir -p "$BACKUP_DIR"
+  BACKUP_FILE="${BACKUP_DIR}/pre-deploy-$(date +%Y%m%d_%H%M%S).sql.gz"
 
-# Wait for backend health check
-log_info "Waiting for backend to be healthy..."
+  if $COMPOSE exec -T postgres \
+      pg_dump -U "${POSTGRES_USER}" "${POSTGRES_DB}" 2>/dev/null \
+      | gzip > "$BACKUP_FILE"; then
+    log_success "Sauvegarde : ${BACKUP_FILE} ($(du -sh "$BACKUP_FILE" | cut -f1))"
+  else
+    log_warn "Sauvegarde échouée (service peut-être pas encore démarré)"
+    rm -f "$BACKUP_FILE"
+  fi
+
+  # Garder les 10 dernières
+  ls -t "${BACKUP_DIR}"/pre-deploy-*.sql.gz 2>/dev/null | tail -n +11 | xargs rm -f || true
+fi
+
+# =============================================================================
+# ÉTAPE 2 — SSL / Let's Encrypt (premier déploiement uniquement)
+# =============================================================================
+if [ "$FIRST_RUN" = true ]; then
+  log_section "2. Certificat SSL Let's Encrypt"
+
+  DOMAIN="${APP_BASE_URL#https://}"
+  DOMAIN="${DOMAIN#http://}"
+  DOMAIN="${DOMAIN%%/*}"
+  EMAIL="${SMTP_USER:-contact@${DOMAIN}}"
+
+  if [ -d "/etc/letsencrypt/live/${DOMAIN}" ]; then
+    log_warn "Certificat SSL existant pour ${DOMAIN} — ignoré"
+  else
+    log_info "Demande du certificat pour ${DOMAIN} (email : ${EMAIL})"
+
+    # Démarrer un nginx minimal pour la vérification ACME
+    $COMPOSE up -d nginx 2>/dev/null || true
+    sleep 3
+
+    certbot certonly \
+      --webroot \
+      --webroot-path=/var/www/certbot \
+      --email "${EMAIL}" \
+      --agree-tos \
+      --no-eff-email \
+      -d "${DOMAIN}" \
+      -d "www.${DOMAIN}" 2>/dev/null \
+    || certbot certonly \
+      --standalone \
+      --email "${EMAIL}" \
+      --agree-tos \
+      --no-eff-email \
+      -d "${DOMAIN}" \
+      --preferred-challenges http
+
+    log_success "Certificat SSL obtenu pour ${DOMAIN}"
+
+    # Renouvellement automatique via cron
+    if ! crontab -l 2>/dev/null | grep -q certbot; then
+      (crontab -l 2>/dev/null; echo "0 3 * * * certbot renew --quiet && docker compose -f /opt/zaya/ticketing-platform/docker-compose.yml -f /opt/zaya/ticketing-platform/docker-compose.prod.yml exec nginx nginx -s reload") | crontab -
+      log_success "Renouvellement automatique SSL configuré (cron 03:00 quotidien)"
+    fi
+  fi
+else
+  log_section "2. SSL"
+  log_info "Mise à jour normale — SSL ignoré (déjà configuré)"
+fi
+
+# =============================================================================
+# ÉTAPE 3 — Récupération du code
+# =============================================================================
+log_section "3. Récupération du code (git pull)"
+git fetch origin
+git checkout main
+git pull origin main
+log_success "Code à jour : $(git rev-parse --short HEAD)"
+
+# =============================================================================
+# ÉTAPE 4 — Construction des images Docker
+# =============================================================================
+log_section "4. Construction des images Docker"
+
+if [ "$SKIP_BUILD" = true ]; then
+  log_warn "Build ignoré (--skip-build)"
+else
+  $COMPOSE build --parallel
+  log_success "Images construites"
+fi
+
+# =============================================================================
+# ÉTAPE 5 — Démarrage des services infrastructure
+# =============================================================================
+log_section "5. Démarrage des services (postgres, redis, nginx)"
+$COMPOSE up -d postgres redis nginx uptime-kuma postgres-backup
+
+# Attendre PostgreSQL
+log_info "Attente de PostgreSQL..."
 for i in $(seq 1 30); do
-    if curl -sf http://localhost:3001/api/v1/health &>/dev/null 2>&1; then
-        log_success "Backend is healthy"
-        break
-    fi
-    echo -n "."
-    sleep 3
-    if [ "$i" -eq 30 ]; then
-        echo ""
-        log_error "Backend health check failed after 90 seconds"
-        log_error "Check logs: docker compose logs backend"
-        exit 1
-    fi
+  if $COMPOSE exec -T postgres pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" &>/dev/null; then
+    log_success "PostgreSQL prêt"
+    break
+  fi
+  [ "$i" -eq 30 ] && log_error "PostgreSQL n'a pas démarré dans le délai imparti"
+  sleep 2
+done
+
+# Attendre Redis
+log_info "Attente de Redis..."
+for i in $(seq 1 15); do
+  if $COMPOSE exec -T redis redis-cli --no-auth-warning -a "${REDIS_PASSWORD}" ping 2>/dev/null | grep -q PONG; then
+    log_success "Redis prêt"
+    break
+  fi
+  [ "$i" -eq 15 ] && log_warn "Redis timeout — on continue quand même"
+  sleep 2
 done
 
 # =============================================================================
-# Step 5: Run Database Migrations
+# ÉTAPE 6 — Migrations Prisma
 # =============================================================================
-if [ "$SKIP_MIGRATE" = false ]; then
-    log_info "Running database migrations..."
-    $DOCKER_COMPOSE_CMD \
-        -f docker-compose.yml \
-        -f docker-compose.prod.yml \
-        exec -T backend npx prisma migrate deploy
-    log_success "Migrations applied"
+log_section "6. Migrations de la base de données"
+
+if [ "$SKIP_MIGRATE" = true ]; then
+  log_warn "Migrations ignorées (--skip-migrate)"
 else
-    log_warn "Skipping migrations (--skip-migrate)"
+  # Démarrer le backend brièvement pour les migrations
+  $COMPOSE up -d backend
+  sleep 10
+
+  $COMPOSE exec -T backend npx prisma migrate deploy \
+    && log_success "Migrations appliquées" \
+    || log_error "Échec des migrations. Vérifier : $COMPOSE logs backend"
 fi
 
 # =============================================================================
-# Step 6: Deploy Frontend
+# ÉTAPE 7 — Migration DEK (PRIVATE_KEY_ENCRYPTION_KEY v1 → v2)
 # =============================================================================
-log_info "Deploying frontend..."
+log_section "7. Vérification du chiffrement AES des clés privées"
 
-$DOCKER_COMPOSE_CMD \
-    -f docker-compose.yml \
-    -f docker-compose.prod.yml \
-    up -d --no-deps frontend
+DEK_STATUS=$($COMPOSE exec -T backend \
+  node -e "
+    const { PrismaClient } = require('@prisma/client');
+    const p = new PrismaClient();
+    p.keyPair.count({ where: { privateKey: { not: { startsWith: 'v2:' } } } })
+      .then(n => { console.log(n); process.exit(0); })
+      .catch(() => { console.log(-1); process.exit(0); });
+  " 2>/dev/null || echo "-1")
 
-# Wait for frontend
-log_info "Waiting for frontend to be healthy..."
+if [ "$DEK_STATUS" = "-1" ]; then
+  log_warn "Vérification DEK ignorée (backend pas encore prêt)"
+elif [ "$DEK_STATUS" -gt 0 ]; then
+  log_warn "${DEK_STATUS} KeyPair(s) en format v1 (sel statique) — migration recommandée"
+  log_warn "Lance : OLD_DEK=<ancien_dek> NEW_DEK=<nouveau_dek> npm run security:rotate-dek"
+else
+  log_success "Toutes les clés privées sont au format v2 (sel aléatoire par enregistrement)"
+fi
+
+# =============================================================================
+# ÉTAPE 8 — Seed initial (premier déploiement uniquement)
+# =============================================================================
+if [ "$FIRST_RUN" = true ]; then
+  log_section "8. Seed initial de la base de données"
+
+  if $COMPOSE exec -T backend npx prisma db seed 2>/dev/null; then
+    log_success "Base de données initialisée avec les données de départ"
+  else
+    log_warn "Seed ignoré (peut-être déjà fait ou aucun seedeur configuré)"
+  fi
+else
+  log_section "8. Seed"
+  log_info "Mise à jour normale — seed ignoré"
+fi
+
+# =============================================================================
+# ÉTAPE 9 — Déploiement complet
+# =============================================================================
+log_section "9. Déploiement complet de tous les services"
+$COMPOSE up -d
+
+# Attendre backend
+log_info "Attente du backend..."
+for i in $(seq 1 40); do
+  if curl -sf http://localhost:3001/api/v1/health &>/dev/null; then
+    log_success "Backend opérationnel"
+    break
+  fi
+  [ "$i" -eq 40 ] && log_error "Backend non disponible après 120s. Logs : $COMPOSE logs backend"
+  sleep 3
+done
+
+# Attendre frontend
+log_info "Attente du frontend..."
 for i in $(seq 1 20); do
-    if curl -sf http://localhost:3000 &>/dev/null 2>&1; then
-        log_success "Frontend is healthy"
-        break
-    fi
-    echo -n "."
-    sleep 3
-    if [ "$i" -eq 20 ]; then
-        echo ""
-        log_warn "Frontend health check timed out - check logs"
-    fi
+  if curl -sf http://localhost:3000 &>/dev/null; then
+    log_success "Frontend opérationnel"
+    break
+  fi
+  [ "$i" -eq 20 ] && log_warn "Frontend timeout (vérifier : $COMPOSE logs frontend)"
+  sleep 3
 done
 
 # =============================================================================
-# Step 7: Deploy/Reload Nginx
+# ÉTAPE 10 — Tests de smoke
 # =============================================================================
-log_info "Deploying/reloading Nginx..."
+log_section "10. Tests de smoke"
 
-# Test nginx config first
-if $DOCKER_COMPOSE_CMD \
-    -f docker-compose.yml \
-    -f docker-compose.prod.yml \
-    exec -T nginx nginx -t 2>/dev/null; then
-    # Reload nginx gracefully
-    $DOCKER_COMPOSE_CMD \
-        -f docker-compose.yml \
-        -f docker-compose.prod.yml \
-        exec -T nginx nginx -s reload 2>/dev/null || \
-    $DOCKER_COMPOSE_CMD \
-        -f docker-compose.yml \
-        -f docker-compose.prod.yml \
-        up -d --no-deps nginx
-    log_success "Nginx deployed/reloaded"
-else
-    log_error "Nginx config test failed. Check docker/nginx/nginx.conf"
-    exit 1
-fi
-
-# =============================================================================
-# Step 8: Smoke Tests
-# =============================================================================
-log_info "Running smoke tests..."
-
-TESTS_PASSED=0
-TESTS_FAILED=0
-
-run_test() {
-    local name="$1"
-    local cmd="$2"
-    if eval "$cmd" &>/dev/null 2>&1; then
-        log_success "PASS: $name"
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-    else
-        log_error "FAIL: $name"
-        TESTS_FAILED=$((TESTS_FAILED + 1))
-    fi
+PASS=0; FAIL=0
+check() {
+  local label="$1"; local cmd="$2"
+  if eval "$cmd" &>/dev/null 2>&1; then
+    log_success "PASS : ${label}"; PASS=$((PASS+1))
+  else
+    log_warn  "FAIL : ${label}"; FAIL=$((FAIL+1))
+  fi
 }
 
-run_test "Backend health endpoint" "curl -sf http://localhost:3001/api/v1/health"
-run_test "Frontend homepage" "curl -sf http://localhost:3000"
-run_test "Nginx HTTP redirect" "curl -sf -o /dev/null -w '%{http_code}' http://localhost:80 | grep -q 301"
+check "Backend health"             "curl -sf http://localhost:3001/api/v1/health"
+check "Frontend homepage"          "curl -sf http://localhost:3000"
+check "HTTPS redirect (80→443)"    "curl -sf -o /dev/null -w '%{http_code}' http://localhost | grep -q '301\|302'"
+check "Auth endpoint accessible"   "curl -sf -o /dev/null -w '%{http_code}' http://localhost:3001/api/v1/auth/login | grep -q '400\|405'"
+check "PostgreSQL actif"           "$COMPOSE exec -T postgres pg_isready -U ${POSTGRES_USER}"
+check "Redis actif"                "$COMPOSE exec -T redis redis-cli --no-auth-warning -a ${REDIS_PASSWORD} ping"
 
 echo ""
-log_info "Smoke tests: ${TESTS_PASSED} passed, ${TESTS_FAILED} failed"
-
-if [ "$TESTS_FAILED" -gt 0 ]; then
-    log_warn "Some smoke tests failed. Review logs: docker compose logs"
-fi
+log_info "Smoke tests : ${PASS} réussis, ${FAIL} échoués"
+[ "$FAIL" -gt 0 ] && log_warn "Des tests ont échoué — vérifier les logs : $COMPOSE logs"
 
 # =============================================================================
-# Step 9: Clean Up Old Images
+# ÉTAPE 11 — Nettoyage images Docker
 # =============================================================================
-log_info "Cleaning up unused Docker images..."
+log_section "11. Nettoyage"
 docker image prune -f --filter "until=24h" 2>/dev/null || true
+log_success "Images anciennes supprimées"
 
 # =============================================================================
-# Deploy Complete
+# Résumé
 # =============================================================================
-echo ""
-echo -e "${GREEN}=============================================${NC}"
-echo -e "${GREEN}  Deployment Complete!${NC}"
-echo -e "${GREEN}=============================================${NC}"
-echo ""
-echo "Commit: $(git rev-parse --short HEAD 2>/dev/null || echo 'N/A')"
-echo "Time: $(date)"
-echo "Log: $LOG_FILE"
-echo ""
-echo "Monitor with:"
-echo "  docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f"
-echo ""
+echo "" | tee -a "$LOG_FILE"
+echo -e "${GREEN}╔══════════════════════════════════════════════════╗${NC}" | tee -a "$LOG_FILE"
+echo -e "${GREEN}║         Déploiement terminé avec succès !         ║${NC}" | tee -a "$LOG_FILE"
+echo -e "${GREEN}╚══════════════════════════════════════════════════╝${NC}" | tee -a "$LOG_FILE"
+echo "" | tee -a "$LOG_FILE"
+
+DOMAIN="${APP_BASE_URL#https://}"; DOMAIN="${DOMAIN#http://}"; DOMAIN="${DOMAIN%%/*}"
+echo "  Plateforme  : https://${DOMAIN}" | tee -a "$LOG_FILE"
+echo "  API         : https://${DOMAIN}/api/v1/health" | tee -a "$LOG_FILE"
+echo "  Monitoring  : http://<IP_VPS>:3001 (Uptime Kuma — config au premier boot)" | tee -a "$LOG_FILE"
+echo "  Log         : ${LOG_FILE}" | tee -a "$LOG_FILE"
+echo "  Commit      : $(git rev-parse --short HEAD 2>/dev/null || echo 'N/A')" | tee -a "$LOG_FILE"
+echo "" | tee -a "$LOG_FILE"
+
+if [ "$FIRST_RUN" = true ]; then
+  echo -e "${YELLOW}  Actions post-déploiement (premier lancement) :${NC}" | tee -a "$LOG_FILE"
+  echo "  1. Uptime Kuma : ouvrir http://<IP_VPS>:3001 → créer compte admin" | tee -a "$LOG_FILE"
+  echo "     Ajouter monitors : https://${DOMAIN}/api/v1/health et https://${DOMAIN}" | tee -a "$LOG_FILE"
+  echo "  2. Migration DEK si des clés v1 existent :" | tee -a "$LOG_FILE"
+  echo "     OLD_DEK=<ancien> NEW_DEK=\$(openssl rand -hex 32) npm run security:rotate-dek" | tee -a "$LOG_FILE"
+  echo "  3. Fermer le port 3001 (Uptime Kuma) depuis le panel VPS après la config" | tee -a "$LOG_FILE"
+  echo "" | tee -a "$LOG_FILE"
+fi
