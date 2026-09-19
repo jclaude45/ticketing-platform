@@ -25,14 +25,21 @@ export class CryptoService implements OnModuleInit {
   async onModuleInit() {
     const kmsKeyId = process.env.KMS_KEY_ID;
     const encryptedDek = process.env.PRIVATE_KEY_ENCRYPTION_KEY;
+    const isProd = process.env.NODE_ENV === 'production';
 
     if (!encryptedDek) {
+      if (isProd) {
+        throw new Error('FATAL: PRIVATE_KEY_ENCRYPTION_KEY is not set — cannot start in production');
+      }
       this.logger.warn('PRIVATE_KEY_ENCRYPTION_KEY is not set — private keys cannot be encrypted');
       return;
     }
 
     if (!kmsKeyId) {
-      // No KMS configured — use env var directly (development / non-KMS environments)
+      // No KMS — use env var directly. Acceptable in dev; blocked in prod unless explicitly opted out.
+      if (isProd) {
+        this.logger.warn('KMS_KEY_ID not set in production — using raw DEK (not recommended)');
+      }
       this.resolvedEncKey = encryptedDek;
       return;
     }
@@ -50,8 +57,10 @@ export class CryptoService implements OnModuleInit {
       this.resolvedEncKey = Buffer.from(Plaintext).toString('utf-8');
       this.logger.log('PRIVATE_KEY_ENCRYPTION_KEY decrypted via AWS KMS');
     } catch (err) {
-      this.logger.error(`KMS decryption failed — falling back to raw env key: ${err.message}`);
-      this.resolvedEncKey = encryptedDek;
+      // No silent fallback — a KMS failure must be visible and fatal.
+      // A silently degraded service would encrypt new keys under a wrong/leaked DEK.
+      this.logger.error(`KMS decryption failed: ${err.message}`);
+      throw new Error(`FATAL: KMS inaccessible — cannot start safely. Detail: ${err.message}`);
     }
   }
 
@@ -178,28 +187,40 @@ export class CryptoService implements OnModuleInit {
     return code;
   }
 
-  // AES-256-GCM: authenticated encryption — immune to padding oracle attacks
+  // AES-256-GCM with per-record scrypt salt (v2 format).
+  // v1 format (static salt) is still decryptable for backward compatibility during migration.
+  // Storage format v2: "v2:<salt_hex>:<iv_hex>:<ct_hex>:<tag_hex>"
+  // Storage format v1: "<iv_hex>:<ct_hex>:<tag_hex>"   (legacy — no longer written)
   encryptAES(data: string, key: string): string {
-    const iv = crypto.randomBytes(12); // 96-bit IV optimal for GCM
-    const keyBuffer = crypto.scryptSync(key, 'ticketing-kdf-salt-v1', 32);
+    const salt = crypto.randomBytes(16); // unique per record — prevents precomputation attacks
+    const iv = crypto.randomBytes(12);   // 96-bit IV optimal for GCM
+    const keyBuffer = crypto.scryptSync(key, salt, 32, { N: 16384, r: 8, p: 1 });
     const cipher = crypto.createCipheriv('aes-256-gcm', keyBuffer, iv);
-    let encrypted = cipher.update(data, 'utf8', 'hex');
-    encrypted += cipher.final('hex');
-    const authTag = cipher.getAuthTag().toString('hex');
-    return `${iv.toString('hex')}:${encrypted}:${authTag}`;
+    const ct = Buffer.concat([cipher.update(data, 'utf8'), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    return `v2:${salt.toString('hex')}:${iv.toString('hex')}:${ct.toString('hex')}:${tag.toString('hex')}`;
   }
 
   decryptAES(encryptedData: string, key: string): string {
+    if (encryptedData.startsWith('v2:')) {
+      // Current format: per-record salt
+      const parts = encryptedData.slice(3).split(':');
+      if (parts.length !== 4) throw new Error('Invalid v2 encrypted data format');
+      const [saltHex, ivHex, ctHex, tagHex] = parts;
+      const keyBuffer = crypto.scryptSync(key, Buffer.from(saltHex, 'hex'), 32, { N: 16384, r: 8, p: 1 });
+      const decipher = crypto.createDecipheriv('aes-256-gcm', keyBuffer, Buffer.from(ivHex, 'hex'));
+      decipher.setAuthTag(Buffer.from(tagHex, 'hex'));
+      return Buffer.concat([decipher.update(Buffer.from(ctHex, 'hex')), decipher.final()]).toString('utf8');
+    }
+
+    // Legacy v1 format: static salt — decrypt-only, migration script upgrades to v2
     const parts = encryptedData.split(':');
     if (parts.length !== 3) throw new Error('Invalid encrypted data format');
-    const [ivHex, encrypted, authTagHex] = parts;
-    const iv = Buffer.from(ivHex, 'hex');
+    const [ivHex, ctHex, tagHex] = parts;
     const keyBuffer = crypto.scryptSync(key, 'ticketing-kdf-salt-v1', 32);
-    const decipher = crypto.createDecipheriv('aes-256-gcm', keyBuffer, iv);
-    decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
-    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    return decrypted;
+    const decipher = crypto.createDecipheriv('aes-256-gcm', keyBuffer, Buffer.from(ivHex, 'hex'));
+    decipher.setAuthTag(Buffer.from(tagHex, 'hex'));
+    return Buffer.concat([decipher.update(Buffer.from(ctHex, 'hex')), decipher.final()]).toString('utf8');
   }
 
   generateSerialNumber(eventId: string, sequence: number): string {

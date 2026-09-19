@@ -18,6 +18,8 @@
     "prisma:studio": "prisma studio",
     "security:encrypt-keys": "ts-node -r tsconfig-paths/register scripts/encrypt-existing-keys.ts",
     "security:encrypt-keys:dry": "DRY_RUN=true ts-node -r tsconfig-paths/register scripts/encrypt-existing-keys.ts",
+    "security:rotate-dek": "ts-node -r tsconfig-paths/register scripts/rotate-dek.ts",
+    "security:rotate-dek:dry": "DRY_RUN=true ts-node -r tsconfig-paths/register scripts/rotate-dek.ts",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",

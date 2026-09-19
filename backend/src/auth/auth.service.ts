@@ -61,6 +61,9 @@ export class AuthService {
 
     const isDev = this.configService.get<string>('nodeEnv') === 'development';
     const emailToken = this.cryptoService.generateSecureToken(32);
+    // Store the SHA-256 hash — raw token travels only in the email link, never in the DB.
+    // Even if the DB is compromised, tokens cannot be replayed without the plaintext.
+    const emailTokenHash = this.cryptoService.hashData(emailToken);
     const emailExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     const user = await this.prisma.user.create({
@@ -72,7 +75,7 @@ export class AuthService {
         role: dto.role || Role.ORGANIZER,
         // In development, auto-verify email so SMTP config is not required
         isEmailVerified: isDev,
-        emailVerificationToken: isDev ? null : emailToken,
+        emailVerificationToken: isDev ? null : emailTokenHash,
         emailVerificationExpiry: isDev ? null : emailExpiry,
       },
       select: {
@@ -351,9 +354,10 @@ export class AuthService {
   }
 
   async verifyEmail(token: string) {
+    const tokenHash = this.cryptoService.hashData(token);
     const user = await this.prisma.user.findFirst({
       where: {
-        emailVerificationToken: token,
+        emailVerificationToken: tokenHash,
         emailVerificationExpiry: { gt: new Date() },
       },
     });
@@ -383,25 +387,28 @@ export class AuthService {
     }
 
     const resetToken = this.cryptoService.generateSecureToken(32);
+    const resetTokenHash = this.cryptoService.hashData(resetToken);
     const resetExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
     await this.prisma.user.update({
       where: { id: user.id },
       data: {
-        passwordResetToken: resetToken,
+        passwordResetToken: resetTokenHash,
         passwordResetExpiry: resetExpiry,
       },
     });
 
+    // Send the raw token — only the hash lives in the DB
     await this.sendPasswordResetEmail(user.email, user.firstName, resetToken);
 
     return { message: 'If that email exists, a password reset link has been sent' };
   }
 
   async resetPassword(token: string, newPassword: string) {
+    const tokenHash = this.cryptoService.hashData(token);
     const user = await this.prisma.user.findFirst({
       where: {
-        passwordResetToken: token,
+        passwordResetToken: tokenHash,
         passwordResetExpiry: { gt: new Date() },
       },
     });
