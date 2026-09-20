@@ -174,6 +174,24 @@ if [ "$FIRST_RUN" = true ]; then
 
     log_success "Certificat SSL obtenu pour ${DOMAIN}"
 
+    # Copier les certs dans docker/nginx/ssl/ pour nginx
+    CERT_DIR=""
+    for d in "/etc/letsencrypt/live/${DOMAIN}" "/etc/letsencrypt/live/${DOMAIN}-0001"; do
+      if sudo test -f "${d}/fullchain.pem" 2>/dev/null; then
+        CERT_DIR="$d"
+      fi
+    done
+    if [ -n "$CERT_DIR" ]; then
+      mkdir -p "${PROJECT_ROOT}/docker/nginx/ssl"
+      sudo cp "${CERT_DIR}/fullchain.pem" "${PROJECT_ROOT}/docker/nginx/ssl/"
+      sudo cp "${CERT_DIR}/privkey.pem"   "${PROJECT_ROOT}/docker/nginx/ssl/"
+      sudo cp "${CERT_DIR}/chain.pem"     "${PROJECT_ROOT}/docker/nginx/ssl/"
+      sudo chown deploy:deploy "${PROJECT_ROOT}/docker/nginx/ssl/"*.pem
+      log_success "Certificats copiés dans docker/nginx/ssl/"
+    else
+      log_warn "Impossible de localiser les certificats dans /etc/letsencrypt/live/"
+    fi
+
     # Renouvellement automatique via cron
     if ! crontab -l 2>/dev/null | grep -q certbot; then
       (crontab -l 2>/dev/null; echo "0 3 * * * sudo certbot renew --quiet && docker compose -f /opt/zaya/app/docker-compose.yml -f /opt/zaya/app/docker-compose.prod.yml exec nginx nginx -s reload") | crontab -
