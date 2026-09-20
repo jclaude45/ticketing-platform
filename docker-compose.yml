@@ -74,8 +74,6 @@ services:
       THROTTLE_TTL: ${THROTTLE_TTL:-60}
       THROTTLE_LIMIT: ${THROTTLE_LIMIT:-100}
     volumes:
-      - ./backend:/app
-      - /app/node_modules
       - ./keys:/app/keys:ro
     ports:
       - "3001:3001"
@@ -98,10 +96,7 @@ services:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001/api/v1}
       NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-http://localhost:3001}
       NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-TicketPlatform}
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
+    volumes: []
     ports:
       - "3000:3000"
     depends_on:

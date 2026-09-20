@@ -1,0 +1,12 @@
+services:
+  backend:
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - ./keys:/app/keys:ro
+
+  frontend:
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
