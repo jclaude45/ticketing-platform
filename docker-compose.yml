@@ -68,6 +68,10 @@ services:
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
+      EMAIL_HOST: ${EMAIL_HOST:-${SMTP_HOST:-smtp.gmail.com}}
+      EMAIL_PORT: ${EMAIL_PORT:-${SMTP_PORT:-587}}
+      EMAIL_USER: ${EMAIL_USER:-${SMTP_USER:-}}
+      EMAIL_PASSWORD: ${EMAIL_PASSWORD:-${SMTP_PASS:-}}
       EMAIL_FROM: ${EMAIL_FROM:-noreply@ticketing.com}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
