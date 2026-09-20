@@ -140,6 +140,13 @@ if [ "$FIRST_RUN" = true ]; then
   DOMAIN="${DOMAIN%%/*}"
   EMAIL="${SMTP_USER:-contact@${DOMAIN}}"
 
+  CERTBOT_CMD="certbot"
+  if ! certbot --version &>/dev/null 2>&1; then
+    CERTBOT_CMD="sudo certbot"
+  elif [ ! -w "/var/log/letsencrypt" ] 2>/dev/null; then
+    CERTBOT_CMD="sudo certbot"
+  fi
+
   if [ -d "/etc/letsencrypt/live/${DOMAIN}" ]; then
     log_warn "Certificat SSL existant pour ${DOMAIN} — ignoré"
   else
@@ -149,7 +156,7 @@ if [ "$FIRST_RUN" = true ]; then
     $COMPOSE up -d nginx 2>/dev/null || true
     sleep 3
 
-    certbot certonly \
+    $CERTBOT_CMD certonly \
       --webroot \
       --webroot-path=/var/www/certbot \
       --email "${EMAIL}" \
@@ -157,7 +164,7 @@ if [ "$FIRST_RUN" = true ]; then
       --no-eff-email \
       -d "${DOMAIN}" \
       -d "www.${DOMAIN}" 2>/dev/null \
-    || certbot certonly \
+    || $CERTBOT_CMD certonly \
       --standalone \
       --email "${EMAIL}" \
       --agree-tos \
@@ -169,7 +176,7 @@ if [ "$FIRST_RUN" = true ]; then
 
     # Renouvellement automatique via cron
     if ! crontab -l 2>/dev/null | grep -q certbot; then
-      (crontab -l 2>/dev/null; echo "0 3 * * * certbot renew --quiet && docker compose -f /opt/zaya/ticketing-platform/docker-compose.yml -f /opt/zaya/ticketing-platform/docker-compose.prod.yml exec nginx nginx -s reload") | crontab -
+      (crontab -l 2>/dev/null; echo "0 3 * * * sudo certbot renew --quiet && docker compose -f /opt/zaya/app/docker-compose.yml -f /opt/zaya/app/docker-compose.prod.yml exec nginx nginx -s reload") | crontab -
       log_success "Renouvellement automatique SSL configuré (cron 03:00 quotidien)"
     fi
   fi
