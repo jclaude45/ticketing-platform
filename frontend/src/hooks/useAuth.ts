@@ -62,12 +62,30 @@ export function useRegister() {
 
   return useMutation({
     mutationFn: (data: RegisterData) => authApi.register(data),
-    onSuccess: () => {
-      toast.success('Account created! Please verify your email.');
-      router.push('/auth/verify-email');
+    onSuccess: (res, variables) => {
+      const data = (res as any)?.data;
+      const email = encodeURIComponent(variables.email);
+      if (data?.needsVerification) {
+        toast.success('Un nouvel email de vérification a été envoyé.');
+      } else {
+        toast.success('Compte créé ! Vérifie ta boîte mail.');
+      }
+      router.push(`/auth/verify-email?email=${email}`);
     },
     onError: (error: { response?: { data?: { message?: string } } }) => {
       toast.error(error.response?.data?.message ?? 'Registration failed');
+    },
+  });
+}
+
+export function useResendVerification() {
+  return useMutation({
+    mutationFn: (email: string) => authApi.resendVerification(email),
+    onSuccess: () => {
+      toast.success('Email de vérification renvoyé !');
+    },
+    onError: () => {
+      toast.error('Impossible d\'envoyer l\'email. Réessaie dans quelques instants.');
     },
   });
 }

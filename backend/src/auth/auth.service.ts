@@ -53,7 +53,25 @@ export class AuthService {
     });
 
     if (existingUser) {
-      throw new ConflictException('Email already in use');
+      if (existingUser.isEmailVerified) {
+        throw new ConflictException('Email already in use');
+      }
+      // Account exists but not verified — generate a fresh token and resend
+      const newToken = this.cryptoService.generateSecureToken(32);
+      const newTokenHash = this.cryptoService.hashData(newToken);
+      const newExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      await this.prisma.user.update({
+        where: { id: existingUser.id },
+        data: {
+          emailVerificationToken: newTokenHash,
+          emailVerificationExpiry: newExpiry,
+        },
+      });
+      await this.sendVerificationEmail(existingUser.email, existingUser.firstName, newToken);
+      return {
+        message: 'A new verification email has been sent. Please check your inbox.',
+        needsVerification: true,
+      };
     }
 
     const saltRounds = this.configService.get<number>('bcrypt.saltRounds') || 12;
@@ -520,6 +538,27 @@ export class AuthService {
     } catch (error) {
       this.logger.error(`Failed to send verification email to ${email}`, error);
     }
+  }
+
+  async resendVerification(email: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    // Always return the same message to prevent email enumeration
+    const genericResponse = { message: 'If an unverified account exists with this email, a new verification link has been sent.' };
+    if (!user || user.isEmailVerified) {
+      return genericResponse;
+    }
+    const newToken = this.cryptoService.generateSecureToken(32);
+    const newTokenHash = this.cryptoService.hashData(newToken);
+    const newExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        emailVerificationToken: newTokenHash,
+        emailVerificationExpiry: newExpiry,
+      },
+    });
+    await this.sendVerificationEmail(user.email, user.firstName, newToken);
+    return genericResponse;
   }
 
   private async sendPasswordResetEmail(email: string, firstName: string, token: string) {

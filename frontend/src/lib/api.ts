@@ -146,6 +146,8 @@ export const authApi = {
 
   verifyEmail: (token: string) =>
     apiClient.post('/auth/verify-email', { token }),
+  resendVerification: (email: string) =>
+    apiClient.post('/auth/resend-verification', { email }),
 
   setupTwoFactor: () =>
     apiClient.post<ApiResponse<{ qrCode: string; secret: string }>>(
