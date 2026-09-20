@@ -72,7 +72,7 @@ FROM node:20-alpine AS production
 
 WORKDIR /app
 
-RUN apk add --no-cache curl dumb-init
+RUN apk add --no-cache curl dumb-init openssl
 
 COPY package*.json ./
 COPY prisma ./prisma/
