@@ -193,10 +193,10 @@ services:
       - uptime_kuma_data:/app/data
     networks:
       - ticketing_network
-    expose:
-      - "3001"
-    # Access via Nginx reverse proxy at /status or a dedicated subdomain.
-    # First boot: open http://localhost:3001 to create the admin account,
+    ports:
+      - "127.0.0.1:3002:3001"
+    # Access via SSH tunnel: ssh -L 3002:localhost:3002 deploy@46.225.98.101
+    # First boot: open http://localhost:3002 to create the admin account,
     # then add monitors for:
     #   - https://zaya.live/api/v1/health  (HTTP keyword "ok")
     #   - https://zaya.live               (HTTP 200)
