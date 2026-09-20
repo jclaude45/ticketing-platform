@@ -14,7 +14,7 @@ RUN npm ci
 
 COPY . .
 
-RUN npx prisma generate && npm run build
+RUN npx prisma generate && npm run build && npx tsc -p tsconfig.scripts.json
 
 # =============================================================================
 # Stage 2: Production deps — installs only prod deps with build tools,
