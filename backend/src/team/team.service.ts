@@ -100,11 +100,11 @@ export class TeamService {
   ) {}
 
   private get qrSecret(): string {
-    // Dedicated secret for accreditation HMAC — must NOT share the JWT secret.
-    // If ACCREDITATION_HMAC_SECRET is absent, falls back to a derived key so the
-    // app still boots in dev, but logs a warning so it's never missed in prod.
     const secret = this.config.get<string>('accreditation.hmacSecret');
     if (!secret) {
+      if (this.config.get<string>('nodeEnv') === 'production') {
+        throw new Error('ACCREDITATION_HMAC_SECRET is required in production — set it in .env');
+      }
       this.logger.warn('ACCREDITATION_HMAC_SECRET is not set — using derived fallback (NOT safe for production)');
     }
     return secret ?? `acc-hmac-${this.config.get<string>('jwt.secret') ?? 'fallback'}`;

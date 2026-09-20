@@ -140,10 +140,23 @@ export class AuthService {
   }
 
   async login(dto: LoginDto, ipAddress?: string) {
+    const bruteKey = `login:fail:${dto.email.toLowerCase()}`;
+    const MAX_ATTEMPTS = 10;
+    const BLOCK_TTL = 15 * 60; // 15 minutes in seconds
+
+    const failCount = parseInt((await this.redisService.get(bruteKey)) ?? '0', 10);
+    if (failCount >= MAX_ATTEMPTS) {
+      throw new UnauthorizedException('Too many failed attempts — please try again in 15 minutes');
+    }
+
     const user = await this.validateUser(dto.email, dto.password);
     if (!user) {
+      await this.redisService.set(bruteKey, String(failCount + 1), BLOCK_TTL);
       throw new UnauthorizedException('Invalid email or password');
     }
+
+    // Successful login — clear the counter
+    await this.redisService.del(bruteKey);
 
     if (!user.isEmailVerified) {
       throw new UnauthorizedException('Please verify your email before logging in');

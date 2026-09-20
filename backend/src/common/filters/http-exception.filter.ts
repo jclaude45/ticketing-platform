@@ -36,8 +36,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
         }
       }
     } else if (exception instanceof Error) {
-      message = exception.message;
       this.logger.error(`Unhandled exception: ${exception.message}`, exception.stack);
+      // message stays 'Internal server error' — never expose internal details to clients
     }
 
     const errorResponse = {

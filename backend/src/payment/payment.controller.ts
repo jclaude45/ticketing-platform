@@ -1,6 +1,7 @@
-import { Controller, Post, Get, Body, Param, Res, NotFoundException } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Res, NotFoundException, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
 import { PaymentService, InitiatePaymentDto } from './payment.service';
+import { FlexPayWebhookGuard } from './flexpay-webhook.guard';
 
 @Controller('public')
 export class PaymentController {
@@ -12,6 +13,7 @@ export class PaymentController {
   }
 
   @Post('payments/callback')
+  @UseGuards(FlexPayWebhookGuard)
   handleCallback(@Body() body: any) {
     return this.paymentService.handleCallback(body);
   }
