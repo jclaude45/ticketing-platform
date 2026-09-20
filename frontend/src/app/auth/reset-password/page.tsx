@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import { ResetPasswordForm } from '@/components/auth/ResetPasswordForm';
 
 export const metadata: Metadata = { title: 'Réinitialiser le mot de passe' };
@@ -12,7 +13,9 @@ export default function ResetPasswordPage() {
           <p className="text-indigo-200 mt-2">Entrez votre nouveau mot de passe</p>
         </div>
         <div className="bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 shadow-2xl p-5 sm:p-8">
-          <ResetPasswordForm />
+          <Suspense>
+            <ResetPasswordForm />
+          </Suspense>
         </div>
       </div>
     </div>
