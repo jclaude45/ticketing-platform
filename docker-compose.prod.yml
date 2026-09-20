@@ -121,6 +121,7 @@ services:
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://app.zaya.live/api/v1}
         NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-wss://app.zaya.live}
+        NEXT_PUBLIC_SOCKET_URL: ${NEXT_PUBLIC_SOCKET_URL:-https://app.zaya.live}
         NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://app.zaya.live}
         NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-TicketPlatform}
     restart: always
