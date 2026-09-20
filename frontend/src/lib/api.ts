@@ -145,7 +145,7 @@ export const authApi = {
     apiClient.post('/auth/reset-password', { token, newPassword: password }),
 
   verifyEmail: (token: string) =>
-    apiClient.post('/auth/verify-email', { token }),
+    apiClient.get(`/auth/verify-email?token=${encodeURIComponent(token)}`),
   resendVerification: (email: string) =>
     apiClient.post('/auth/resend-verification', { email }),
 
