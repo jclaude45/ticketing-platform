@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useResendVerification } from '@/hooks/useAuth';
 import { authApi } from '@/lib/api';
 
-export default function VerifyEmailPage() {
+function VerifyEmailContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const token = searchParams.get('token');
@@ -29,7 +29,6 @@ export default function VerifyEmailPage() {
       });
   }, [token, router]);
 
-  // ── Token present: show verification result ──────────────────────────────
   if (token) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-950 via-purple-900 to-slate-900 p-4">
@@ -74,7 +73,6 @@ export default function VerifyEmailPage() {
     );
   }
 
-  // ── No token: "check your email" page ────────────────────────────────────
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-950 via-purple-900 to-slate-900 p-4">
       <div className="w-full max-w-md text-center">
@@ -102,5 +100,13 @@ export default function VerifyEmailPage() {
         </a>
       </div>
     </div>
+  );
+}
+
+export default function VerifyEmailPage() {
+  return (
+    <Suspense>
+      <VerifyEmailContent />
+    </Suspense>
   );
 }
