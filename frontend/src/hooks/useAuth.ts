@@ -51,8 +51,14 @@ export function useLogin() {
         router.push('/dashboard');
       }
     },
-    onError: (error: { response?: { data?: { message?: string } } }) => {
-      toast.error(error.response?.data?.message ?? 'Login failed');
+    onError: (error: { response?: { data?: { message?: string } } }, variables) => {
+      const msg = error.response?.data?.message ?? '';
+      if (msg.toLowerCase().includes('verify your email')) {
+        toast.error('Vérifie ton email avant de te connecter.');
+        router.push(`/auth/verify-email?email=${encodeURIComponent(variables.email)}`);
+        return;
+      }
+      toast.error(msg || 'Login failed');
     },
   });
 }
