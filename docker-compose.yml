@@ -82,6 +82,7 @@ services:
       THROTTLE_LIMIT: ${THROTTLE_LIMIT:-100}
     volumes:
       - ./keys:/app/keys:ro
+      - backend_uploads:/app/public/uploads
     ports:
       - "3001:3001"
     depends_on:
@@ -137,6 +138,8 @@ volumes:
   postgres_data:
     driver: local
   redis_data:
+    driver: local
+  backend_uploads:
     driver: local
 
 networks:

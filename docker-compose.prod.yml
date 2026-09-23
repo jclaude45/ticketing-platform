@@ -95,6 +95,7 @@ services:
       APP_BASE_URL: ${APP_BASE_URL}
     volumes:
       - ./keys:/app/keys:ro
+      - backend_uploads:/app/public/uploads
       # Remove source volume mount in production
     deploy:
       resources:
@@ -258,6 +259,8 @@ volumes:
   postgres_data:
     driver: local
   redis_data:
+    driver: local
+  backend_uploads:
     driver: local
   certbot_www:
     driver: local

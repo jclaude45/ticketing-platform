@@ -163,7 +163,7 @@ export const authApi = {
   disableTwoFactor: (code: string) =>
     apiClient.post('/auth/2fa/disable', { totpCode: code }),
 
-  getProfile: () => apiClient.get<ApiResponse<User>>('/auth/profile'),
+  getProfile: () => apiClient.get<ApiResponse<User>>('/auth/me'),
 
   updateProfile: (data: Partial<User>) =>
     apiClient.patch<ApiResponse<User>>('/users/me', data),
