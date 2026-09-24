@@ -186,11 +186,11 @@ export class PaymentService {
 
     const event = await this.prisma.event.findUnique({
       where: { id: payment.eventId },
-      select: { name: true, startDate: true, city: true, venue: true },
+      select: { name: true, startDate: true, endDate: true, city: true, venue: true, bannerUrl: true },
     });
     if (!event) throw new Error('Événement introuvable');
 
-    const buffer = await this.publicService.buildTicketPdf(ticket, event, payment.holderName);
+    const buffer = await this.publicService.buildTicketPdf(ticket, event, payment.holderName, (event as any).bannerUrl);
     return { buffer, serialNumber: ticket.serialNumber };
   }
 
@@ -285,7 +285,12 @@ export class PaymentService {
   private async generateTicketsForPayment(payment: any, providerRef?: string) {
     const event = await this.prisma.event.findUnique({
       where: { id: payment.eventId },
-      select: { id: true, name: true, organizerId: true, startDate: true, endDate: true, city: true, venue: true, bannerUrl: true },
+      select: {
+        id: true, name: true, organizerId: true,
+        startDate: true, endDate: true, city: true, venue: true,
+        address: true, description: true, bannerUrl: true,
+        organizer: { select: { firstName: true, lastName: true, email: true } },
+      },
     });
     if (!event) return;
 
@@ -326,6 +331,8 @@ export class PaymentService {
         Number(payment.amount),
         payment.currency,
         (event as any).bannerUrl,
+        payment.reference,
+        (event as any).organizer,
       );
     } catch (err) {
       this.logger.warn(`Email send failed: ${err.message}`);

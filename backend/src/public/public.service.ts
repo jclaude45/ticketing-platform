@@ -118,7 +118,12 @@ export class PublicService {
 
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
-      select: { id: true, name: true, organizerId: true, status: true, startDate: true, endDate: true, city: true, venue: true, bannerUrl: true },
+      select: {
+        id: true, name: true, organizerId: true, status: true,
+        startDate: true, endDate: true, city: true, venue: true,
+        address: true, description: true, bannerUrl: true,
+        organizer: { select: { firstName: true, lastName: true, email: true } },
+      },
     });
     if (!event) throw new NotFoundException('Événement introuvable');
     if (event.status !== 'PUBLISHED') throw new BadRequestException('Cet événement n\'accepte plus d\'inscriptions');
@@ -183,9 +188,16 @@ export class PublicService {
       qrCode:       t.qrCode,
     }));
 
-    this.sendConfirmationEmail(dto, event, ticketRows, total, currency, (event as any).bannerUrl).catch(err =>
-      this.logger.warn(`Confirmation email failed: ${err.message}`),
-    );
+    this.sendConfirmationEmail(
+      { holderName: dto.holderName, holderEmail: dto.holderEmail },
+      event,
+      ticketRows,
+      total,
+      currency,
+      (event as any).bannerUrl,
+      null,
+      (event as any).organizer,
+    ).catch(err => this.logger.warn(`Confirmation email failed: ${err.message}`));
 
     return {
       eventName:  event.name,
@@ -232,185 +244,186 @@ export class PublicService {
   }
 
   async sendConfirmationEmail(
-    dto: PurchaseTicketDto,
-    event: { id: string; name: string; startDate: Date; endDate: Date; city: string; venue: string },
+    holder: { holderName: string; holderEmail: string },
+    event: {
+      id: string; name: string; startDate: Date; endDate: Date;
+      city: string; venue: string;
+      address?: string | null;
+      description?: string | null;
+    },
     tickets: { ticketId: string; serialNumber: string; templateName: string; price: number; currency: string; qrCode: string | null }[],
     total: number,
     currency: string,
     bannerUrl?: string | null,
+    reference?: string | null,
+    organizer?: { firstName: string; lastName: string; email?: string } | null,
   ) {
     if (!this.mailer) return;
 
     const from = this.config.get<string>('email.from') || this.config.get<string>('email.user');
-    const totalLabel = total === 0 ? 'Gratuit' : `${total.toFixed(2)} ${currency}`;
+    const frontendUrl = this.config.get<string>('frontend.publicUrl') || 'https://zaya.live';
 
-    const dateStr = new Intl.DateTimeFormat('fr-FR', {
-      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
-    }).format(new Date(event.startDate));
+    // Calendar links
+    const encodeCalDate = (d: Date) => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    const eventEnd = event.endDate ? new Date(event.endDate) : new Date(new Date(event.startDate).getTime() + 2 * 3600000);
+    const calStart = encodeCalDate(new Date(event.startDate));
+    const calEnd   = encodeCalDate(eventEnd);
+    const calTitle    = encodeURIComponent(event.name);
+    const calLocation = encodeURIComponent(`${event.venue}, ${event.city}`);
+    const googleCalUrl  = `https://www.google.com/calendar/render?action=TEMPLATE&text=${calTitle}&dates=${calStart}/${calEnd}&location=${calLocation}`;
+    const outlookCalUrl = `https://outlook.live.com/calendar/0/deeplink/compose?subject=${calTitle}&startdt=${new Date(event.startDate).toISOString()}&enddt=${eventEnd.toISOString()}&location=${calLocation}`;
 
-    // Build CID attachments (QR images) + PDF attachment per ticket
-    const attachments: { filename: string; content: Buffer; cid?: string }[] = [];
+    // ICS attachment (Apple Calendar)
+    const icsContent = [
+      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//ZAYA//Ticketing//FR',
+      'BEGIN:VEVENT',
+      `UID:${event.id}-${holder.holderEmail}@zaya.live`,
+      `DTSTART:${calStart}`, `DTEND:${calEnd}`,
+      `SUMMARY:${event.name}`,
+      `LOCATION:${event.venue}\\, ${event.city}`,
+      `DESCRIPTION:Billet ZAYA pour ${holder.holderName}`,
+      'END:VEVENT', 'END:VCALENDAR',
+    ].join('\r\n');
+
+    // PDF attachments + ICS (no inline QR — QR codes are in the PDF)
+    const attachments: { filename: string; content: Buffer | string; cid?: string; contentType?: string }[] = [];
+    attachments.push({ filename: 'evenement.ics', content: icsContent, contentType: 'text/calendar; method=REQUEST; charset=UTF-8' });
+
     for (const t of tickets) {
-      if (t.qrCode) {
-        const match = t.qrCode.match(/^data:image\/png;base64,(.+)$/);
-        if (match) {
-          attachments.push({
-            filename: `qr-${t.serialNumber}.png`,
-            content: Buffer.from(match[1], 'base64'),
-            cid: `qr_${t.ticketId}`,
-          });
-        }
-      }
-      // Generate PDF ticket and attach it
       try {
-        const pdfBuf = await this.buildTicketPdf(t, event, dto.holderName, bannerUrl);
-        attachments.push({
-          filename: `billet-${t.serialNumber}.pdf`,
-          content: pdfBuf,
-        });
+        const pdfBuf = await this.buildTicketPdf(t, event, holder.holderName, bannerUrl);
+        attachments.push({ filename: `billet-${t.serialNumber}.pdf`, content: pdfBuf });
       } catch (err) {
         this.logger.warn(`PDF generation failed for ticket ${t.serialNumber}: ${err?.message}`);
       }
     }
 
-    // Build one visual ticket card per ticket
-    const ticketCards = tickets.map(t => {
-      const priceLabel = t.price === 0 ? 'Gratuit' : `${t.price.toFixed(2)} ${t.currency}`;
-      const qrBlock = attachments.find(a => a.cid === `qr_${t.ticketId}`)
-        ? `<img src="cid:qr_${t.ticketId}" width="120" height="120" alt="QR" style="display:block;border-radius:6px;border:4px solid #ffffff;"/>`
-        : `<p style="font-family:'Courier New',monospace;font-size:9px;color:#6366f1;word-break:break-all;">${t.serialNumber}</p>`;
+    // Header info
+    const uniqueCategories = [...new Set(tickets.map(t => t.templateName))];
+    const categoryLine = uniqueCategories.length === 1
+      ? uniqueCategories[0]
+      : `${tickets.length} billet${tickets.length > 1 ? 's' : ''}`;
 
-      return `
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
-             style="margin-bottom:20px;border-radius:14px;overflow:hidden;box-shadow:0 4px 18px rgba(79,70,229,0.18);">
-        <!-- Header gradient -->
-        <tr>
-          <td colspan="2" style="background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%);padding:18px 20px 14px;">
-            <p style="margin:0 0 2px;color:rgba(255,255,255,0.65);font-size:10px;text-transform:uppercase;letter-spacing:0.1em;font-family:Arial,sans-serif;">Billet d'entrée</p>
-            <h2 style="margin:0 0 8px;color:#ffffff;font-size:17px;font-weight:700;font-family:Arial,sans-serif;">${event.name}</h2>
-            <p style="margin:0 0 3px;color:rgba(255,255,255,0.82);font-size:12px;font-family:Arial,sans-serif;">&#128197; ${dateStr}</p>
-            <p style="margin:0;color:rgba(255,255,255,0.82);font-size:12px;font-family:Arial,sans-serif;">&#128205; ${event.venue}, ${event.city}</p>
-          </td>
-        </tr>
-        <!-- Dashed perforation -->
-        <tr>
-          <td colspan="2" style="background:#5b50e8;padding:0 20px;">
-            <div style="border-top:2px dashed rgba(255,255,255,0.35);height:0;font-size:0;line-height:0;">&nbsp;</div>
-          </td>
-        </tr>
-        <!-- Stub: details + QR -->
-        <tr>
-          <td style="background:#ffffff;padding:18px 16px 18px 20px;vertical-align:top;">
-            <p style="margin:0 0 2px;font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.07em;font-family:Arial,sans-serif;">Catégorie</p>
-            <p style="margin:0 0 12px;font-size:14px;font-weight:700;color:#1e1b4b;font-family:Arial,sans-serif;">${t.templateName}</p>
-            <p style="margin:0 0 2px;font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.07em;font-family:Arial,sans-serif;">Titulaire</p>
-            <p style="margin:0 0 12px;font-size:13px;font-weight:500;color:#374151;font-family:Arial,sans-serif;">${dto.holderName}</p>
-            <p style="margin:0 0 2px;font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.07em;font-family:Arial,sans-serif;">N° de billet</p>
-            <p style="margin:0 0 12px;font-family:'Courier New',monospace;font-size:12px;font-weight:700;color:#4f46e5;letter-spacing:0.04em;">${t.serialNumber}</p>
-            <p style="margin:0 0 2px;font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.07em;font-family:Arial,sans-serif;">Prix</p>
-            <p style="margin:0;font-size:13px;font-weight:600;color:#374151;font-family:Arial,sans-serif;">${priceLabel}</p>
-          </td>
-          <!-- QR code -->
-          <td style="background:#ffffff;padding:18px 20px 18px 0;vertical-align:middle;text-align:center;border-left:2px dashed #e0e7ff;width:150px;">
-            ${qrBlock}
-            <p style="margin:6px 0 0;font-size:9px;color:#9ca3af;font-family:Arial,sans-serif;">Scanner à l'entrée</p>
-          </td>
-        </tr>
-        <!-- Footer stripe -->
-        <tr>
-          <td colspan="2" style="background:#f5f3ff;padding:8px 20px;border-top:1px solid #e0e7ff;">
-            <p style="margin:0;font-size:10px;color:#a5b4fc;font-family:Arial,sans-serif;text-align:center;letter-spacing:0.05em;">ZAYA — Plateforme de billetterie</p>
-          </td>
-        </tr>
-      </table>`;
-    }).join('');
+    const organizerName  = organizer ? `${organizer.firstName} ${organizer.lastName}` : '';
+    const organizerEmail = organizer?.email ?? '';
 
-    // Summary rows
-    const summaryRows = tickets.map(t => {
-      const p = t.price === 0 ? 'Gratuit' : `${t.price.toFixed(2)} ${t.currency}`;
-      return `<tr>
-        <td style="padding:9px 14px;font-size:12px;color:#374151;border-bottom:1px solid #e5e7eb;font-family:Arial,sans-serif;">${t.templateName}</td>
-        <td style="padding:9px 14px;font-family:'Courier New',monospace;font-size:12px;color:#1e1b4b;border-bottom:1px solid #e5e7eb;">${t.serialNumber}</td>
-        <td style="padding:9px 14px;font-size:12px;color:#374151;text-align:right;border-bottom:1px solid #e5e7eb;font-family:Arial,sans-serif;">${p}</td>
-      </tr>`;
-    }).join('');
+    const downloadBtn = reference
+      ? `<a href="${frontendUrl}/billetterie/payment/success?reference=${reference}"
+            style="display:inline-block;padding:12px 28px;background:#4f46e5;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:700;font-family:Arial,sans-serif;text-transform:uppercase;letter-spacing:0.05em;">
+            JE T&Eacute;L&Eacute;CHARGE MES BILLETS
+         </a>`
+      : `<p style="margin:0;font-size:13px;color:#6b7280;font-family:Arial,sans-serif;">Vos billets sont joints &agrave; cet email en pi&egrave;ce jointe (PDF).</p>`;
 
     await this.mailer.sendMail({
       from,
-      to: dto.holderEmail,
-      subject: `🎟️ Vos billets — ${event.name}`,
+      to: holder.holderEmail,
+      subject: `Vos billets — ${event.name}`,
       attachments,
-      html: `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml" lang="fr">
+      html: `<!DOCTYPE html>
+<html lang="fr">
 <head>
-  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Vos billets — ${event.name}</title>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Vos billets &#8212; ${event.name}</title>
 </head>
-<body style="margin:0;padding:0;background:#f0f0f5;font-family:Arial,Helvetica,sans-serif;">
+<body style="margin:0;padding:0;background-color:#f0f0f5;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f0f0f5">
-  <tr><td align="center" style="padding:24px 16px 40px;">
+<tr><td align="center" style="padding:24px 16px 40px;">
 
-    <!-- Wrapper card -->
-    <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"
-           style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 2px 20px rgba(0,0,0,0.07);max-width:600px;">
+  <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"
+         style="max-width:600px;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,0.08);">
 
-      <!-- Event cover / banner -->
-      ${bannerUrl ? `<tr><td style="padding:0;line-height:0;font-size:0;">
-        <img src="${bannerUrl}" width="600" alt="${event.name}"
-             style="display:block;width:100%;max-width:600px;max-height:240px;object-fit:cover;border-radius:0;"/>
-      </td></tr>` : ''}
+    ${bannerUrl ? `
+    <tr><td style="padding:0;line-height:0;font-size:0;">
+      <img src="${bannerUrl}" width="600" alt="${event.name}"
+           style="display:block;width:100%;max-width:600px;"/>
+    </td></tr>` : ''}
 
-      <!-- Top banner -->
-      <tr>
-        <td align="center" style="background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%);padding:28px 32px 24px;">
-          <h1 style="margin:0 0 6px;color:#ffffff;font-size:22px;font-weight:700;">&#10003; Inscription confirmée</h1>
-          <p style="margin:0;color:rgba(255,255,255,0.8);font-size:14px;">${event.name}</p>
-        </td>
-      </tr>
+    <!-- Merci -->
+    <tr><td align="center" style="padding:36px 40px 28px;">
+      <p style="margin:0 0 10px;color:#4f46e5;font-size:22px;font-weight:700;font-family:Arial,sans-serif;">Merci pour votre commande&nbsp;!</p>
+      <p style="margin:0 0 4px;color:#111827;font-size:18px;font-weight:700;font-family:Arial,sans-serif;">${event.name}</p>
+      <p style="margin:0 0 24px;color:#6b7280;font-size:14px;font-family:Arial,sans-serif;">${categoryLine}</p>
+      ${downloadBtn}
+    </td></tr>
 
-      <!-- Body -->
-      <tr><td style="padding:28px 32px;">
+    <!-- Divider -->
+    <tr><td style="padding:0 40px;"><div style="height:1px;background:#e5e7eb;"></div></td></tr>
 
-        <p style="margin:0 0 6px;font-size:15px;color:#374151;">Bonjour <strong>${dto.holderName}</strong>,</p>
-        <p style="margin:0 0 24px;font-size:14px;color:#6b7280;line-height:1.7;">
-          Votre commande est confirmée. Vos billets sont disponibles ci-dessous — présentez le QR code de chaque billet à l'entrée de l'événement.
-        </p>
+    <!-- Informations pratiques -->
+    <tr><td style="padding:28px 40px;">
+      <p style="margin:0 0 18px;font-size:15px;font-weight:700;color:#111827;font-family:Arial,sans-serif;">Informations pratiques</p>
 
-        <!-- Ticket cards -->
-        ${ticketCards}
+      <p style="margin:0 0 5px;font-size:11px;font-weight:700;color:#374151;font-family:Arial,sans-serif;text-transform:uppercase;letter-spacing:0.06em;">Lieu de l&apos;&eacute;v&eacute;nement</p>
+      <p style="margin:0 0 3px;font-size:13px;color:#374151;font-family:Arial,sans-serif;">${event.venue}</p>
+      ${event.address ? `<p style="margin:0 0 3px;font-size:13px;color:#6b7280;font-family:Arial,sans-serif;">${event.address}</p>` : ''}
+      <p style="margin:0 0 20px;font-size:13px;color:#6b7280;font-family:Arial,sans-serif;">${event.city}</p>
 
-        <!-- Summary table -->
-        <p style="margin:24px 0 10px;font-size:13px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:0.06em;">Récapitulatif</p>
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
-               style="background:#f8f8ff;border-radius:10px;overflow:hidden;border:1px solid #e0e7ff;">
-          <tr style="background:#eef2ff;">
-            <th style="padding:7px 14px;font-size:10px;color:#6366f1;text-align:left;text-transform:uppercase;letter-spacing:0.07em;">Catégorie</th>
-            <th style="padding:7px 14px;font-size:10px;color:#6366f1;text-align:left;text-transform:uppercase;letter-spacing:0.07em;">Numéro</th>
-            <th style="padding:7px 14px;font-size:10px;color:#6366f1;text-align:right;text-transform:uppercase;letter-spacing:0.07em;">Prix</th>
-          </tr>
-          ${summaryRows}
-          <tr style="background:#eef2ff;">
-            <td colspan="2" style="padding:9px 14px;font-size:13px;font-weight:700;color:#374151;font-family:Arial,sans-serif;">Total</td>
-            <td style="padding:9px 14px;font-size:13px;font-weight:700;color:#4f46e5;text-align:right;font-family:Arial,sans-serif;">${totalLabel}</td>
-          </tr>
-        </table>
+      ${event.description ? `
+      <p style="margin:0 0 5px;font-size:11px;font-weight:700;color:#374151;font-family:Arial,sans-serif;text-transform:uppercase;letter-spacing:0.06em;">Message de l&apos;organisateur</p>
+      <p style="margin:0 0 20px;font-size:13px;color:#6b7280;font-family:Arial,sans-serif;line-height:1.65;">${event.description.slice(0, 400)}</p>
+      ` : ''}
 
-        <p style="margin:18px 0 0;font-size:12px;color:#9ca3af;line-height:1.6;">
-          Vous pouvez également télécharger vos billets en PDF depuis la page de confirmation sur notre plateforme.
-        </p>
+      ${organizerEmail ? `
+      <p style="margin:0 0 20px;font-size:13px;color:#374151;font-family:Arial,sans-serif;">
+        Pour toute question&nbsp;:
+        <a href="mailto:${organizerEmail}" style="color:#4f46e5;text-decoration:none;">${organizerEmail}</a>
+      </p>
+      ` : ''}
 
-      </td></tr>
+      <p style="margin:0 0 12px;font-size:11px;font-weight:700;color:#374151;font-family:Arial,sans-serif;text-transform:uppercase;letter-spacing:0.06em;">Ajouter &agrave; mon agenda</p>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td style="padding-right:8px;">
+            <a href="${googleCalUrl}"
+               style="display:inline-block;padding:9px 16px;background:#f3f4f6;border-radius:6px;color:#374151;text-decoration:none;font-size:12px;font-weight:600;font-family:Arial,sans-serif;border:1px solid #e5e7eb;">
+              G &nbsp;Google
+            </a>
+          </td>
+          <td style="padding-right:8px;">
+            <a href="${outlookCalUrl}"
+               style="display:inline-block;padding:9px 16px;background:#f3f4f6;border-radius:6px;color:#374151;text-decoration:none;font-size:12px;font-weight:600;font-family:Arial,sans-serif;border:1px solid #e5e7eb;">
+              &#128197; &nbsp;Outlook
+            </a>
+          </td>
+          <td>
+            <span style="display:inline-block;padding:9px 16px;background:#f3f4f6;border-radius:6px;color:#9ca3af;font-size:12px;font-weight:600;font-family:Arial,sans-serif;border:1px solid #e5e7eb;">
+              &#63743; &nbsp;Apple (fichier .ics joint)
+            </span>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
 
-      <!-- Footer -->
-      <tr>
-        <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:14px 32px;text-align:center;">
-          <p style="margin:0;font-size:11px;color:#9ca3af;font-family:Arial,sans-serif;">Propulsé par <strong>ZAYA</strong></p>
-        </td>
-      </tr>
-    </table>
+    <!-- Divider -->
+    <tr><td style="padding:0 40px;"><div style="height:1px;background:#e5e7eb;"></div></td></tr>
 
-  </td></tr>
+    <!-- Informations légales -->
+    <tr><td style="padding:28px 40px;">
+      <p style="margin:0 0 18px;font-size:15px;font-weight:700;color:#111827;font-family:Arial,sans-serif;">Informations l&eacute;gales</p>
+
+      ${organizerName ? `
+      <p style="margin:0 0 5px;font-size:11px;font-weight:700;color:#374151;font-family:Arial,sans-serif;text-transform:uppercase;letter-spacing:0.06em;">Organisateur</p>
+      <p style="margin:0 0 18px;font-size:13px;color:#6b7280;font-family:Arial,sans-serif;">${organizerName}</p>
+      ` : ''}
+
+      <p style="margin:0 0 5px;font-size:11px;font-weight:700;color:#374151;font-family:Arial,sans-serif;text-transform:uppercase;letter-spacing:0.06em;">Acheteur</p>
+      <p style="margin:0 0 3px;font-size:13px;color:#6b7280;font-family:Arial,sans-serif;">${holder.holderName}</p>
+      <p style="margin:0;font-size:13px;color:#6b7280;font-family:Arial,sans-serif;">${holder.holderEmail}</p>
+    </td></tr>
+
+    <!-- Footer -->
+    <tr><td align="center" style="background:#4f46e5;padding:22px 40px;">
+      <p style="margin:0;color:rgba(255,255,255,0.85);font-size:12px;font-family:Arial,sans-serif;line-height:1.7;">
+        Cette solution de billetterie et d&apos;inscription en ligne est fournie par <strong style="color:#ffffff;">ZAYA</strong>.
+        Vous organisez des &eacute;v&eacute;nements&nbsp;? Sur
+        <a href="https://zaya.live" style="color:#ffffff;">zaya.live</a>,
+        c&apos;est simple, rapide et s&ucirc;r.
+      </p>
+    </td></tr>
+
+  </table>
+</td></tr>
 </table>
 </body>
 </html>`,
@@ -419,7 +432,7 @@ export class PublicService {
 
   async buildTicketPdf(
     ticket: { serialNumber: string; templateName: string; price: number; currency: string; qrCode: string | null },
-    event: { name: string; startDate: Date; city: string; venue: string },
+    event: { name: string; startDate: Date; endDate?: Date | null; city: string; venue: string },
     holderName: string,
     bannerUrl?: string | null,
   ): Promise<Buffer> {
