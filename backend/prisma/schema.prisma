@@ -239,15 +239,17 @@ model Ticket {
 }
 
 model Controller {
-  id           String   @id @default(uuid())
-  name         String
-  email        String   @unique
-  password     String
-  isActive     Boolean  @default(true)
-  organizerId  String
-  lastLoginAt  DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id              String    @id @default(uuid())
+  name            String
+  email           String    @unique
+  password        String?
+  isActive        Boolean   @default(false)
+  organizerId     String
+  lastLoginAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  invitationToken String?   @unique
+  invitedAt       DateTime?
 
   organizer        User              @relation(fields: [organizerId], references: [id])
   controllerEvents ControllerEvent[]

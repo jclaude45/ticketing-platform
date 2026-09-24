@@ -12,34 +12,22 @@ export default function NewControllerPage() {
   const router      = useRouter();
   const queryClient = useQueryClient();
 
-  // The create mutation — sends to /controllers then assigns events
+  // Invite mutation — sends invitation email, controller sets their own password
   const create = useMutation({
     mutationFn: async (data: ControllerFormData) => {
-      // 1) Create the controller account
-      const res = await apiClient.post('/controllers', {
+      return apiClient.post('/controllers/invite', {
         name:     `${data.firstName} ${data.lastName}`.trim(),
         email:    data.email,
-        password: data.password,
+        eventIds: data.eventIds,
       });
-      const controllerId = (res.data as any)?.data?.id ?? (res.data as any)?.id;
-
-      // 2) Assign to selected events
-      if (controllerId && data.eventIds?.length) {
-        await Promise.all(
-          data.eventIds.map((eventId) =>
-            apiClient.post(`/controllers/${controllerId}/assign`, { eventId }),
-          ),
-        );
-      }
-      return res;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['controllers'] });
-      toast.success('Contrôleur créé avec succès !');
+      toast.success('Invitation envoyée ! Le contrôleur recevra un email pour activer son compte.');
       router.push('/dashboard/controllers');
     },
     onError: (err: any) => {
-      toast.error(err?.response?.data?.message ?? 'Erreur lors de la création');
+      toast.error(err?.response?.data?.message ?? 'Erreur lors de l\'envoi de l\'invitation');
     },
   });
 
@@ -61,9 +49,9 @@ export default function NewControllerPage() {
             <Shield className="h-5 w-5 text-indigo-600" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Nouveau contrôleur</h1>
+            <h1 className="text-xl font-bold text-gray-900">Inviter un contrôleur</h1>
             <p className="text-sm text-gray-500">
-              L'agent pourra se connecter à l'application mobile et scanner les billets
+              Un email d'invitation sera envoyé — le contrôleur créera son propre mot de passe
             </p>
           </div>
         </div>
@@ -72,7 +60,7 @@ export default function NewControllerPage() {
       <ControllerForm
         onSubmit={(data) => create.mutate(data)}
         isLoading={create.isPending}
-        submitLabel="Créer le contrôleur"
+        submitLabel="Envoyer l'invitation"
       />
     </div>
   );

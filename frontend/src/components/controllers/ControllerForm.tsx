@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, User, Mail, Phone, Calendar } from 'lucide-react';
+import { Loader2, User, Mail, Calendar, Send } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { eventsApi } from '@/lib/api';
 
@@ -13,8 +13,6 @@ const schema = z.object({
   firstName:  z.string().min(2, 'Minimum 2 caractères'),
   lastName:   z.string().min(2, 'Minimum 2 caractères'),
   email:      z.string().email('Email invalide'),
-  phone:      z.string().optional(),
-  password:   z.string().min(8, 'Minimum 8 caractères'),
   eventIds:   z.array(z.string()).min(1, 'Assignez au moins un événement'),
 });
 
@@ -25,16 +23,13 @@ interface Props {
   onSubmit: (data: ControllerFormData) => void;
   isLoading?: boolean;
   submitLabel?: string;
-  /** En mode édition, ne pas afficher le champ mot de passe */
-  editMode?: boolean;
 }
 
 export function ControllerForm({
   defaultValues,
   onSubmit,
   isLoading = false,
-  submitLabel = 'Créer le contrôleur',
-  editMode = false,
+  submitLabel = 'Envoyer l\'invitation',
 }: Props) {
   const {
     register,
@@ -43,11 +38,7 @@ export function ControllerForm({
     watch,
     formState: { errors },
   } = useForm<ControllerFormData>({
-    resolver: zodResolver(
-      editMode
-        ? schema.omit({ password: true }).extend({ password: z.string().optional() })
-        : schema,
-    ) as any,
+    resolver: zodResolver(schema) as any,
     defaultValues: { eventIds: [], ...defaultValues },
   });
 
@@ -108,67 +99,29 @@ export function ControllerForm({
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
           <Mail className="h-4 w-4 text-indigo-500" />
-          Coordonnées &amp; accès
+          Adresse email
         </h3>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <Mail className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
-                {...register('email')}
-                type="email"
-                placeholder="agent@example.com"
-                className={cn(
-                  'w-full rounded-lg border pl-9 pr-3 py-2 text-sm transition-colors',
-                  'focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100',
-                  errors.email ? 'border-red-300 bg-red-50' : 'border-gray-200',
-                )}
-              />
-            </div>
-            {errors.email && <p className="mt-1 text-xs text-red-500">{errors.email.message}</p>}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Téléphone <span className="text-gray-400 font-normal">(optionnel)</span>
-            </label>
-            <div className="relative">
-              <Phone className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
-                {...register('phone')}
-                type="tel"
-                placeholder="+33 6 00 00 00 00"
-                className="w-full rounded-lg border border-gray-200 pl-9 pr-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-              />
-            </div>
-          </div>
-
-          {!editMode && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Mot de passe <span className="text-red-500">*</span>
-              </label>
-              <input
-                {...register('password')}
-                type="password"
-                placeholder="Minimum 8 caractères"
-                className={cn(
-                  'w-full rounded-lg border px-3 py-2 text-sm transition-colors',
-                  'focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100',
-                  errors.password ? 'border-red-300 bg-red-50' : 'border-gray-200',
-                )}
-              />
-              {errors.password && (
-                <p className="mt-1 text-xs text-red-500">{errors.password.message}</p>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Email <span className="text-red-500">*</span>
+          </label>
+          <div className="relative">
+            <Mail className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input
+              {...register('email')}
+              type="email"
+              placeholder="agent@example.com"
+              className={cn(
+                'w-full rounded-lg border pl-9 pr-3 py-2 text-sm transition-colors',
+                'focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100',
+                errors.email ? 'border-red-300 bg-red-50' : 'border-gray-200',
               )}
-              <p className="mt-1 text-xs text-gray-400">
-                Le contrôleur utilisera ces identifiants sur l'application mobile
-              </p>
-            </div>
-          )}
+            />
+          </div>
+          {errors.email && <p className="mt-1 text-xs text-red-500">{errors.email.message}</p>}
+          <p className="mt-1.5 text-xs text-gray-400">
+            Un lien d'invitation sera envoyé à cette adresse. Le contrôleur créera son propre mot de passe.
+          </p>
         </div>
       </div>
 
@@ -263,7 +216,7 @@ export function ControllerForm({
           disabled={isLoading}
           className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60 transition-colors shadow-sm"
         >
-          {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+          {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           {submitLabel}
         </button>
       </div>

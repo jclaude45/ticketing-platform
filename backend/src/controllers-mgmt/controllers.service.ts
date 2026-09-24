@@ -6,23 +6,38 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
-import { CreateControllerDto, AssignEventDto } from './dto/create-controller.dto';
+import { CreateControllerDto, AssignEventDto, InviteControllerDto, AcceptInvitationDto } from './dto/create-controller.dto';
 import { UpdateControllerDto } from './dto/update-controller.dto';
 import { AuthService } from '../auth/auth.service';
 import { Role } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import * as crypto from 'crypto';
+import * as nodemailer from 'nodemailer';
 
 @Injectable()
 export class ControllersService {
   private readonly logger = new Logger(ControllersService.name);
+  private readonly mailer: nodemailer.Transporter;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly redisService: RedisService,
     private readonly authService: AuthService,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    this.mailer = nodemailer.createTransport({
+      host: configService.get<string>('email.host'),
+      port: configService.get<number>('email.port') ?? 587,
+      secure: false,
+      auth: {
+        user: configService.get<string>('email.user'),
+        pass: configService.get<string>('email.password'),
+      },
+    });
+  }
 
   async create(organizerId: string, dto: CreateControllerDto) {
     const existing = await this.prisma.controller.findUnique({
@@ -213,6 +228,10 @@ export class ControllersService {
       throw new ForbiddenException('Invalid credentials or account inactive');
     }
 
+    if (!controller.password) {
+      throw new ForbiddenException('Account not yet activated. Please accept your invitation.');
+    }
+
     const isPasswordValid = await bcrypt.compare(password, controller.password);
     if (!isPasswordValid) {
       throw new ForbiddenException('Invalid credentials');
@@ -236,6 +255,92 @@ export class ControllersService {
       controller: safeController,
       ...tokens,
     };
+  }
+
+  async invite(organizerId: string, dto: InviteControllerDto) {
+    const existing = await this.prisma.controller.findUnique({ where: { email: dto.email } });
+    if (existing) throw new ConflictException('A controller with this email already exists');
+
+    const invitationToken = crypto.randomBytes(32).toString('hex');
+
+    const controller = await this.prisma.controller.create({
+      data: {
+        name: dto.name,
+        email: dto.email,
+        organizerId,
+        isActive: false,
+        invitationToken,
+        invitedAt: new Date(),
+      },
+    });
+
+    if (dto.eventIds?.length) {
+      await this.prisma.controllerEvent.createMany({
+        data: dto.eventIds.map(eventId => ({ controllerId: controller.id, eventId })),
+        skipDuplicates: true,
+      });
+    }
+
+    await this.sendInvitationEmail(dto.email, dto.name, invitationToken);
+
+    return { message: 'Invitation sent', id: controller.id };
+  }
+
+  async getInvitation(token: string) {
+    const controller = await this.prisma.controller.findUnique({
+      where: { invitationToken: token },
+      include: { organizer: { select: { firstName: true, lastName: true } } },
+    });
+    if (!controller) throw new NotFoundException('Invitation not found or expired');
+    if (controller.isActive) throw new BadRequestException('Invitation already accepted');
+    return {
+      name: controller.name,
+      email: controller.email,
+      organizerName: `${controller.organizer.firstName} ${controller.organizer.lastName}`,
+    };
+  }
+
+  async acceptInvitation(token: string, dto: AcceptInvitationDto) {
+    const controller = await this.prisma.controller.findUnique({
+      where: { invitationToken: token },
+    });
+    if (!controller) throw new NotFoundException('Invitation not found or expired');
+    if (controller.isActive) throw new BadRequestException('Invitation already accepted');
+
+    const hashedPassword = await bcrypt.hash(dto.password, 12);
+
+    await this.prisma.controller.update({
+      where: { id: controller.id },
+      data: { password: hashedPassword, isActive: true, invitationToken: null },
+    });
+
+    return { message: 'Account activated successfully' };
+  }
+
+  private async sendInvitationEmail(email: string, name: string, token: string) {
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'https://app.zaya.live';
+    const joinUrl = `${frontendUrl}/invite/controller/${token}`;
+    const firstName = name.split(' ')[0];
+    try {
+      await this.mailer.sendMail({
+        from: this.configService.get<string>('email.from'),
+        to: email,
+        subject: 'Invitation contrôleur — ZAYA',
+        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px">
+          <h2 style="color:#4f46e5">Bonjour ${firstName} !</h2>
+          <p>Vous avez été invité(e) à rejoindre la plateforme <strong>ZAYA</strong> en tant que <strong>contrôleur de billets</strong>.</p>
+          <p>Cliquez sur le bouton ci-dessous pour créer votre mot de passe et activer votre compte :</p>
+          <a href="${joinUrl}" style="display:inline-block;margin:16px 0;padding:12px 28px;background:#4f46e5;color:white;text-decoration:none;border-radius:8px;font-weight:bold">
+            Activer mon compte
+          </a>
+          <p style="color:#6b7280;font-size:13px">Ce lien est à usage unique et expire dans 7 jours.</p>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
+          <p style="color:#9ca3af;font-size:12px">Si vous n'attendiez pas cette invitation, ignorez cet email.</p>
+        </div>`,
+      });
+    } catch (err) {
+      this.logger.warn('sendInvitationEmail failed', (err as Error)?.message);
+    }
   }
 
   async getControllerStats(controllerId: string, organizerId: string, organizerRole: Role) {

@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ControllersService } from './controllers.service';
-import { CreateControllerDto, AssignEventDto } from './dto/create-controller.dto';
+import { CreateControllerDto, AssignEventDto, InviteControllerDto, AcceptInvitationDto } from './dto/create-controller.dto';
 import { UpdateControllerDto } from './dto/update-controller.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -37,9 +37,31 @@ export class ControllersController {
     return this.controllersService.controllerLogin(body.email, body.password);
   }
 
+  @Post('invite')
+  @Roles(Role.ORGANIZER, Role.ADMIN)
+  @ApiOperation({ summary: 'Invite a controller by email' })
+  async invite(@CurrentUser() user: any, @Body() dto: InviteControllerDto) {
+    return this.controllersService.invite(user.id, dto);
+  }
+
+  @Public()
+  @Get('invitations/:token')
+  @ApiOperation({ summary: 'Get invitation details (public)' })
+  async getInvitation(@Param('token') token: string) {
+    return this.controllersService.getInvitation(token);
+  }
+
+  @Public()
+  @Post('invitations/:token/accept')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Accept controller invitation and set password (public)' })
+  async acceptInvitation(@Param('token') token: string, @Body() dto: AcceptInvitationDto) {
+    return this.controllersService.acceptInvitation(token, dto);
+  }
+
   @Post()
   @Roles(Role.ORGANIZER, Role.ADMIN)
-  @ApiOperation({ summary: 'Create a new controller' })
+  @ApiOperation({ summary: 'Create a new controller (direct, with password)' })
   async create(@CurrentUser() user: any, @Body() dto: CreateControllerDto) {
     return this.controllersService.create(user.id, dto);
   }
