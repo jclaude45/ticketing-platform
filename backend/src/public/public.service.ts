@@ -478,16 +478,17 @@ export class PublicService {
       doc.fillColor('#ffffff').rect(0, 0, W, H).fill();
 
       // ── Event thumbnail (top-left) ────────────────────────────────────────
+      let imgDrawn = false;
       if (bannerBuffer) {
+        doc.save();
         try {
-          doc.save()
-            .roundedRect(PAD, PAD, IMG, IMG, 8).clip()
-            .image(bannerBuffer, PAD, PAD, { cover: [IMG, IMG] })
-            .restore();
-        } catch (_) {
-          doc.fillColor('#e5e7eb').roundedRect(PAD, PAD, IMG, IMG, 8).fill();
-        }
-      } else {
+          doc.roundedRect(PAD, PAD, IMG, IMG, 8).clip();
+          doc.image(bannerBuffer, PAD, PAD, { cover: [IMG, IMG] });
+          imgDrawn = true;
+        } catch (_) { /* fall through to placeholder */ }
+        doc.restore(); // always balance save/restore
+      }
+      if (!imgDrawn) {
         doc.fillColor('#e5e7eb').roundedRect(PAD, PAD, IMG, IMG, 8).fill();
         doc.fillColor('#a5b4fc').fontSize(28).font('Helvetica-Bold')
           .text('Z', PAD, PAD + 26, { width: IMG, align: 'center' });

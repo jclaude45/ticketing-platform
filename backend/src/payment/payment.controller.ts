@@ -1,10 +1,11 @@
-import { Controller, Post, Get, Body, Param, Res, NotFoundException, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Res, NotFoundException, UseGuards, Logger } from '@nestjs/common';
 import { Response } from 'express';
 import { PaymentService, InitiatePaymentDto } from './payment.service';
 import { FlexPayWebhookGuard } from './flexpay-webhook.guard';
 
 @Controller('public')
 export class PaymentController {
+  private readonly logger = new Logger(PaymentController.name);
   constructor(private readonly paymentService: PaymentService) {}
 
   @Post('events/:eventId/initiate-payment')
@@ -37,7 +38,8 @@ export class PaymentController {
         'Content-Length': buffer.length,
       });
       res.end(buffer);
-    } catch {
+    } catch (err: any) {
+      this.logger.error(`PDF generation failed for ref=${reference} ticket=${ticketId}: ${err?.message}`, err?.stack);
       throw new NotFoundException('Billet introuvable');
     }
   }
