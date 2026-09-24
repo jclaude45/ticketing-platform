@@ -21,9 +21,14 @@ export default function NewControllerPage() {
         eventIds: data.eventIds,
       });
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['controllers'] });
-      toast.success('Invitation envoyée ! Le contrôleur recevra un email pour activer son compte.');
+      const msg = (res.data as any)?.data?.message ?? '';
+      if (msg.includes('existing account')) {
+        toast.success('Accès activé ! Cette personne a déjà un compte ZAYA — elle peut se connecter directement.');
+      } else {
+        toast.success('Invitation envoyée ! Le contrôleur recevra un email pour activer son compte.');
+      }
       router.push('/dashboard/controllers');
     },
     onError: (err: any) => {

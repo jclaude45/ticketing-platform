@@ -228,11 +228,17 @@ export class ControllersService {
       throw new ForbiddenException('Invalid credentials or account inactive');
     }
 
-    if (!controller.password) {
-      throw new ForbiddenException('Account not yet activated. Please accept your invitation.');
+    let isPasswordValid = false;
+    if (controller.password) {
+      isPasswordValid = await bcrypt.compare(password, controller.password);
+    } else {
+      // No dedicated controller password → fall back to the User account password
+      const user = await this.prisma.user.findUnique({ where: { email: controller.email } });
+      if (!user?.password) {
+        throw new ForbiddenException('Account not yet activated. Please accept your invitation.');
+      }
+      isPasswordValid = await bcrypt.compare(password, user.password);
     }
-
-    const isPasswordValid = await bcrypt.compare(password, controller.password);
     if (!isPasswordValid) {
       throw new ForbiddenException('Invalid credentials');
     }
@@ -261,18 +267,35 @@ export class ControllersService {
     const existing = await this.prisma.controller.findUnique({ where: { email: dto.email } });
     if (existing) throw new ConflictException('A controller with this email already exists');
 
-    const invitationToken = crypto.randomBytes(32).toString('hex');
+    // If this email already has a User account, activate directly without invitation.
+    // The controllerLogin will fall back to the User password.
+    const existingUser = await this.prisma.user.findUnique({ where: { email: dto.email } });
 
-    const controller = await this.prisma.controller.create({
-      data: {
-        name: dto.name,
-        email: dto.email,
-        organizerId,
-        isActive: false,
-        invitationToken,
-        invitedAt: new Date(),
-      },
-    });
+    let controller;
+    if (existingUser) {
+      controller = await this.prisma.controller.create({
+        data: {
+          name: dto.name || `${existingUser.firstName} ${existingUser.lastName}`,
+          email: dto.email,
+          organizerId,
+          isActive: true,   // already has credentials via User account
+        },
+      });
+      await this.sendAlreadyActiveEmail(dto.email, controller.name);
+    } else {
+      const invitationToken = crypto.randomBytes(32).toString('hex');
+      controller = await this.prisma.controller.create({
+        data: {
+          name: dto.name,
+          email: dto.email,
+          organizerId,
+          isActive: false,
+          invitationToken,
+          invitedAt: new Date(),
+        },
+      });
+      await this.sendInvitationEmail(dto.email, dto.name, invitationToken);
+    }
 
     if (dto.eventIds?.length) {
       await this.prisma.controllerEvent.createMany({
@@ -281,9 +304,10 @@ export class ControllersService {
       });
     }
 
-    await this.sendInvitationEmail(dto.email, dto.name, invitationToken);
-
-    return { message: 'Invitation sent', id: controller.id };
+    return {
+      message: existingUser ? 'Controller activated (existing account)' : 'Invitation sent',
+      id: controller.id,
+    };
   }
 
   async getInvitation(token: string) {
@@ -315,6 +339,26 @@ export class ControllersService {
     });
 
     return { message: 'Account activated successfully' };
+  }
+
+  private async sendAlreadyActiveEmail(email: string, name: string) {
+    const firstName = name.split(' ')[0];
+    try {
+      await this.mailer.sendMail({
+        from: this.configService.get<string>('email.from'),
+        to: email,
+        subject: 'Accès contrôleur activé — ZAYA',
+        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px">
+          <h2 style="color:#4f46e5">Bonjour ${firstName} !</h2>
+          <p>Vous avez été ajouté(e) comme <strong>contrôleur de billets</strong> sur la plateforme ZAYA.</p>
+          <p>Votre accès est déjà actif. Connectez-vous sur l'application mobile avec votre adresse email et votre mot de passe ZAYA habituel.</p>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
+          <p style="color:#9ca3af;font-size:12px">Si vous n'attendiez pas ce message, contactez votre organisateur.</p>
+        </div>`,
+      });
+    } catch (err) {
+      this.logger.warn('sendAlreadyActiveEmail failed', (err as Error)?.message);
+    }
   }
 
   private async sendInvitationEmail(email: string, name: string, token: string) {
