@@ -17,34 +17,21 @@ type TicketRow = {
 
 type Status = 'checking' | 'completed' | 'failed';
 
-async function downloadPdf(reference: string, ticket: TicketRow) {
-  const res = await fetch(`/api/public/payments/${reference}/tickets/${ticket.ticketId}/pdf`);
-  if (!res.ok) return;
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `billet-${ticket.serialNumber}.pdf`;
-  a.click();
-  URL.revokeObjectURL(url);
+function downloadPdf(reference: string, ticket: TicketRow) {
+  // Open PDF directly in a new tab — works on all devices including mobile.
+  // The browser handles inline display or download prompt natively.
+  window.open(
+    `/api/public/payments/${reference}/tickets/${ticket.ticketId}/pdf`,
+    '_blank',
+    'noopener,noreferrer',
+  );
 }
 
-async function downloadAll(reference: string, tickets: TicketRow[]) {
-  for (let i = 0; i < tickets.length; i++) {
-    await downloadPdf(reference, tickets[i]);
-    if (i < tickets.length - 1) await new Promise(r => setTimeout(r, 400));
-  }
+function downloadAll(reference: string, tickets: TicketRow[]) {
+  tickets.forEach(t => downloadPdf(reference, t));
 }
 
 function TicketCard({ ticket, reference }: { ticket: TicketRow; reference: string }) {
-  const [loading, setLoading] = useState(false);
-
-  const handleDownload = async () => {
-    setLoading(true);
-    await downloadPdf(reference, ticket);
-    setLoading(false);
-  };
-
   return (
     <div className="border border-gray-200 dark:border-gray-700 rounded-xl p-4 flex flex-col items-center gap-3 bg-gray-50 dark:bg-gray-800/50">
       <img
@@ -60,12 +47,11 @@ function TicketCard({ ticket, reference }: { ticket: TicketRow; reference: strin
         </p>
       </div>
       <button
-        onClick={handleDownload}
-        disabled={loading}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-xs font-medium hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors disabled:opacity-60"
+        onClick={() => downloadPdf(reference, ticket)}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-xs font-medium hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
       >
-        {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-        {loading ? 'Génération…' : 'PDF'}
+        <Download className="h-3.5 w-3.5" />
+        PDF
       </button>
     </div>
   );
