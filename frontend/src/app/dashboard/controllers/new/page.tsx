@@ -17,11 +17,9 @@ export default function NewControllerPage() {
     mutationFn: async (data: ControllerFormData) => {
       // 1) Create the controller account
       const res = await apiClient.post('/controllers', {
-        firstName: data.firstName,
-        lastName:  data.lastName,
-        email:     data.email,
-        phone:     data.phone,
-        password:  data.password,
+        name:     `${data.firstName} ${data.lastName}`.trim(),
+        email:    data.email,
+        password: data.password,
       });
       const controllerId = (res.data as any)?.data?.id ?? (res.data as any)?.id;
 
