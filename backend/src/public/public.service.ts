@@ -436,7 +436,6 @@ export class PublicService {
     holderName: string,
     bannerUrl?: string | null,
   ): Promise<Buffer> {
-    // Pre-load banner from local filesystem before entering the PDFKit Promise
     let bannerBuffer: Buffer | null = null;
     if (bannerUrl) {
       try {
@@ -449,118 +448,122 @@ export class PublicService {
         }
         if (rel) {
           const localPath = path.join(process.cwd(), 'public', rel);
-          if (fs.existsSync(localPath)) {
-            bannerBuffer = fs.readFileSync(localPath);
-          }
+          if (fs.existsSync(localPath)) bannerBuffer = fs.readFileSync(localPath);
         }
-      } catch (_) { /* fall back to gradient */ }
+      } catch (_) { /* ignore */ }
     }
 
     return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ size: [300, 480], margin: 0, info: { Title: `Billet — ${event.name}`, Author: 'ZAYA' } });
+      const W = 360;
+      const H = 500;
+      const doc = new PDFDocument({ size: [W, H], margin: 0, info: { Title: `Billet — ${event.name}`, Author: 'ZAYA' } });
       const chunks: Buffer[] = [];
       doc.on('data', (c: Buffer) => chunks.push(c));
-      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('end',  () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      const W = 300;
-      const headerH = 195;
-      const priceLabel = ticket.price === 0 ? 'Gratuit' : `${ticket.price.toFixed(2)} ${ticket.currency}`;
-      const dateStr = new Intl.DateTimeFormat('fr-FR', {
-        weekday: 'short', day: 'numeric', month: 'long', year: 'numeric',
-      }).format(new Date(event.startDate));
+      const PAD   = 22;
+      const PERF  = 262;      // Y of perforation line
+      const IMG   = 88;       // thumbnail size
+      const startDate = new Date(event.startDate);
 
-      // ── Header ────────────────────────────────────────────────────────────
+      const dateLabel = new Intl.DateTimeFormat('fr-FR', {
+        day: 'numeric', month: 'long', year: 'numeric',
+      }).format(startDate);
+      const timeLabel = new Intl.DateTimeFormat('fr-FR', {
+        weekday: 'short', hour: '2-digit', minute: '2-digit',
+      }).format(startDate);
+
+      // ── Background ────────────────────────────────────────────────────────
+      doc.fillColor('#ffffff').rect(0, 0, W, H).fill();
+
+      // ── Event thumbnail (top-left) ────────────────────────────────────────
       if (bannerBuffer) {
-        // Event cover as background, dark overlay for text legibility
         try {
-          doc.image(bannerBuffer, 0, 0, { cover: [W, headerH] });
-        } catch (_) { /* image format not supported — fall to gradient */ }
-        doc.fillOpacity(0.6).fillColor('#0f0a2e').rect(0, 0, W, headerH).fill();
-        doc.fillOpacity(1);
+          doc.save()
+            .roundedRect(PAD, PAD, IMG, IMG, 8).clip()
+            .image(bannerBuffer, PAD, PAD, { cover: [IMG, IMG] })
+            .restore();
+        } catch (_) {
+          doc.fillColor('#e5e7eb').roundedRect(PAD, PAD, IMG, IMG, 8).fill();
+        }
       } else {
-        // Fallback: purple gradient
-        const grad = doc.linearGradient(0, 0, W, headerH);
-        grad.stop(0, '#4f46e5').stop(1, '#7c3aed');
-        doc.rect(0, 0, W, headerH).fill(grad);
+        doc.fillColor('#e5e7eb').roundedRect(PAD, PAD, IMG, IMG, 8).fill();
+        doc.fillColor('#a5b4fc').fontSize(28).font('Helvetica-Bold')
+          .text('Z', PAD, PAD + 26, { width: IMG, align: 'center' });
       }
 
-      doc.fillColor('rgba(255,255,255,0.55)').fontSize(7.5).font('Helvetica')
-        .text("BILLET D'ENTREE", 20, 18, { width: W - 40, characterSpacing: 1.5 });
+      // ── Event name + holder (right of thumbnail) ──────────────────────────
+      const TX = PAD + IMG + 16;
+      const TW = W - TX - PAD;
 
-      doc.fillColor('#ffffff').fontSize(16).font('Helvetica-Bold')
-        .text(event.name, 20, 33, { width: W - 40 });
+      doc.fillColor('#111111').fontSize(16).font('Helvetica-Bold')
+        .text(event.name, TX, PAD, { width: TW, lineGap: 2, height: 42, ellipsis: true });
 
-      const nameBottom = doc.y + 6;
-      doc.fillColor('rgba(255,255,255,0.75)').fontSize(9.5).font('Helvetica')
-        .text(dateStr, 20, nameBottom, { width: W - 40 });
-      doc.text(`${event.venue}, ${event.city}`, 20, doc.y + 2, { width: W - 40 });
+      doc.fillColor('#999999').fontSize(8).font('Helvetica')
+        .text('Member Name', TX, 76, { characterSpacing: 0.5 });
+      doc.fillColor('#222222').fontSize(11).font('Helvetica-Bold')
+        .text(holderName, TX, 89, { width: TW });
 
-      // Category + price chips
-      const chipY = headerH - 38;
-      doc.fillColor('rgba(255,255,255,0.18)').roundedRect(20, chipY, 130, 20, 10).fill();
-      doc.fillColor('#ffffff').fontSize(9).font('Helvetica-Bold')
-        .text(ticket.templateName, 28, chipY + 5, { width: 114 });
+      // ── Info grid ─────────────────────────────────────────────────────────
+      const GY   = PAD + IMG + 20;   // y ≈ 130
+      const GCW  = (W - PAD * 2) / 2; // column width ≈ 158
 
-      doc.fillColor('rgba(255,255,255,0.18)').roundedRect(W - 90, chipY, 70, 20, 10).fill();
-      doc.fillColor('#ffffff').fontSize(9).font('Helvetica-Bold')
-        .text(priceLabel, W - 84, chipY + 5, { width: 58, align: 'right' });
+      // Thin separator before grid
+      doc.strokeColor('#e5e7eb').lineWidth(0.5)
+        .moveTo(PAD, GY - 8).lineTo(W - PAD, GY - 8).stroke();
+
+      // Row 1 — Date | Time
+      doc.fillColor('#999999').fontSize(8).font('Helvetica')
+        .text('Date', PAD, GY, { characterSpacing: 0.4 });
+      doc.fillColor('#999999').fontSize(8).font('Helvetica')
+        .text('Time', PAD + GCW, GY, { characterSpacing: 0.4 });
+      doc.fillColor('#111111').fontSize(11).font('Helvetica-Bold')
+        .text(dateLabel, PAD, GY + 13, { width: GCW - 8 });
+      doc.fillColor('#111111').fontSize(11).font('Helvetica-Bold')
+        .text(timeLabel, PAD + GCW, GY + 13, { width: GCW - 8 });
+
+      // Row 2 — Category | Venue
+      const GY2 = GY + 48;
+      doc.fillColor('#999999').fontSize(8).font('Helvetica')
+        .text('Admit', PAD, GY2, { characterSpacing: 0.4 });
+      doc.fillColor('#999999').fontSize(8).font('Helvetica')
+        .text('Venue', PAD + GCW, GY2, { characterSpacing: 0.4 });
+      doc.fillColor('#111111').fontSize(11).font('Helvetica-Bold')
+        .text(ticket.templateName, PAD, GY2 + 13, { width: GCW - 8 });
+      doc.fillColor('#111111').fontSize(11).font('Helvetica-Bold')
+        .text(`${event.venue}, ${event.city}`, PAD + GCW, GY2 + 13, { width: GCW - 8, lineGap: 1 });
 
       // ── Perforation ───────────────────────────────────────────────────────
-      doc.fillColor('#5b50e8').rect(0, headerH, W, 3).fill();
-      doc.strokeColor('rgba(255,255,255,0.45)').lineWidth(0.8)
-        .dash(4, { space: 3 })
-        .moveTo(18, headerH + 1.5).lineTo(W - 18, headerH + 1.5).stroke().undash();
+      // Half-circle notches
+      doc.fillColor('#f0f0f0').circle(0, PERF, 13).fill();
+      doc.fillColor('#f0f0f0').circle(W, PERF, 13).fill();
+      // Dashed line
+      doc.strokeColor('#cccccc').lineWidth(1)
+        .dash(5, { space: 4 })
+        .moveTo(18, PERF).lineTo(W - 18, PERF)
+        .stroke().undash();
 
-      // ── Stub (white) ─────────────────────────────────────────────────────
-      doc.fillColor('#ffffff').rect(0, headerH + 3, W, 255).fill();
+      // ── Bottom section (QR) ───────────────────────────────────────────────
+      doc.fillColor('#f7f7f7').rect(0, PERF + 1, W, H - PERF - 1).fill();
 
-      // QR code image
-      const stubTop = headerH + 18;
+      const QR  = 162;
+      const QRX = (W - QR) / 2;
+      const QRY = PERF + 28;
+
       if (ticket.qrCode) {
         const match = ticket.qrCode.match(/^data:image\/png;base64,(.+)$/);
         if (match) {
           try {
-            doc.image(Buffer.from(match[1], 'base64'), 16, stubTop, { width: 118, height: 118 });
-          } catch (_) { /* skip if image fails */ }
+            doc.image(Buffer.from(match[1], 'base64'), QRX, QRY, { width: QR, height: QR });
+          } catch (_) { /* skip */ }
         }
       }
-      doc.fillColor('#9ca3af').fontSize(7).font('Helvetica')
-        .text("Scanner a l'entree", 16, stubTop + 122, { width: 118, align: 'center' });
 
-      // Vertical separator
-      doc.strokeColor('#e0e7ff').lineWidth(1)
-        .dash(3, { space: 3 })
-        .moveTo(148, stubTop - 4).lineTo(148, stubTop + 148).stroke().undash();
-
-      // Details: holder, serial, category
-      const dx = 158;
-      let dy = stubTop;
-
-      doc.fillColor('#9ca3af').fontSize(7).font('Helvetica').text('TITULAIRE', dx, dy, { characterSpacing: 0.8 });
-      dy += 11;
-      doc.fillColor('#1e1b4b').fontSize(11).font('Helvetica-Bold').text(holderName, dx, dy, { width: W - dx - 14 });
-      dy = doc.y + 12;
-
-      doc.fillColor('#9ca3af').fontSize(7).font('Helvetica').text('N° DE BILLET', dx, dy, { characterSpacing: 0.8 });
-      dy += 11;
-      doc.fillColor('#4f46e5').fontSize(8.5).font('Courier-Bold').text(ticket.serialNumber, dx, dy, { width: W - dx - 14 });
-      dy = doc.y + 12;
-
-      doc.fillColor('#9ca3af').fontSize(7).font('Helvetica').text('CATEGORIE', dx, dy, { characterSpacing: 0.8 });
-      dy += 11;
-      doc.fillColor('#374151').fontSize(10).font('Helvetica-Bold').text(ticket.templateName, dx, dy, { width: W - dx - 14 });
-      dy = doc.y + 12;
-
-      doc.fillColor('#9ca3af').fontSize(7).font('Helvetica').text('PRIX', dx, dy, { characterSpacing: 0.8 });
-      dy += 11;
-      doc.fillColor('#374151').fontSize(10).font('Helvetica-Bold').text(priceLabel, dx, dy);
-
-      // ── Footer ────────────────────────────────────────────────────────────
-      const footerY = 453;
-      doc.fillColor('#f5f3ff').rect(0, footerY, W, 27).fill();
-      doc.fillColor('#a5b4fc').fontSize(8).font('Helvetica')
-        .text('ZAYA — Plateforme de billetterie', 0, footerY + 9, { width: W, align: 'center' });
+      doc.fillColor('#333333').fontSize(9).font('Helvetica-Bold')
+        .text(`BOOKING ID  -  ${ticket.serialNumber}`, 0, QRY + QR + 14, {
+          width: W, align: 'center', characterSpacing: 0.8,
+        });
 
       doc.end();
     });
