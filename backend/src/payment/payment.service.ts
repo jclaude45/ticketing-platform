@@ -285,7 +285,7 @@ export class PaymentService {
   private async generateTicketsForPayment(payment: any, providerRef?: string) {
     const event = await this.prisma.event.findUnique({
       where: { id: payment.eventId },
-      select: { id: true, name: true, organizerId: true, startDate: true, endDate: true, city: true, venue: true },
+      select: { id: true, name: true, organizerId: true, startDate: true, endDate: true, city: true, venue: true, bannerUrl: true },
     });
     if (!event) return;
 
@@ -325,6 +325,7 @@ export class PaymentService {
         ticketRows,
         Number(payment.amount),
         payment.currency,
+        (event as any).bannerUrl,
       );
     } catch (err) {
       this.logger.warn(`Email send failed: ${err.message}`);

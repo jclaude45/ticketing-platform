@@ -8,6 +8,8 @@ import { PurchaseTicketDto } from './dto/purchase-ticket.dto';
 import * as nodemailer from 'nodemailer';
 import { ConfigService } from '@nestjs/config';
 import PDFDocument from 'pdfkit';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @Injectable()
 export class PublicService {
@@ -116,7 +118,7 @@ export class PublicService {
 
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
-      select: { id: true, name: true, organizerId: true, status: true, startDate: true, endDate: true, city: true, venue: true },
+      select: { id: true, name: true, organizerId: true, status: true, startDate: true, endDate: true, city: true, venue: true, bannerUrl: true },
     });
     if (!event) throw new NotFoundException('Événement introuvable');
     if (event.status !== 'PUBLISHED') throw new BadRequestException('Cet événement n\'accepte plus d\'inscriptions');
@@ -181,7 +183,7 @@ export class PublicService {
       qrCode:       t.qrCode,
     }));
 
-    this.sendConfirmationEmail(dto, event, ticketRows, total, currency).catch(err =>
+    this.sendConfirmationEmail(dto, event, ticketRows, total, currency, (event as any).bannerUrl).catch(err =>
       this.logger.warn(`Confirmation email failed: ${err.message}`),
     );
 
@@ -235,6 +237,7 @@ export class PublicService {
     tickets: { ticketId: string; serialNumber: string; templateName: string; price: number; currency: string; qrCode: string | null }[],
     total: number,
     currency: string,
+    bannerUrl?: string | null,
   ) {
     if (!this.mailer) return;
 
@@ -260,7 +263,7 @@ export class PublicService {
       }
       // Generate PDF ticket and attach it
       try {
-        const pdfBuf = await this.buildTicketPdf(t, event, dto.holderName);
+        const pdfBuf = await this.buildTicketPdf(t, event, dto.holderName, bannerUrl);
         attachments.push({
           filename: `billet-${t.serialNumber}.pdf`,
           content: pdfBuf,
@@ -352,10 +355,15 @@ export class PublicService {
     <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"
            style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 2px 20px rgba(0,0,0,0.07);max-width:600px;">
 
+      <!-- Event cover / banner -->
+      ${bannerUrl ? `<tr><td style="padding:0;line-height:0;font-size:0;">
+        <img src="${bannerUrl}" width="600" alt="${event.name}"
+             style="display:block;width:100%;max-width:600px;max-height:240px;object-fit:cover;border-radius:0;"/>
+      </td></tr>` : ''}
+
       <!-- Top banner -->
       <tr>
         <td align="center" style="background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%);padding:28px 32px 24px;">
-          <img src="https://zaya.live/email-logo.png" width="52" height="52" alt="ZAYA" style="display:block;margin:0 auto 14px;border-radius:12px;border:2px solid rgba(255,255,255,0.25);" />
           <h1 style="margin:0 0 6px;color:#ffffff;font-size:22px;font-weight:700;">&#10003; Inscription confirmée</h1>
           <p style="margin:0;color:rgba(255,255,255,0.8);font-size:14px;">${event.name}</p>
         </td>
@@ -409,11 +417,32 @@ export class PublicService {
     });
   }
 
-  buildTicketPdf(
+  async buildTicketPdf(
     ticket: { serialNumber: string; templateName: string; price: number; currency: string; qrCode: string | null },
     event: { name: string; startDate: Date; city: string; venue: string },
     holderName: string,
+    bannerUrl?: string | null,
   ): Promise<Buffer> {
+    // Pre-load banner from local filesystem before entering the PDFKit Promise
+    let bannerBuffer: Buffer | null = null;
+    if (bannerUrl) {
+      try {
+        const appBase = this.config.get<string>('APP_BASE_URL') || '';
+        let rel: string | null = null;
+        if (appBase && bannerUrl.startsWith(appBase)) {
+          rel = bannerUrl.slice(appBase.length);
+        } else if (/^https?:\/\/localhost:\d+/.test(bannerUrl)) {
+          rel = bannerUrl.replace(/^https?:\/\/localhost:\d+/, '');
+        }
+        if (rel) {
+          const localPath = path.join(process.cwd(), 'public', rel);
+          if (fs.existsSync(localPath)) {
+            bannerBuffer = fs.readFileSync(localPath);
+          }
+        }
+      } catch (_) { /* fall back to gradient */ }
+    }
+
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ size: [300, 480], margin: 0, info: { Title: `Billet — ${event.name}`, Author: 'ZAYA' } });
       const chunks: Buffer[] = [];
@@ -428,10 +457,20 @@ export class PublicService {
         weekday: 'short', day: 'numeric', month: 'long', year: 'numeric',
       }).format(new Date(event.startDate));
 
-      // ── Header (purple gradient) ──────────────────────────────────────────
-      const grad = doc.linearGradient(0, 0, W, headerH);
-      grad.stop(0, '#4f46e5').stop(1, '#7c3aed');
-      doc.rect(0, 0, W, headerH).fill(grad);
+      // ── Header ────────────────────────────────────────────────────────────
+      if (bannerBuffer) {
+        // Event cover as background, dark overlay for text legibility
+        try {
+          doc.image(bannerBuffer, 0, 0, { cover: [W, headerH] });
+        } catch (_) { /* image format not supported — fall to gradient */ }
+        doc.fillOpacity(0.6).fillColor('#0f0a2e').rect(0, 0, W, headerH).fill();
+        doc.fillOpacity(1);
+      } else {
+        // Fallback: purple gradient
+        const grad = doc.linearGradient(0, 0, W, headerH);
+        grad.stop(0, '#4f46e5').stop(1, '#7c3aed');
+        doc.rect(0, 0, W, headerH).fill(grad);
+      }
 
       doc.fillColor('rgba(255,255,255,0.55)').fontSize(7.5).font('Helvetica')
         .text("BILLET D'ENTREE", 20, 18, { width: W - 40, characterSpacing: 1.5 });
