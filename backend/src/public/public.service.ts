@@ -7,7 +7,8 @@ import { Role } from '@prisma/client';
 import { PurchaseTicketDto } from './dto/purchase-ticket.dto';
 import * as nodemailer from 'nodemailer';
 import { ConfigService } from '@nestjs/config';
-import PDFDocument from 'pdfkit';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const PDFDocument = require('pdfkit');
 import * as fs from 'fs';
 import * as path from 'path';
 
