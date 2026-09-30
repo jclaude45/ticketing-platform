@@ -306,15 +306,26 @@ export class PublicService {
       'END:VEVENT', 'END:VCALENDAR',
     ].join('\r\n');
 
-    // Attachments — PDF per ticket + ICS
-    const attachments: { filename: string; content: Buffer | string; contentType?: string }[] = [];
+    // QR codes as inline CID images (small ~10KB each, keeps email under Gmail's 102KB clip threshold)
+    // PDFs are NOT attached to email — paid ticket holders download from the success page,
+    // free ticket holders use the QR code displayed in the email body.
+    const attachments: { filename: string; content: Buffer | string; cid?: string; contentType?: string }[] = [];
     attachments.push({ filename: 'evenement.ics', content: icsContent, contentType: 'text/calendar; method=REQUEST; charset=UTF-8' });
+
+    const qrCids: { ticketId: string; serialNumber: string; cid: string }[] = [];
     for (const t of tickets) {
-      try {
-        const pdfBuf = await this.buildTicketPdf(t, event, holder.holderName, bannerUrl);
-        attachments.push({ filename: `billet-${t.serialNumber}.pdf`, content: pdfBuf });
-      } catch (err) {
-        this.logger.warn(`PDF generation failed for ticket ${t.serialNumber}: ${err?.message}`);
+      if (t.qrCode) {
+        const match = t.qrCode.match(/^data:image\/png;base64,(.+)$/);
+        if (match) {
+          const cid = `qr-${t.ticketId}`;
+          attachments.push({
+            filename: `qr-${t.serialNumber}.png`,
+            content: Buffer.from(match[1], 'base64'),
+            cid,
+            contentType: 'image/png',
+          });
+          qrCids.push({ ticketId: t.ticketId, serialNumber: t.serialNumber, cid });
+        }
       }
     }
 
@@ -332,7 +343,7 @@ export class PublicService {
              </a>
            </td></tr>
          </table>`
-      : `<p style="margin-top:20px;margin-bottom:0;font-size:13px;color:#6b7280;font-family:Arial,sans-serif;">Vos billets sont joints en pi&egrave;ce jointe (PDF).</p>`;
+      : '';
 
     await this.mailer.sendMail({
       from,
@@ -395,6 +406,24 @@ export class PublicService {
 
     ${ctaBtn}
   </td></tr>
+
+  <!-- QR codes -->
+  ${qrCids.length > 0 ? `
+  <tr><td style="padding:0 40px 28px;">
+    <p style="margin:0 0 14px;font-size:12px;color:#9ca3af;font-family:Arial,sans-serif;">
+      ${qrCids.length === 1 ? 'Votre billet' : 'Vos billets'} &mdash; pr&eacute;sentez ce QR code &agrave; l&apos;entr&eacute;e
+    </p>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+      <tr>
+        ${qrCids.map(q => `
+        <td style="text-align:center;padding-right:16px;vertical-align:top;">
+          <img src="cid:${q.cid}" width="130" height="130" alt="QR billet"
+               style="display:block;width:130px;height:130px;border-radius:8px;"/>
+          <p style="margin:6px 0 0;font-size:10px;color:#9ca3af;font-family:Arial,sans-serif;letter-spacing:0.04em;">${q.serialNumber}</p>
+        </td>`).join('')}
+      </tr>
+    </table>
+  </td></tr>` : ''}
 
   <!-- Calendar links -->
   <tr><td style="padding:0 40px 28px;">
