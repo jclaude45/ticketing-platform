@@ -260,18 +260,38 @@ export class PublicService {
   ) {
     if (!this.mailer) return;
 
-    const from = this.config.get<string>('email.from') || this.config.get<string>('email.user');
+    const from        = this.config.get<string>('email.from') || this.config.get<string>('email.user');
     const frontendUrl = this.config.get<string>('frontend.publicUrl') || 'https://zaya.live';
+    const appBase     = this.config.get<string>('APP_BASE_URL') || frontendUrl;
+
+    // Resolve banner URL to a publicly accessible absolute URL
+    let resolvedBannerUrl: string | null = null;
+    if (bannerUrl) {
+      if (bannerUrl.startsWith('/')) {
+        resolvedBannerUrl = `${appBase}${bannerUrl}`;
+      } else {
+        resolvedBannerUrl = bannerUrl.replace(/^https?:\/\/localhost(:\d+)?/, appBase);
+      }
+    }
+
+    // Date formatting
+    const startDate = new Date(event.startDate);
+    const dateStr = new Intl.DateTimeFormat('fr-FR', {
+      weekday: 'long', day: 'numeric', month: 'long',
+    }).format(startDate);
+    const timeStr = new Intl.DateTimeFormat('fr-FR', {
+      hour: '2-digit', minute: '2-digit',
+    }).format(startDate);
 
     // Calendar links
     const encodeCalDate = (d: Date) => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-    const eventEnd = event.endDate ? new Date(event.endDate) : new Date(new Date(event.startDate).getTime() + 2 * 3600000);
-    const calStart = encodeCalDate(new Date(event.startDate));
-    const calEnd   = encodeCalDate(eventEnd);
-    const calTitle    = encodeURIComponent(event.name);
-    const calLocation = encodeURIComponent(`${event.venue}, ${event.city}`);
+    const eventEnd      = event.endDate ? new Date(event.endDate) : new Date(startDate.getTime() + 2 * 3600000);
+    const calStart      = encodeCalDate(startDate);
+    const calEnd        = encodeCalDate(eventEnd);
+    const calTitle      = encodeURIComponent(event.name);
+    const calLocation   = encodeURIComponent(`${event.venue}, ${event.city}`);
     const googleCalUrl  = `https://www.google.com/calendar/render?action=TEMPLATE&text=${calTitle}&dates=${calStart}/${calEnd}&location=${calLocation}`;
-    const outlookCalUrl = `https://outlook.live.com/calendar/0/deeplink/compose?subject=${calTitle}&startdt=${new Date(event.startDate).toISOString()}&enddt=${eventEnd.toISOString()}&location=${calLocation}`;
+    const outlookCalUrl = `https://outlook.live.com/calendar/0/deeplink/compose?subject=${calTitle}&startdt=${startDate.toISOString()}&enddt=${eventEnd.toISOString()}&location=${calLocation}`;
 
     // ICS attachment (Apple Calendar)
     const icsContent = [
@@ -285,10 +305,9 @@ export class PublicService {
       'END:VEVENT', 'END:VCALENDAR',
     ].join('\r\n');
 
-    // PDF attachments + ICS (no inline QR — QR codes are in the PDF)
-    const attachments: { filename: string; content: Buffer | string; cid?: string; contentType?: string }[] = [];
+    // Attachments — PDF per ticket + ICS
+    const attachments: { filename: string; content: Buffer | string; contentType?: string }[] = [];
     attachments.push({ filename: 'evenement.ics', content: icsContent, contentType: 'text/calendar; method=REQUEST; charset=UTF-8' });
-
     for (const t of tickets) {
       try {
         const pdfBuf = await this.buildTicketPdf(t, event, holder.holderName, bannerUrl);
@@ -298,131 +317,135 @@ export class PublicService {
       }
     }
 
-    // Header info
     const uniqueCategories = [...new Set(tickets.map(t => t.templateName))];
-    const categoryLine = uniqueCategories.length === 1
-      ? uniqueCategories[0]
-      : `${tickets.length} billet${tickets.length > 1 ? 's' : ''}`;
+    const categoryLine     = uniqueCategories.length === 1 ? uniqueCategories[0] : `${tickets.length} billets`;
+    const organizerName    = organizer ? `${organizer.firstName} ${organizer.lastName}` : '';
+    const organizerEmail   = organizer?.email ?? '';
 
-    const organizerName  = organizer ? `${organizer.firstName} ${organizer.lastName}` : '';
-    const organizerEmail = organizer?.email ?? '';
-
-    const downloadBtn = reference
-      ? `<a href="${frontendUrl}/billetterie/payment/success?reference=${reference}"
-            style="display:inline-block;padding:12px 28px;background:#4f46e5;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:700;font-family:Arial,sans-serif;text-transform:uppercase;letter-spacing:0.05em;">
-            JE T&Eacute;L&Eacute;CHARGE MES BILLETS
-         </a>`
-      : `<p style="margin:0;font-size:13px;color:#6b7280;font-family:Arial,sans-serif;">Vos billets sont joints &agrave; cet email en pi&egrave;ce jointe (PDF).</p>`;
+    const ctaBtn = reference
+      ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:24px;">
+           <tr><td style="background:#4f46e5;border-radius:8px;">
+             <a href="${frontendUrl}/billetterie/payment/success?reference=${reference}"
+                style="display:inline-block;padding:13px 28px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;font-family:Arial,sans-serif;">
+               T&eacute;l&eacute;charger mes billets &rarr;
+             </a>
+           </td></tr>
+         </table>`
+      : `<p style="margin-top:20px;margin-bottom:0;font-size:13px;color:#6b7280;font-family:Arial,sans-serif;">Vos billets sont joints en pi&egrave;ce jointe (PDF).</p>`;
 
     await this.mailer.sendMail({
       from,
       to: holder.holderEmail,
-      subject: `Vos billets — ${event.name}`,
+      subject: `${event.name} — votre billet`,
       attachments,
       html: `<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>Vos billets &#8212; ${event.name}</title>
 </head>
-<body style="margin:0;padding:0;background-color:#f0f0f5;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f0f0f5">
-<tr><td align="center" style="padding:24px 16px 40px;">
+<body style="margin:0;padding:0;background:#f1f1f5;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+<tr><td align="center" style="padding:28px 16px 40px;">
 
-  <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"
-         style="max-width:600px;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,0.08);">
+<table role="presentation" width="560" cellpadding="0" cellspacing="0"
+       style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;">
 
-    ${bannerUrl ? `
-    <tr><td style="padding:0;line-height:0;font-size:0;">
-      <img src="${bannerUrl}" width="600" alt="${event.name}"
-           style="display:block;width:100%;max-width:600px;"/>
-    </td></tr>` : ''}
+  ${resolvedBannerUrl
+    ? `<tr><td style="line-height:0;font-size:0;">
+         <img src="${resolvedBannerUrl}" width="560" alt="${event.name}"
+              style="display:block;width:100%;height:auto;"/>
+       </td></tr>`
+    : `<tr><td style="background:#4f46e5;height:6px;font-size:0;line-height:0;">&nbsp;</td></tr>`
+  }
 
-    <!-- Merci -->
-    <tr><td align="center" style="padding:36px 40px 28px;">
-      <p style="margin:0 0 10px;color:#4f46e5;font-size:22px;font-weight:700;font-family:Arial,sans-serif;">Merci pour votre commande&nbsp;!</p>
-      <p style="margin:0 0 4px;color:#111827;font-size:18px;font-weight:700;font-family:Arial,sans-serif;">${event.name}</p>
-      <p style="margin:0 0 24px;color:#6b7280;font-size:14px;font-family:Arial,sans-serif;">${categoryLine}</p>
-      ${downloadBtn}
-    </td></tr>
+  <!-- Main content -->
+  <tr><td style="padding:36px 40px 28px;">
+    <p style="margin:0 0 12px;font-size:11px;font-weight:700;color:#4f46e5;font-family:Arial,sans-serif;text-transform:uppercase;letter-spacing:0.1em;">Billet confirm&eacute;</p>
+    <h1 style="margin:0 0 18px;font-size:22px;font-weight:700;color:#111827;font-family:Arial,sans-serif;line-height:1.3;">${event.name}</h1>
 
-    <!-- Divider -->
-    <tr><td style="padding:0 40px;"><div style="height:1px;background:#e5e7eb;"></div></td></tr>
+    <!-- Date + Lieu -->
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td width="50%" style="padding-right:6px;vertical-align:top;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+                 style="border:1px solid #f3f4f6;border-radius:8px;">
+            <tr><td style="padding:14px 16px;">
+              <p style="margin:0 0 5px;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#9ca3af;font-family:Arial,sans-serif;">Date &amp; heure</p>
+              <p style="margin:0;font-size:14px;font-weight:600;color:#111827;font-family:Arial,sans-serif;">${dateStr}</p>
+              <p style="margin:4px 0 0;font-size:13px;color:#6b7280;font-family:Arial,sans-serif;">${timeStr}</p>
+            </td></tr>
+          </table>
+        </td>
+        <td width="50%" style="vertical-align:top;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+                 style="border:1px solid #f3f4f6;border-radius:8px;">
+            <tr><td style="padding:14px 16px;">
+              <p style="margin:0 0 5px;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#9ca3af;font-family:Arial,sans-serif;">Lieu</p>
+              <p style="margin:0;font-size:14px;font-weight:600;color:#111827;font-family:Arial,sans-serif;">${event.venue}</p>
+              <p style="margin:4px 0 0;font-size:13px;color:#6b7280;font-family:Arial,sans-serif;">${event.city}${event.address ? ` &middot; ${event.address}` : ''}</p>
+            </td></tr>
+          </table>
+        </td>
+      </tr>
+    </table>
 
-    <!-- Informations pratiques -->
-    <tr><td style="padding:28px 40px;">
-      <p style="margin:0 0 18px;font-size:15px;font-weight:700;color:#111827;font-family:Arial,sans-serif;">Informations pratiques</p>
+    <p style="margin:16px 0 0;font-size:13px;color:#9ca3af;font-family:Arial,sans-serif;">${categoryLine}</p>
 
-      <p style="margin:0 0 5px;font-size:11px;font-weight:700;color:#374151;font-family:Arial,sans-serif;text-transform:uppercase;letter-spacing:0.06em;">Lieu de l&apos;&eacute;v&eacute;nement</p>
-      <p style="margin:0 0 3px;font-size:13px;color:#374151;font-family:Arial,sans-serif;">${event.venue}</p>
-      ${event.address ? `<p style="margin:0 0 3px;font-size:13px;color:#6b7280;font-family:Arial,sans-serif;">${event.address}</p>` : ''}
-      <p style="margin:0 0 20px;font-size:13px;color:#6b7280;font-family:Arial,sans-serif;">${event.city}</p>
+    ${ctaBtn}
+  </td></tr>
 
-      ${event.description ? `
-      <p style="margin:0 0 5px;font-size:11px;font-weight:700;color:#374151;font-family:Arial,sans-serif;text-transform:uppercase;letter-spacing:0.06em;">Message de l&apos;organisateur</p>
-      <p style="margin:0 0 20px;font-size:13px;color:#6b7280;font-family:Arial,sans-serif;line-height:1.65;">${event.description.slice(0, 400)}</p>
-      ` : ''}
+  <!-- Calendar links -->
+  <tr><td style="padding:0 40px 28px;">
+    <p style="margin:0 0 10px;font-size:12px;color:#9ca3af;font-family:Arial,sans-serif;">Ajouter &agrave; mon agenda</p>
+    <table role="presentation" cellpadding="0" cellspacing="0">
+      <tr>
+        <td style="padding-right:6px;">
+          <a href="${googleCalUrl}" style="display:inline-block;padding:8px 14px;border:1px solid #e5e7eb;border-radius:6px;color:#374151;text-decoration:none;font-size:12px;font-family:Arial,sans-serif;">Google</a>
+        </td>
+        <td style="padding-right:6px;">
+          <a href="${outlookCalUrl}" style="display:inline-block;padding:8px 14px;border:1px solid #e5e7eb;border-radius:6px;color:#374151;text-decoration:none;font-size:12px;font-family:Arial,sans-serif;">Outlook</a>
+        </td>
+        <td>
+          <span style="display:inline-block;padding:8px 14px;border:1px solid #f3f4f6;border-radius:6px;color:#d1d5db;font-size:12px;font-family:Arial,sans-serif;">Apple (.ics joint)</span>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
 
-      ${organizerEmail ? `
-      <p style="margin:0 0 20px;font-size:13px;color:#374151;font-family:Arial,sans-serif;">
-        Pour toute question&nbsp;:
-        <a href="mailto:${organizerEmail}" style="color:#4f46e5;text-decoration:none;">${organizerEmail}</a>
-      </p>
-      ` : ''}
+  <!-- Thin divider -->
+  <tr><td style="padding:0 40px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr><td style="border-top:1px solid #f3f4f6;font-size:0;line-height:0;">&nbsp;</td></tr>
+    </table>
+  </td></tr>
 
-      <p style="margin:0 0 12px;font-size:11px;font-weight:700;color:#374151;font-family:Arial,sans-serif;text-transform:uppercase;letter-spacing:0.06em;">Ajouter &agrave; mon agenda</p>
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-        <tr>
-          <td style="padding-right:8px;">
-            <a href="${googleCalUrl}"
-               style="display:inline-block;padding:9px 16px;background:#f3f4f6;border-radius:6px;color:#374151;text-decoration:none;font-size:12px;font-weight:600;font-family:Arial,sans-serif;border:1px solid #e5e7eb;">
-              G &nbsp;Google
-            </a>
-          </td>
-          <td style="padding-right:8px;">
-            <a href="${outlookCalUrl}"
-               style="display:inline-block;padding:9px 16px;background:#f3f4f6;border-radius:6px;color:#374151;text-decoration:none;font-size:12px;font-weight:600;font-family:Arial,sans-serif;border:1px solid #e5e7eb;">
-              &#128197; &nbsp;Outlook
-            </a>
-          </td>
-          <td>
-            <span style="display:inline-block;padding:9px 16px;background:#f3f4f6;border-radius:6px;color:#9ca3af;font-size:12px;font-weight:600;font-family:Arial,sans-serif;border:1px solid #e5e7eb;">
-              &#63743; &nbsp;Apple (fichier .ics joint)
-            </span>
-          </td>
-        </tr>
-      </table>
-    </td></tr>
+  <!-- Organisateur + Acheteur -->
+  <tr><td style="padding:20px 40px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        ${organizerName ? `<td style="width:50%;vertical-align:top;padding-right:16px;">
+          <p style="margin:0 0 3px;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:#d1d5db;font-family:Arial,sans-serif;">Organisateur</p>
+          <p style="margin:0;font-size:12px;color:#9ca3af;font-family:Arial,sans-serif;">${organizerName}</p>
+          ${organizerEmail ? `<p style="margin:2px 0 0;font-size:12px;color:#9ca3af;font-family:Arial,sans-serif;">${organizerEmail}</p>` : ''}
+        </td>` : ''}
+        <td style="vertical-align:top;">
+          <p style="margin:0 0 3px;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:#d1d5db;font-family:Arial,sans-serif;">Acheteur</p>
+          <p style="margin:0;font-size:12px;color:#9ca3af;font-family:Arial,sans-serif;">${holder.holderName}</p>
+          <p style="margin:2px 0 0;font-size:12px;color:#9ca3af;font-family:Arial,sans-serif;">${holder.holderEmail}</p>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
 
-    <!-- Divider -->
-    <tr><td style="padding:0 40px;"><div style="height:1px;background:#e5e7eb;"></div></td></tr>
+  <!-- Footer -->
+  <tr><td align="center" style="background:#4f46e5;padding:18px 40px;">
+    <a href="https://zaya.live" style="text-decoration:none;">
+      <p style="margin:0;font-size:13px;font-weight:700;color:#ffffff;font-family:Arial,sans-serif;letter-spacing:0.08em;">ZAYA</p>
+    </a>
+  </td></tr>
 
-    <!-- Informations légales -->
-    <tr><td style="padding:28px 40px;">
-      <p style="margin:0 0 18px;font-size:15px;font-weight:700;color:#111827;font-family:Arial,sans-serif;">Informations l&eacute;gales</p>
-
-      ${organizerName ? `
-      <p style="margin:0 0 5px;font-size:11px;font-weight:700;color:#374151;font-family:Arial,sans-serif;text-transform:uppercase;letter-spacing:0.06em;">Organisateur</p>
-      <p style="margin:0 0 18px;font-size:13px;color:#6b7280;font-family:Arial,sans-serif;">${organizerName}</p>
-      ` : ''}
-
-      <p style="margin:0 0 5px;font-size:11px;font-weight:700;color:#374151;font-family:Arial,sans-serif;text-transform:uppercase;letter-spacing:0.06em;">Acheteur</p>
-      <p style="margin:0 0 3px;font-size:13px;color:#6b7280;font-family:Arial,sans-serif;">${holder.holderName}</p>
-      <p style="margin:0;font-size:13px;color:#6b7280;font-family:Arial,sans-serif;">${holder.holderEmail}</p>
-    </td></tr>
-
-    <!-- Footer -->
-    <tr><td align="center" style="background:#4f46e5;padding:22px 40px;">
-      <p style="margin:0;color:rgba(255,255,255,0.85);font-size:12px;font-family:Arial,sans-serif;line-height:1.7;">
-        Cette solution de billetterie et d&apos;inscription en ligne est fournie par <strong style="color:#ffffff;">ZAYA</strong>.
-        Vous organisez des &eacute;v&eacute;nements&nbsp;? Sur
-        <a href="https://zaya.live" style="color:#ffffff;">zaya.live</a>,
-        c&apos;est simple, rapide et s&ucirc;r.
-      </p>
-    </td></tr>
-
-  </table>
+</table>
 </td></tr>
 </table>
 </body>
