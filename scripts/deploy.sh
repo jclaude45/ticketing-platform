@@ -354,7 +354,7 @@ check() {
 check "Backend health"             "curl -sf http://localhost:3001/api/v1/health"
 check "Frontend homepage"          "curl -sf http://localhost:3000"
 check "HTTPS redirect (80→443)"    "curl -sf -o /dev/null -w '%{http_code}' http://localhost | grep -q '301\|302'"
-check "Auth endpoint accessible"   "curl -sf -o /dev/null -w '%{http_code}' http://localhost:3001/api/v1/auth/login | grep -q '400\|405'"
+check "Auth endpoint accessible"   "curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{}' http://localhost:3001/api/v1/auth/login | grep -q '400\|401'"
 check "PostgreSQL actif"           "$COMPOSE exec -T postgres pg_isready -U ${POSTGRES_USER}"
 check "Redis actif"                "$COMPOSE exec -T redis redis-cli --no-auth-warning -a ${REDIS_PASSWORD} ping"
 
