@@ -267,14 +267,28 @@ export class PublicService {
     const frontendUrl = this.config.get<string>('frontend.publicUrl') || 'https://zaya.live';
     const appBase     = this.config.get<string>('APP_BASE_URL') || frontendUrl;
 
-    // Resolve banner URL to a publicly accessible absolute URL
-    let resolvedBannerUrl: string | null = null;
-    if (bannerUrl) {
-      if (bannerUrl.startsWith('/')) {
-        resolvedBannerUrl = `${appBase}${bannerUrl}`;
-      } else {
-        resolvedBannerUrl = bannerUrl.replace(/^https?:\/\/localhost(:\d+)?/, appBase);
+    // Banner: banners are often stored as base64 data URIs, which Gmail blocks and which
+    // push the HTML past its 102KB clip limit. Send the image as a downscaled CID attachment
+    // (attachments don't count toward the clip limit); fall back to a public URL otherwise.
+    let bannerSrc: string | null = null;
+    let bannerAttachment: { filename: string; content: Buffer; cid: string; contentType: string } | null = null;
+    const bannerSource = this.readBannerSource(bannerUrl);
+    if (bannerSource) {
+      try {
+        const content = await sharp(bannerSource)
+          .resize({ width: 1120, withoutEnlargement: true })
+          .jpeg({ quality: 75 })
+          .toBuffer();
+        bannerAttachment = { filename: 'banniere.jpg', content, cid: 'event-banner', contentType: 'image/jpeg' };
+        bannerSrc = 'cid:event-banner';
+      } catch (err) {
+        this.logger.warn(`Email banner failed: ${err?.message}`);
       }
+    }
+    if (!bannerSrc && bannerUrl && !bannerUrl.startsWith('data:')) {
+      bannerSrc = bannerUrl.startsWith('/')
+        ? `${appBase}${bannerUrl}`
+        : bannerUrl.replace(/^https?:\/\/localhost(:\d+)?/, appBase);
     }
 
     // Date formatting
@@ -312,6 +326,7 @@ export class PublicService {
     // which keeps each attachment around 15-20KB and the email under Gmail's clip threshold.
     const attachments: { filename: string; content: Buffer | string; cid?: string; contentType?: string }[] = [];
     attachments.push({ filename: 'evenement.ics', content: icsContent, contentType: 'text/calendar; method=REQUEST; charset=UTF-8' });
+    if (bannerAttachment) attachments.push(bannerAttachment);
 
     for (const t of tickets) {
       try {
@@ -360,9 +375,9 @@ export class PublicService {
 <table role="presentation" width="560" cellpadding="0" cellspacing="0"
        style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;">
 
-  ${resolvedBannerUrl
+  ${bannerSrc
     ? `<tr><td style="line-height:0;font-size:0;">
-         <img src="${resolvedBannerUrl}" width="560" alt="${event.name}"
+         <img src="${bannerSrc}" width="560" alt="${event.name}"
               style="display:block;width:100%;height:auto;"/>
        </td></tr>`
     : `<tr><td style="background:#4f46e5;height:6px;font-size:0;line-height:0;">&nbsp;</td></tr>`
@@ -470,6 +485,32 @@ export class PublicService {
     });
   }
 
+  /** Raw banner bytes from a base64 data URI or a file under public/, or null. */
+  private readBannerSource(bannerUrl?: string | null): Buffer | null {
+    if (!bannerUrl) return null;
+    try {
+      const dataMatch = bannerUrl.match(/^data:image\/[a-z+]+;base64,(.+)$/i);
+      if (dataMatch) return Buffer.from(dataMatch[1], 'base64');
+
+      const appBase = this.config.get<string>('APP_BASE_URL') || '';
+      let rel: string | null = null;
+      if (bannerUrl.startsWith('/')) {
+        rel = bannerUrl;
+      } else if (appBase && bannerUrl.startsWith(appBase)) {
+        rel = bannerUrl.slice(appBase.length);
+      } else if (/^https?:\/\/localhost:\d+/.test(bannerUrl)) {
+        rel = bannerUrl.replace(/^https?:\/\/localhost:\d+/, '');
+      }
+      if (rel) {
+        const localPath = path.join(process.cwd(), 'public', rel);
+        if (fs.existsSync(localPath)) return fs.readFileSync(localPath);
+      }
+    } catch (err) {
+      this.logger.warn(`Banner read failed: ${err?.message}`);
+    }
+    return null;
+  }
+
   async buildTicketPdf(
     ticket: { ticketId?: string; serialNumber: string; templateName: string; price: number; currency: string; qrCode: string | null },
     event: { name: string; startDate: Date; endDate?: Date | null; city: string; venue: string; address?: string | null },
@@ -490,28 +531,15 @@ export class PublicService {
       qrModules = QRCode.create(qrContent, { errorCorrectionLevel: 'M' }).modules;
     }
 
-    // Event thumbnail: read the local upload and downscale it (~10KB) so the PDF stays light
+    // Event thumbnail, downscaled (~10KB) so the PDF stays light
     let thumbBuffer: Buffer | null = null;
-    if (bannerUrl) {
+    const bannerSource = this.readBannerSource(bannerUrl);
+    if (bannerSource) {
       try {
-        const appBase = this.config.get<string>('APP_BASE_URL') || '';
-        let rel: string | null = null;
-        if (bannerUrl.startsWith('/')) {
-          rel = bannerUrl;
-        } else if (appBase && bannerUrl.startsWith(appBase)) {
-          rel = bannerUrl.slice(appBase.length);
-        } else if (/^https?:\/\/localhost:\d+/.test(bannerUrl)) {
-          rel = bannerUrl.replace(/^https?:\/\/localhost:\d+/, '');
-        }
-        if (rel) {
-          const localPath = path.join(process.cwd(), 'public', rel);
-          if (fs.existsSync(localPath)) {
-            thumbBuffer = await sharp(localPath)
-              .resize(240, 240, { fit: 'cover' })
-              .jpeg({ quality: 80 })
-              .toBuffer();
-          }
-        }
+        thumbBuffer = await sharp(bannerSource)
+          .resize(240, 240, { fit: 'cover' })
+          .jpeg({ quality: 80 })
+          .toBuffer();
       } catch (err) {
         this.logger.warn(`Ticket thumbnail failed: ${err?.message}`);
       }
