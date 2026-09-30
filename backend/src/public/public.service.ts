@@ -14,6 +14,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as sharp from 'sharp';
 
+/** The "Z" of the ZAYA logo, copied from frontend/public/zaya-logo.svg. */
+const ZAYA_LOGO_Z_PATH =
+  'M751.532 248.66L700.694 399.422L700.579 399.762H508.587L751.413 644.335L751.559 644.481V752.123H643.915' +
+  'L643.769 751.976L494.269 601.812L450.015 751.765L449.909 752.123H249L249.213 751.469L298.298 600.707' +
+  'L298.41 600.361H492.824L249.334 355.788L249.089 355.542L249.234 355.227L298.319 248.291L298.453 248' +
+  'H751.755L751.532 248.66Z';
+
 @Injectable()
 export class PublicService {
   private readonly logger = new Logger(PublicService.name);
@@ -559,19 +566,18 @@ export class PublicService {
       const fmtDate = (d: Date) => new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(d);
       const fmtTime = (d: Date) => new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' }).format(d);
 
-      // ── Logo ──────────────────────────────────────────────────────────────
-      const bars = [
-        { color: '#1f8fc6', h: 26 }, { color: '#8cc152', h: 34 }, { color: '#f6bb2a', h: 40 },
-        { color: '#f5812a', h: 34 }, { color: '#d9342b', h: 26 },
-      ];
+      // ── Logo (same mark as frontend/public/zaya-logo.svg, 1000×1000 viewBox) ──
+      const LOGO = 40;
       const LOGO_Y = 50;
-      bars.forEach((b, i) => {
-        doc.fillColor(b.color).rect(M + i * 8, LOGO_Y + (40 - b.h) / 2, 4, b.h).fill();
-      });
+      doc.fillColor('#5C37FF').roundedRect(M, LOGO_Y, LOGO, LOGO, 9).fill();
+      doc.save();
+      doc.translate(M, LOGO_Y).scale(LOGO / 1000);
+      doc.path(ZAYA_LOGO_Z_PATH).fill('#FEFFFF');
+      doc.restore();
       doc.fillColor('#111111').font('Helvetica-Bold').fontSize(22)
-        .text('ZAYA', M + bars.length * 8 + 6, LOGO_Y + 10, { lineBreak: false });
+        .text('ZAYA', M + LOGO + 12, LOGO_Y + 10, { lineBreak: false });
       doc.fillColor('#111111').font('Helvetica-Bold').fontSize(11)
-        .text('www.zaya.live', M + bars.length * 8 + 6, LOGO_Y + 56, { lineBreak: false });
+        .text('www.zaya.live', M, LOGO_Y + 56, { lineBreak: false });
 
       // ── QR code (top-right, vector) ───────────────────────────────────────
       const QR = 120;
