@@ -306,14 +306,16 @@ export class PublicService {
       'END:VEVENT', 'END:VCALENDAR',
     ].join('\r\n');
 
-    // QR codes as inline CID images (small ~10KB each, keeps email under Gmail's 102KB clip threshold)
-    // PDFs are NOT attached to email — paid ticket holders download from the success page,
-    // free ticket holders use the QR code displayed in the email body.
+    // Strategy to stay under Gmail's 102KB clip threshold:
+    // - PDFs are attached WITHOUT the QR code (text+design only, ~15KB)
+    // - QR codes are attached as inline CID images (original PNG, ~8KB each)
+    // - Total MIME: ~30-50KB regardless of ticket count
     const attachments: { filename: string; content: Buffer | string; cid?: string; contentType?: string }[] = [];
     attachments.push({ filename: 'evenement.ics', content: icsContent, contentType: 'text/calendar; method=REQUEST; charset=UTF-8' });
 
     const qrCids: { ticketId: string; serialNumber: string; cid: string }[] = [];
     for (const t of tickets) {
+      // QR code as inline CID image (original PNG, tiny compared to PDF-decoded version)
       if (t.qrCode) {
         const match = t.qrCode.match(/^data:image\/png;base64,(.+)$/);
         if (match) {
@@ -326,6 +328,19 @@ export class PublicService {
           });
           qrCids.push({ ticketId: t.ticketId, serialNumber: t.serialNumber, cid });
         }
+      }
+      // PDF without QR code (PDFKit decodes PNG to raw pixels which balloons PDF size;
+      // removing QR from PDF keeps it ~15KB vs ~100KB+ with QR)
+      try {
+        const pdfBuf = await this.buildTicketPdf(
+          { ...t, qrCode: null },
+          event,
+          holder.holderName,
+          bannerUrl,
+        );
+        attachments.push({ filename: `billet-${t.serialNumber}.pdf`, content: pdfBuf });
+      } catch (err) {
+        this.logger.warn(`PDF generation failed for ticket ${t.serialNumber}: ${err?.message}`);
       }
     }
 
