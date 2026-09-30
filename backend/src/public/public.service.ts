@@ -9,8 +9,10 @@ import * as nodemailer from 'nodemailer';
 import { ConfigService } from '@nestjs/config';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const PDFDocument = require('pdfkit');
+import * as QRCode from 'qrcode';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as sharp from 'sharp';
 
 @Injectable()
 export class PublicService {
@@ -306,38 +308,18 @@ export class PublicService {
       'END:VEVENT', 'END:VCALENDAR',
     ].join('\r\n');
 
-    // Strategy to stay under Gmail's 102KB clip threshold:
-    // - PDFs are attached WITHOUT the QR code (text+design only, ~15KB)
-    // - QR codes are attached as inline CID images (original PNG, ~8KB each)
-    // - Total MIME: ~30-50KB regardless of ticket count
+    // The QR code lives only in the PDF, drawn as vector shapes (no embedded PNG),
+    // which keeps each attachment around 15-20KB and the email under Gmail's clip threshold.
     const attachments: { filename: string; content: Buffer | string; cid?: string; contentType?: string }[] = [];
     attachments.push({ filename: 'evenement.ics', content: icsContent, contentType: 'text/calendar; method=REQUEST; charset=UTF-8' });
 
-    const qrCids: { ticketId: string; serialNumber: string; cid: string }[] = [];
     for (const t of tickets) {
-      // QR code as inline CID image (original PNG, tiny compared to PDF-decoded version)
-      if (t.qrCode) {
-        const match = t.qrCode.match(/^data:image\/png;base64,(.+)$/);
-        if (match) {
-          const cid = `qr-${t.ticketId}`;
-          attachments.push({
-            filename: `qr-${t.serialNumber}.png`,
-            content: Buffer.from(match[1], 'base64'),
-            cid,
-            contentType: 'image/png',
-          });
-          qrCids.push({ ticketId: t.ticketId, serialNumber: t.serialNumber, cid });
-        }
-      }
-      // PDF without QR code (PDFKit decodes PNG to raw pixels which balloons PDF size;
-      // removing QR from PDF keeps it ~15KB vs ~100KB+ with QR)
       try {
-        const pdfBuf = await this.buildTicketPdf(
-          { ...t, qrCode: null },
-          event,
-          holder.holderName,
-          bannerUrl,
-        );
+        const pdfBuf = await this.buildTicketPdf(t, event, holder.holderName, bannerUrl, {
+          holderEmail: holder.holderEmail,
+          purchasedAt: new Date(),
+          organizer,
+        });
         attachments.push({ filename: `billet-${t.serialNumber}.pdf`, content: pdfBuf });
       } catch (err) {
         this.logger.warn(`PDF generation failed for ticket ${t.serialNumber}: ${err?.message}`);
@@ -422,23 +404,13 @@ export class PublicService {
     ${ctaBtn}
   </td></tr>
 
-  <!-- QR codes -->
-  ${qrCids.length > 0 ? `
+  <!-- Ticket reminder -->
   <tr><td style="padding:0 40px 28px;">
-    <p style="margin:0 0 14px;font-size:12px;color:#9ca3af;font-family:Arial,sans-serif;">
-      ${qrCids.length === 1 ? 'Votre billet' : 'Vos billets'} &mdash; pr&eacute;sentez ce QR code &agrave; l&apos;entr&eacute;e
+    <p style="margin:0;font-size:13px;color:#374151;font-family:Arial,sans-serif;line-height:1.5;">
+      ${tickets.length === 1 ? 'Votre billet est joint' : 'Vos billets sont joints'} &agrave; cet email au format PDF.
+      Pr&eacute;sentez le QR code &agrave; l&apos;entr&eacute;e, sur votre t&eacute;l&eacute;phone ou imprim&eacute;.
     </p>
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-      <tr>
-        ${qrCids.map(q => `
-        <td style="text-align:center;padding-right:16px;vertical-align:top;">
-          <img src="cid:${q.cid}" width="130" height="130" alt="QR billet"
-               style="display:block;width:130px;height:130px;border-radius:8px;"/>
-          <p style="margin:6px 0 0;font-size:10px;color:#9ca3af;font-family:Arial,sans-serif;letter-spacing:0.04em;">${q.serialNumber}</p>
-        </td>`).join('')}
-      </tr>
-    </table>
-  </td></tr>` : ''}
+  </td></tr>
 
   <!-- Calendar links -->
   <tr><td style="padding:0 40px 28px;">
@@ -499,128 +471,96 @@ export class PublicService {
   }
 
   async buildTicketPdf(
-    ticket: { serialNumber: string; templateName: string; price: number; currency: string; qrCode: string | null },
-    event: { name: string; startDate: Date; endDate?: Date | null; city: string; venue: string },
+    ticket: { ticketId?: string; serialNumber: string; templateName: string; price: number; currency: string; qrCode: string | null },
+    event: { name: string; startDate: Date; endDate?: Date | null; city: string; venue: string; address?: string | null },
     holderName: string,
     bannerUrl?: string | null,
+    extra?: {
+      holderEmail?: string | null;
+      purchasedAt?: Date | null;
+      organizer?: { firstName: string; lastName: string; email?: string | null } | null;
+    },
   ): Promise<Buffer> {
-    let bannerBuffer: Buffer | null = null;
+    // QR drawn as vector modules (a few KB) instead of an embedded PNG, which
+    // PDFKit decodes to raw pixels (~100KB) and pushes the email past Gmail's clip limit.
+    // Content must match QrcodeService.generateSignedQRCode (V2 compact format).
+    let qrModules: { size: number; data: Uint8Array } | null = null;
+    if (ticket.ticketId) {
+      const qrContent = JSON.stringify({ id: ticket.ticketId, sn: ticket.serialNumber, v: '2' });
+      qrModules = QRCode.create(qrContent, { errorCorrectionLevel: 'M' }).modules;
+    }
+
+    // Event thumbnail: read the local upload and downscale it (~10KB) so the PDF stays light
+    let thumbBuffer: Buffer | null = null;
     if (bannerUrl) {
       try {
         const appBase = this.config.get<string>('APP_BASE_URL') || '';
         let rel: string | null = null;
-        if (appBase && bannerUrl.startsWith(appBase)) {
+        if (bannerUrl.startsWith('/')) {
+          rel = bannerUrl;
+        } else if (appBase && bannerUrl.startsWith(appBase)) {
           rel = bannerUrl.slice(appBase.length);
         } else if (/^https?:\/\/localhost:\d+/.test(bannerUrl)) {
           rel = bannerUrl.replace(/^https?:\/\/localhost:\d+/, '');
         }
         if (rel) {
           const localPath = path.join(process.cwd(), 'public', rel);
-          if (fs.existsSync(localPath)) bannerBuffer = fs.readFileSync(localPath);
+          if (fs.existsSync(localPath)) {
+            thumbBuffer = await sharp(localPath)
+              .resize(240, 240, { fit: 'cover' })
+              .jpeg({ quality: 80 })
+              .toBuffer();
+          }
         }
-      } catch (_) { /* ignore */ }
+      } catch (err) {
+        this.logger.warn(`Ticket thumbnail failed: ${err?.message}`);
+      }
     }
 
     return new Promise((resolve, reject) => {
-      const W = 360;
-      const H = 500;
-      const doc = new PDFDocument({ size: [W, H], margin: 0, info: { Title: `Billet — ${event.name}`, Author: 'ZAYA' } });
+      const W = 595.28;   // A4
+      const M = 56;       // page margin
+      const CW = W - M * 2;
+      const doc = new PDFDocument({ size: 'A4', margin: 0, info: { Title: `Billet — ${event.name}`, Author: 'ZAYA' } });
       const chunks: Buffer[] = [];
       doc.on('data', (c: Buffer) => chunks.push(c));
       doc.on('end',  () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      const PAD   = 22;
-      const PERF  = 262;      // Y of perforation line
-      const IMG   = 88;       // thumbnail size
       const startDate = new Date(event.startDate);
+      const fmtDate = (d: Date) => new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(d);
+      const fmtTime = (d: Date) => new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' }).format(d);
 
-      const dateLabel = new Intl.DateTimeFormat('fr-FR', {
-        day: 'numeric', month: 'long', year: 'numeric',
-      }).format(startDate);
-      const timeLabel = new Intl.DateTimeFormat('fr-FR', {
-        weekday: 'short', hour: '2-digit', minute: '2-digit',
-      }).format(startDate);
+      // ── Logo ──────────────────────────────────────────────────────────────
+      const bars = [
+        { color: '#1f8fc6', h: 26 }, { color: '#8cc152', h: 34 }, { color: '#f6bb2a', h: 40 },
+        { color: '#f5812a', h: 34 }, { color: '#d9342b', h: 26 },
+      ];
+      const LOGO_Y = 50;
+      bars.forEach((b, i) => {
+        doc.fillColor(b.color).rect(M + i * 8, LOGO_Y + (40 - b.h) / 2, 4, b.h).fill();
+      });
+      doc.fillColor('#111111').font('Helvetica-Bold').fontSize(22)
+        .text('ZAYA', M + bars.length * 8 + 6, LOGO_Y + 10, { lineBreak: false });
+      doc.fillColor('#111111').font('Helvetica-Bold').fontSize(11)
+        .text('www.zaya.live', M + bars.length * 8 + 6, LOGO_Y + 56, { lineBreak: false });
 
-      // ── Background ────────────────────────────────────────────────────────
-      doc.fillColor('#ffffff').rect(0, 0, W, H).fill();
-
-      // ── Event thumbnail (top-left) ────────────────────────────────────────
-      let imgDrawn = false;
-      if (bannerBuffer) {
-        doc.save();
-        try {
-          doc.roundedRect(PAD, PAD, IMG, IMG, 8).clip();
-          doc.image(bannerBuffer, PAD, PAD, { cover: [IMG, IMG] });
-          imgDrawn = true;
-        } catch (_) { /* fall through to placeholder */ }
-        doc.restore(); // always balance save/restore
-      }
-      if (!imgDrawn) {
-        doc.fillColor('#e5e7eb').roundedRect(PAD, PAD, IMG, IMG, 8).fill();
-        doc.fillColor('#a5b4fc').fontSize(28).font('Helvetica-Bold')
-          .text('Z', PAD, PAD + 26, { width: IMG, align: 'center' });
-      }
-
-      // ── Event name + holder (right of thumbnail) ──────────────────────────
-      const TX = PAD + IMG + 16;
-      const TW = W - TX - PAD;
-
-      doc.fillColor('#111111').fontSize(16).font('Helvetica-Bold')
-        .text(event.name, TX, PAD, { width: TW, lineGap: 2, height: 42, ellipsis: true });
-
-      doc.fillColor('#999999').fontSize(8).font('Helvetica')
-        .text('Member Name', TX, 76, { characterSpacing: 0.5 });
-      doc.fillColor('#222222').fontSize(11).font('Helvetica-Bold')
-        .text(holderName, TX, 89, { width: TW });
-
-      // ── Info grid ─────────────────────────────────────────────────────────
-      const GY   = PAD + IMG + 20;   // y ≈ 130
-      const GCW  = (W - PAD * 2) / 2; // column width ≈ 158
-
-      // Thin separator before grid
-      doc.strokeColor('#e5e7eb').lineWidth(0.5)
-        .moveTo(PAD, GY - 8).lineTo(W - PAD, GY - 8).stroke();
-
-      // Row 1 — Date | Time
-      doc.fillColor('#999999').fontSize(8).font('Helvetica')
-        .text('Date', PAD, GY, { characterSpacing: 0.4 });
-      doc.fillColor('#999999').fontSize(8).font('Helvetica')
-        .text('Time', PAD + GCW, GY, { characterSpacing: 0.4 });
-      doc.fillColor('#111111').fontSize(11).font('Helvetica-Bold')
-        .text(dateLabel, PAD, GY + 13, { width: GCW - 8 });
-      doc.fillColor('#111111').fontSize(11).font('Helvetica-Bold')
-        .text(timeLabel, PAD + GCW, GY + 13, { width: GCW - 8 });
-
-      // Row 2 — Category | Venue
-      const GY2 = GY + 48;
-      doc.fillColor('#999999').fontSize(8).font('Helvetica')
-        .text('Admit', PAD, GY2, { characterSpacing: 0.4 });
-      doc.fillColor('#999999').fontSize(8).font('Helvetica')
-        .text('Venue', PAD + GCW, GY2, { characterSpacing: 0.4 });
-      doc.fillColor('#111111').fontSize(11).font('Helvetica-Bold')
-        .text(ticket.templateName, PAD, GY2 + 13, { width: GCW - 8 });
-      doc.fillColor('#111111').fontSize(11).font('Helvetica-Bold')
-        .text(`${event.venue}, ${event.city}`, PAD + GCW, GY2 + 13, { width: GCW - 8, lineGap: 1 });
-
-      // ── Perforation ───────────────────────────────────────────────────────
-      // Half-circle notches
-      doc.fillColor('#f0f0f0').circle(0, PERF, 13).fill();
-      doc.fillColor('#f0f0f0').circle(W, PERF, 13).fill();
-      // Dashed line
-      doc.strokeColor('#cccccc').lineWidth(1)
-        .dash(5, { space: 4 })
-        .moveTo(18, PERF).lineTo(W - 18, PERF)
-        .stroke().undash();
-
-      // ── Bottom section (QR) ───────────────────────────────────────────────
-      doc.fillColor('#f7f7f7').rect(0, PERF + 1, W, H - PERF - 1).fill();
-
-      const QR  = 162;
-      const QRX = (W - QR) / 2;
-      const QRY = PERF + 28;
-
-      if (ticket.qrCode) {
+      // ── QR code (top-right, vector) ───────────────────────────────────────
+      const QR = 120;
+      const QRX = W - M - QR;
+      const QRY = 140;
+      if (qrModules) {
+        const cell = QR / qrModules.size;
+        for (let row = 0; row < qrModules.size; row++) {
+          for (let col = 0; col < qrModules.size; col++) {
+            if (qrModules.data[row * qrModules.size + col]) {
+              // Slight overlap avoids hairline gaps between modules in some viewers
+              doc.rect(QRX + col * cell, QRY + row * cell, cell + 0.05, cell + 0.05);
+            }
+          }
+        }
+        doc.fillColor('#000000').fill();
+      } else if (ticket.qrCode) {
         const match = ticket.qrCode.match(/^data:image\/png;base64,(.+)$/);
         if (match) {
           try {
@@ -629,10 +569,70 @@ export class PublicService {
         }
       }
 
-      doc.fillColor('#333333').fontSize(9).font('Helvetica-Bold')
-        .text(`BOOKING ID  -  ${ticket.serialNumber}`, 0, QRY + QR + 14, {
-          width: W, align: 'center', characterSpacing: 0.8,
+      // ── Thumbnail + title ─────────────────────────────────────────────────
+      const THUMB = 100;
+      const THUMB_Y = QRY + (QR - THUMB) / 2;
+      let titleX = M;
+      if (thumbBuffer) {
+        doc.save();
+        try {
+          doc.roundedRect(M, THUMB_Y, THUMB, THUMB, 8).clip();
+          doc.image(thumbBuffer, M, THUMB_Y, { width: THUMB, height: THUMB });
+          titleX = M + THUMB + 18;
+        } catch (_) { /* no thumbnail */ }
+        doc.restore(); // always balance save/restore
+      }
+      const titleW = QRX - titleX - 20;
+      doc.fillColor('#111111').font('Helvetica-Bold').fontSize(20)
+        .text(`Billet ${ticket.serialNumber}`, titleX, THUMB_Y + 14, { width: titleW });
+      doc.fillColor('#555555').font('Helvetica').fontSize(11)
+        .text(event.name, titleX, doc.y + 6, { width: titleW, height: 28, ellipsis: true });
+      doc.fillColor('#222222').font('Helvetica').fontSize(11)
+        .text(`Réservation : ${fmtDate(extra?.purchasedAt ? new Date(extra.purchasedAt) : new Date())}`, titleX, doc.y + 6, { width: titleW });
+
+      // ── Info table ────────────────────────────────────────────────────────
+      const organizerName = extra?.organizer ? `${extra.organizer.firstName} ${extra.organizer.lastName}` : '—';
+      const priceLabel = ticket.price > 0 ? `${Number(ticket.price).toFixed(2)} ${ticket.currency}` : 'Gratuit';
+      const place = [event.venue, event.address, event.city].filter(Boolean).join(', ');
+      const rows: [string, string][][] = [
+        [['Événement', event.name],        ['Prix', priceLabel]],
+        [['Lieu', place],                   ['Date et heure', `${fmtDate(startDate)}\nà ${fmtTime(startDate)}`]],
+        [['Participant', holderName],       ['Catégorie', ticket.templateName]],
+        [['Contact', extra?.holderEmail || '—'], ['Organisateur', organizerName]],
+      ];
+
+      const PAD = 12;
+      const COL = CW / 2;
+      const TW = COL - PAD * 2;
+      let y = 300;
+      doc.lineWidth(0.75).strokeColor('#c8c8c8');
+      for (const row of rows) {
+        const cellH = (label: string, value: string) =>
+          doc.font('Helvetica-Bold').fontSize(11).heightOfString(label, { width: TW }) + 6 +
+          doc.font('Helvetica').fontSize(11).heightOfString(value, { width: TW, lineGap: 4 });
+        const h = Math.max(...row.map(([l, v]) => cellH(l, v))) + PAD * 2;
+
+        row.forEach(([label, value], i) => {
+          const x = M + i * COL;
+          doc.rect(x, y, COL, h).stroke();
+          doc.fillColor('#111111').font('Helvetica-Bold').fontSize(11).text(label, x + PAD, y + PAD, { width: TW });
+          doc.fillColor('#222222').font('Helvetica').fontSize(11).text(value, x + PAD, doc.y + 6, { width: TW, lineGap: 4 });
         });
+        y += h;
+      }
+
+      // ── Legal footer ──────────────────────────────────────────────────────
+      const orgLine = extra?.organizer
+        ? `L'organisateur de cet événement et vendeur des billets est : ${organizerName}${extra.organizer.email ? `, adresse e-mail : ${extra.organizer.email}` : ''}.`
+        : null;
+      doc.fillColor('#333333').font('Helvetica').fontSize(8.5);
+      let fy = y + 28;
+      if (orgLine) {
+        doc.text(orgLine, M, fy, { width: CW, lineGap: 3 });
+        fy = doc.y + 8;
+      }
+      doc.text('Ce billet est personnel. Présentez le QR code à l\'entrée : il ne peut être scanné qu\'une seule fois.', M, fy, { width: CW, lineGap: 3 });
+      doc.text('Ce billet n\'est pas une facture. L\'émission de la facture relève de l\'organisateur de l\'événement, vendeur des billets.', M, doc.y + 8, { width: CW, lineGap: 3 });
 
       doc.end();
     });

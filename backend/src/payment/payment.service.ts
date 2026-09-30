@@ -186,11 +186,18 @@ export class PaymentService {
 
     const event = await this.prisma.event.findUnique({
       where: { id: payment.eventId },
-      select: { name: true, startDate: true, endDate: true, city: true, venue: true, bannerUrl: true },
+      select: {
+        name: true, startDate: true, endDate: true, city: true, venue: true, address: true, bannerUrl: true,
+        organizer: { select: { firstName: true, lastName: true, email: true } },
+      },
     });
     if (!event) throw new Error('Événement introuvable');
 
-    const buffer = await this.publicService.buildTicketPdf(ticket, event, payment.holderName, (event as any).bannerUrl);
+    const buffer = await this.publicService.buildTicketPdf(ticket, event, payment.holderName, event.bannerUrl, {
+      holderEmail: payment.holderEmail,
+      purchasedAt: payment.createdAt,
+      organizer: event.organizer,
+    });
     return { buffer, serialNumber: ticket.serialNumber };
   }
 
