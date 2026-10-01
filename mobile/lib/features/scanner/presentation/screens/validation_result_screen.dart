@@ -1,325 +1,100 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 
+import '../../../../core/constants/app_constants.dart';
 import '../../../../core/constants/colors.dart';
+import '../../../../core/utils/date_utils.dart';
+import '../../../../shared/widgets/zc_result.dart';
 import '../../domain/entities/validation_result.dart';
-import '../widgets/fraudulent_ticket_card.dart';
-import '../widgets/invalid_qr_card.dart';
-import '../widgets/used_ticket_card.dart';
-import '../widgets/valid_ticket_card.dart';
 
-class ValidationResultScreen extends StatefulWidget {
+/// Ticket scan result: valid, already used, fraudulent or not a ticket. Back to the
+/// scanner by itself after a few seconds, or on a tap.
+class ValidationResultScreen extends StatelessWidget {
   final ValidationResult result;
 
   const ValidationResultScreen({super.key, required this.result});
 
   @override
-  State<ValidationResultScreen> createState() => _ValidationResultScreenState();
-}
-
-class _ValidationResultScreenState extends State<ValidationResultScreen>
-    with TickerProviderStateMixin {
-  late AnimationController _bgController;
-  late AnimationController _countdownController;
-  late Animation<double> _bgOpacity;
-  Timer? _autoReturnTimer;
-  int _countdownSeconds = 3;
-
-  @override
-  void initState() {
-    super.initState();
-
-    _bgController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 300),
-    );
-    _countdownController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 3),
-    );
-
-    _bgOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _bgController, curve: Curves.easeIn),
-    );
-
-    _bgController.forward();
-    _countdownController.forward();
-
-    // Countdown timer
-    _autoReturnTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      setState(() => _countdownSeconds--);
-      if (_countdownSeconds <= 0) {
-        timer.cancel();
-        _returnToScanner();
-      }
-    });
-
-    // Set status bar to match result
-    _setSystemUI();
-  }
-
-  void _setSystemUI() {
-    Color statusColor;
-    if (widget.result.isValid) {
-      statusColor = AppColors.validBackground;
-    } else if (widget.result.isUsed) {
-      statusColor = AppColors.usedBackground;
-    } else {
-      statusColor = AppColors.fraudBackground;
-    }
-
-    SystemChrome.setSystemUIOverlayStyle(
-      const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.light,
-      ),
-    );
-  }
-
-  void _returnToScanner() {
-    if (!mounted) return;
-    Navigator.pop(context);
-  }
-
-  @override
-  void dispose() {
-    _autoReturnTimer?.cancel();
-    _bgController.dispose();
-    _countdownController.dispose();
-    super.dispose();
-  }
-
-  // Determine colors and gradient based on result
-  Gradient get _backgroundGradient {
-    if (widget.result.isValid) {
-      return const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Color(0xFF001A0A), Color(0xFF003319), Color(0xFF001A0A)],
-      );
-    } else if (widget.result.isUsed) {
-      return const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Color(0xFF1A0005), Color(0xFF33000D), Color(0xFF1A0005)],
-      );
-    } else if (widget.result.isFraudulent) {
-      return const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Color(0xFF1A0800), Color(0xFF331500), Color(0xFF1A0800)],
-      );
-    } else {
-      // invalid QR / not found
-      return const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Color(0xFF000A1A), Color(0xFF001533), Color(0xFF000A1A)],
-      );
-    }
-  }
-
-  Color get _accentColor {
-    if (widget.result.isValid) return AppColors.validGreen;
-    if (widget.result.isUsed) return AppColors.usedRed;
-    if (widget.result.isFraudulent) return AppColors.fraudOrange;
-    return const Color(0xFF448AFF); // blue for invalid QR
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: _returnToScanner,
-      child: Scaffold(
-        backgroundColor: Colors.black,
-        body: FadeTransition(
-          opacity: _bgOpacity,
-          child: Container(
-            decoration: BoxDecoration(gradient: _backgroundGradient),
-            child: SafeArea(
-              child: Stack(
-                children: [
-                  // Glow effect background
-                  Positioned(
-                    top: -100,
-                    left: 0,
-                    right: 0,
-                    child: Container(
-                      height: 400,
-                      decoration: BoxDecoration(
-                        gradient: RadialGradient(
-                          colors: [
-                            _accentColor.withOpacity(0.12),
-                            Colors.transparent,
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+    final r = result;
+    final serial = r.serialNumber;
+    final shortCode = r.ticketCode.length > 40 ? '${r.ticketCode.substring(0, 40)}…' : r.ticketCode;
 
-                  // Main content
-                  SingleChildScrollView(
-                    physics: const NeverScrollableScrollPhysics(),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minHeight: MediaQuery.of(context).size.height -
-                            MediaQuery.of(context).padding.top -
-                            MediaQuery.of(context).padding.bottom,
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 20),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            // Result card
-                            _buildResultWidget(),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // Top bar with close + countdown
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: _buildTopBar(),
-                  ),
-
-                  // Bottom tap hint
-                  Positioned(
-                    bottom: 24,
-                    left: 0,
-                    right: 0,
-                    child: Column(
-                      children: [
-                        // Countdown progress
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 48),
-                          child: AnimatedBuilder(
-                            animation: _countdownController,
-                            builder: (_, __) => ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: LinearProgressIndicator(
-                                value: 1 - _countdownController.value,
-                                backgroundColor:
-                                    Colors.white.withOpacity(0.1),
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  _accentColor.withOpacity(0.6),
-                                ),
-                                minHeight: 3,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'Appuyez pour scanner le prochain ticket  •  $_countdownSeconds',
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            color: Colors.white.withOpacity(0.4),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildResultWidget() {
-    if (widget.result.isValid) {
-      return ValidTicketCard(result: widget.result);
-    } else if (widget.result.isUsed) {
-      return UsedTicketCard(result: widget.result);
-    } else if (widget.result.isFraudulent) {
-      return FraudulentTicketCard(result: widget.result);
-    } else {
-      return InvalidQrCard(result: widget.result);
-    }
-  }
-
-  Widget _buildTopBar() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Status indicator
-          Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: _accentColor.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: _accentColor.withOpacity(0.3),
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 7,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    color: _accentColor,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  widget.result.isValid
-                      ? 'VALIDE'
-                      : widget.result.isUsed
-                          ? 'UTILISÉ'
-                          : widget.result.isFraudulent
-                              ? 'FRAUDE'
-                              : 'ERREUR',
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    color: _accentColor,
-                    letterSpacing: 1,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Close button
-          GestureDetector(
-            onTap: _returnToScanner,
-            child: Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(
-                Icons.close_rounded,
-                color: Colors.white54,
-                size: 20,
-              ),
-            ),
-          ),
+    if (r.isValid) {
+      return ZcResultView(
+        color: AppColors.validGreen,
+        icon: Icons.check_rounded,
+        title: 'Billet valide',
+        subtitle: 'Entrée autorisée',
+        badge: r.isOfflineResult ? 'Validé hors ligne' : null,
+        details: [
+          if (r.holderName != null) (label: 'Titulaire', value: r.holderName!),
+          if (r.ticketType != null) (label: 'Type', value: r.ticketType!),
+          if (serial != null) (label: 'N° de série', value: serial),
+          if (r.seat != null) (label: 'Place', value: '${r.zone != null ? '${r.zone} · ' : ''}${r.seat}'),
+          (label: 'Heure', value: AppDateUtils.formatShortTime(r.scannedAt)),
         ],
-      ),
+        autoReturnSeconds: AppConstants.resultDisplaySeconds,
+      );
+    }
+
+    if (r.isUsed) {
+      return ZcResultView(
+        color: AppColors.usedRed,
+        icon: Icons.block_rounded,
+        title: 'Déjà utilisé',
+        subtitle: 'Ce billet a déjà été validé',
+        badge: r.isOfflineResult ? 'Vérifié hors ligne' : null,
+        details: [
+          if (r.holderName != null) (label: 'Titulaire', value: r.holderName!),
+          if (serial != null) (label: 'N° de série', value: serial),
+          if (r.usedAt != null) (label: 'Entré le', value: AppDateUtils.formatDateTime(r.usedAt!)),
+          if (r.usedBy != null) (label: 'Scanné par', value: r.usedBy!),
+          if (r.usedAtGate != null) (label: 'À l\'entrée', value: r.usedAtGate!),
+        ],
+        notice: "Refuser l'accès. Alerter le responsable si la personne insiste.",
+        autoReturnSeconds: AppConstants.resultDisplaySeconds,
+      );
+    }
+
+    if (r.isFraudulent) {
+      return ZcResultView(
+        color: AppColors.fraudOrange,
+        icon: Icons.gpp_bad_rounded,
+        title: 'Billet frauduleux',
+        subtitle: 'Alerte sécurité',
+        details: [
+          if (serial != null) (label: 'N° de série', value: serial),
+          if (shortCode.isNotEmpty) (label: 'QR code', value: shortCode),
+        ],
+        notice: '${r.securityNote ?? "Ce QR code n'est pas reconnu comme un billet valide."}\n\n'
+            "• Refuser l'entrée immédiatement\n• Conserver le billet si possible\n• Alerter le responsable",
+        autoReturnSeconds: AppConstants.resultDisplaySeconds,
+      );
+    }
+
+    // Not a ticket, refused scan, or no connection: the title says which, so a network
+    // problem is never mistaken for a fake ticket
+    final String title;
+    final String subtitle;
+    final IconData icon;
+    if (r.networkFailure) {
+      (title, subtitle, icon) = ('Pas de connexion', "Le billet n'a pas pu être vérifié", Icons.wifi_off_rounded);
+    } else if (r.isOfflineResult && r.isNotFound && r.ticketId == null && (r.errorMessage ?? '').startsWith('Billet absent')) {
+      (title, subtitle, icon) = ('Billet inconnu', 'Absent de la liste hors ligne', Icons.help_outline_rounded);
+    } else if (r.hasError) {
+      (title, subtitle, icon) = ('Scan refusé', 'Ce billet ne peut pas entrer ici', Icons.do_not_disturb_rounded);
+    } else {
+      (title, subtitle, icon) = ('QR code invalide', 'Ce QR code ne correspond à aucun billet', Icons.qr_code_2_rounded);
+    }
+    return ZcResultView(
+      color: AppColors.ink,
+      icon: icon,
+      title: title,
+      subtitle: subtitle,
+      details: [if (shortCode.isNotEmpty) (label: 'Contenu scanné', value: shortCode)],
+      notice: '${r.errorMessage ?? "Ce QR code n'est pas un billet valide pour cet événement."}\n\n'
+          "• Faire réessayer le scan\n• Vérifier le billet\n• Contacter l'organisateur si besoin",
+      autoReturnSeconds: AppConstants.resultDisplaySeconds,
     );
   }
-
 }

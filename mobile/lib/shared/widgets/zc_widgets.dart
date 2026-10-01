@@ -278,6 +278,7 @@ class ZcEventCard extends StatelessWidget {
   Widget build(BuildContext context) {
     const ink = Color(0xFF111111); // always dark on yellow
     return Container(
+      width: double.infinity,
       margin: const EdgeInsets.symmetric(horizontal: 11),
       padding: const EdgeInsets.fromLTRB(30, 14, 20, 14),
       constraints: const BoxConstraints(minHeight: 80),

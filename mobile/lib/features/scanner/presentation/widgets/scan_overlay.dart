@@ -152,7 +152,7 @@ class _ScanOverlayState extends State<ScanOverlay>
                     child: CircularProgressIndicator(
                       strokeWidth: 3,
                       valueColor:
-                          AlwaysStoppedAnimation<Color>(AppColors.primary),
+                          const AlwaysStoppedAnimation<Color>(AppColors.eventCard),
                     ),
                   ),
                 ),

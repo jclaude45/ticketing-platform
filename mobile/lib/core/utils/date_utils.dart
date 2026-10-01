@@ -1,14 +1,15 @@
 import 'package:intl/intl.dart';
 
+/// Dates shown in French: the app sets Intl.defaultLocale to fr_FR at start (main.dart).
 class AppDateUtils {
   AppDateUtils._();
 
-  static final _dateFormat = DateFormat('MMM d, yyyy');
+  static final _dateFormat = DateFormat('d MMM yyyy');
   static final _timeFormat = DateFormat('HH:mm');
-  static final _dateTimeFormat = DateFormat('MMM d, yyyy • HH:mm');
-  static final _fullDateTimeFormat = DateFormat('EEEE, MMMM d, yyyy • HH:mm');
+  static final _dateTimeFormat = DateFormat("d MMM yyyy 'à' HH:mm");
+  static final _fullDateTimeFormat = DateFormat("EEEE d MMMM yyyy 'à' HH:mm");
   static final _isoFormat = DateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
-  static final _shortTimeFormat = DateFormat('h:mm a');
+  static final _shortTimeFormat = DateFormat('HH:mm');
 
   static String formatDate(DateTime date) => _dateFormat.format(date.toLocal());
 
@@ -33,13 +34,13 @@ class AppDateUtils {
     final diff = now.difference(date.toLocal());
 
     if (diff.inSeconds < 60) {
-      return 'Just now';
+      return "À l'instant";
     } else if (diff.inMinutes < 60) {
-      return '${diff.inMinutes}m ago';
+      return 'Il y a ${diff.inMinutes} min';
     } else if (diff.inHours < 24) {
-      return '${diff.inHours}h ago';
+      return 'Il y a ${diff.inHours} h';
     } else if (diff.inDays < 7) {
-      return '${diff.inDays}d ago';
+      return 'Il y a ${diff.inDays} j';
     } else {
       return formatDate(date);
     }

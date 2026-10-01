@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../../core/constants/colors.dart';
@@ -12,6 +11,7 @@ import '../../../../core/di/injection_container.dart';
 import '../../../../core/feedback/scan_feedback.dart';
 import '../../../../core/network/network_info.dart';
 import '../../../../core/utils/date_utils.dart';
+import '../../../../shared/widgets/zc_widgets.dart';
 import '../../../accreditation/presentation/providers/accreditation_provider.dart';
 import '../../../accreditation/presentation/screens/accreditation_result_screen.dart';
 import '../../../events/presentation/providers/events_provider.dart';
@@ -243,19 +243,20 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
     final code = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.backgroundCard,
-        title: Text('Code de commande', style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-        content: TextField(
+        backgroundColor: AppColors.page,
+        title: Text('Code de la commande', style: zcText(18, weight: FontWeight.w600)),
+        content: ZcTextField(
           controller: controller,
-          autofocus: true,
+          hint: 'B-XXXXXX',
           textCapitalization: TextCapitalization.characters,
-          style: GoogleFonts.inter(fontSize: 20, letterSpacing: 2, color: AppColors.textPrimary),
-          decoration: const InputDecoration(hintText: 'B-7K3P9Q'),
           onSubmitted: (v) => Navigator.pop(ctx, v),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
-          TextButton(onPressed: () => Navigator.pop(ctx, controller.text), child: const Text('Rechercher')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Annuler', style: zcText(14, color: AppColors.grey))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: Text('Rechercher', style: zcText(14, weight: FontWeight.w500)),
+          ),
         ],
       ),
     );
@@ -276,16 +277,17 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
     HapticFeedback.selectionClick();
   }
 
+  static const _modes = [
+    (mode: ScanMode.tickets, label: 'Billets', icon: Icons.confirmation_number_outlined),
+    (mode: ScanMode.badges, label: 'Badges', icon: Icons.badge_outlined),
+    (mode: ScanMode.merch, label: 'Boutique', icon: Icons.shopping_bag_outlined),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final scannerState = ref.watch(scannerNotifierProvider);
     final accState = ref.watch(accreditationNotifierProvider);
-    final connectivity = ref.watch(connectivityStreamProvider);
-    final isOnline = connectivity.when(
-      data: (v) => v,
-      loading: () => true,
-      error: (_, __) => false,
-    );
+    final isOnline = ref.watch(connectivityStreamProvider).valueOrNull ?? true;
     final hardwareOnly = ref.watch(hardwareScannerOnlyProvider);
     final camera = _hasCameraPermission && !hardwareOnly;
     final isProcessing = switch (_scanMode) {
@@ -293,249 +295,146 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
       ScanMode.badges => accState.isProcessing,
       ScanMode.merch => _merchBusy,
     };
+    // Yellow of the charter; orange when tickets are checked with the offline list
+    final frameColor = _scanMode == ScanMode.tickets && !isOnline ? AppColors.statusOffline : AppColors.eventCard;
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          // Camera, or the panel of the terminal's trigger
-          if (hardwareOnly)
-            _buildTriggerPanel(isProcessing)
-          else if (_hasCameraPermission)
-            Positioned.fill(
-              child: QrScannerWidget(
-                key: _scannerKey,
-                onDetected: _onQrDetected,
-                isActive: !isProcessing && !_showingResult,
-              ),
-            )
-          else
-            _buildPermissionDenied(),
-
-          // Scan overlay
-          if (camera)
-            Positioned.fill(
-              child: ScanOverlay(
-                isScanning: !isProcessing,
-                isProcessing: isProcessing,
-                frameColor: switch (_scanMode) {
-                  ScanMode.badges => const Color(0xFF6366F1),
-                  ScanMode.merch => const Color(0xFFF59E0B),
-                  ScanMode.tickets => isOnline ? AppColors.scannerFrame : AppColors.statusOffline,
-                },
-              ),
-            ),
-
-          // Flash
-          AnimatedBuilder(
-            animation: _flashController,
-            builder: (_, __) => Positioned.fill(
-              child: IgnorePointer(
-                child: Container(
-                  color: _flashColor.withOpacity(_flashOpacity.value),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent),
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: Stack(
+          children: [
+            // Camera, or the panel of the terminal's trigger
+            if (hardwareOnly)
+              _buildTriggerPanel(isProcessing, frameColor)
+            else if (_hasCameraPermission)
+              Positioned.fill(
+                child: QrScannerWidget(
+                  key: _scannerKey,
+                  onDetected: _onQrDetected,
+                  isActive: !isProcessing && !_showingResult,
                 ),
+              )
+            else
+              _buildPermissionDenied(),
+
+            if (camera)
+              Positioned.fill(
+                child: ScanOverlay(isScanning: !isProcessing, isProcessing: isProcessing, frameColor: frameColor),
+              ),
+
+            // Flash
+            AnimatedBuilder(
+              animation: _flashController,
+              builder: (_, __) => Positioned.fill(
+                child: IgnorePointer(child: Container(color: _flashColor.withValues(alpha: _flashOpacity.value))),
               ),
             ),
-          ),
 
-          // Top bar
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: _buildTopBar(isOnline, ref.watch(syncNotifierProvider).pending),
-          ),
+            Positioned(top: 0, left: 0, right: 0, child: _buildTopBar(isOnline, ref.watch(syncNotifierProvider).pending)),
 
-          // Center hint
-          if (camera && !isProcessing)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 300),
-                child: Text(
-                  switch (_scanMode) {
-                    ScanMode.tickets => 'Placez le QR code dans le cadre',
-                    ScanMode.badges => 'Scannez le badge du membre',
-                    ScanMode.merch => isOnline
-                        ? 'Scannez le QR de retrait de la commande'
-                        : 'Le retrait boutique nécessite une connexion',
-                  },
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    color: Colors.white.withOpacity(0.6),
-                    letterSpacing: 0.3,
+            if (camera && !isProcessing)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 340),
+                  child: Text(
+                    switch (_scanMode) {
+                      ScanMode.tickets => 'Placez le QR code dans le cadre',
+                      ScanMode.badges => 'Scannez le badge du membre',
+                      ScanMode.merch => isOnline ? 'Scannez le QR de retrait de la commande' : 'Le retrait boutique nécessite une connexion',
+                    },
+                    style: zcText(13, color: Colors.white.withValues(alpha: 0.8)),
                   ),
                 ),
               ),
-            ),
 
-          // Bottom controls
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: _buildBottomControls(isOnline, scannerState.lastResult, hardwareOnly),
-          ),
-        ],
+            Positioned(bottom: 0, left: 0, right: 0, child: _buildBottomSheet(scannerState.lastResult, hardwareOnly)),
+          ],
+        ),
       ),
     );
   }
 
+  /// Back chevron, title and event, network state, entries waiting to be sent.
   Widget _buildTopBar(bool isOnline, int pendingCount) {
+    final statusColor = isOnline ? AppColors.statusOnline : AppColors.statusOffline;
     return Container(
-      padding: EdgeInsets.fromLTRB(
-        16,
-        MediaQuery.of(context).padding.top + 12,
-        16,
-        16,
-      ),
-      decoration: BoxDecoration(
+      padding: EdgeInsets.fromLTRB(8, MediaQuery.of(context).padding.top + 8, 16, 24),
+      decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [
-            Colors.black.withOpacity(0.85),
-            Colors.transparent,
-          ],
+          colors: [Color(0xCC000000), Colors.transparent],
         ),
       ),
       child: Row(
         children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 22),
-            ),
+          IconButton(
+            tooltip: 'Retour',
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 24),
+            onPressed: () => Navigator.pop(context),
           ),
-          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   switch (_scanMode) {
-                    ScanMode.tickets => 'Scanner les tickets',
+                    ScanMode.tickets => 'Scanner les billets',
                     ScanMode.badges => 'Scanner les badges',
                     ScanMode.merch => 'Retrait boutique',
                   },
-                  style: GoogleFonts.inter(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
+                  style: zcText(16, weight: FontWeight.w600, color: Colors.white),
                 ),
                 Text(
                   ref.watch(eventByIdProvider(widget.eventId))?.name ?? '',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(fontSize: 11, color: Colors.white54),
+                  style: zcText(12, color: Colors.white70),
                 ),
               ],
             ),
           ),
-          // Online badge
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: (isOnline ? AppColors.statusOnline : AppColors.statusOffline).withOpacity(0.15),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: (isOnline ? AppColors.statusOnline : AppColors.statusOffline).withOpacity(0.4),
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 7, height: 7,
-                  decoration: BoxDecoration(
-                    color: isOnline ? AppColors.statusOnline : AppColors.statusOffline,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 5),
-                Text(
-                  isOnline ? 'En ligne' : 'Hors ligne',
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: isOnline ? AppColors.statusOnline : AppColors.statusOffline,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          _Pill(color: statusColor, icon: isOnline ? Icons.wifi_rounded : Icons.wifi_off_rounded, label: isOnline ? 'En ligne' : 'Hors ligne'),
           if (pendingCount > 0) ...[
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-              decoration: BoxDecoration(
-                color: AppColors.fraudOrange.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppColors.fraudOrange.withOpacity(0.4)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.cloud_upload_outlined, size: 12, color: AppColors.fraudOrange),
-                  const SizedBox(width: 4),
-                  Text(
-                    '$pendingCount',
-                    style: GoogleFonts.inter(
-                      fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.fraudOrange,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            const SizedBox(width: 6),
+            _Pill(color: AppColors.fraudOrange, icon: Icons.cloud_upload_outlined, label: '$pendingCount'),
           ],
         ],
       ),
     );
   }
 
-  Widget _buildBottomControls(bool isOnline, ValidationResult? lastResult, bool hardwareOnly) {
+  /// White sheet with rounded top corners, like the bottom bar of the app.
+  Widget _buildBottomSheet(ValidationResult? lastResult, bool hardwareOnly) {
     return Container(
-      padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(context).padding.bottom + 24),
+      padding: EdgeInsets.fromLTRB(20, 18, 20, MediaQuery.of(context).padding.bottom + 14),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.bottomCenter,
-          end: Alignment.topCenter,
-          colors: [Colors.black.withOpacity(0.9), Colors.transparent],
-        ),
+        color: AppColors.page,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(34)),
+        boxShadow: [BoxShadow(color: AppColors.shadow, blurRadius: 22.5, offset: const Offset(0, -3))],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Mode toggle
           _buildModeToggle(),
-          const SizedBox(height: 16),
-
-          // Last scan info (tickets mode only)
-          if (_scanMode == ScanMode.tickets && lastResult != null)
+          if (_scanMode == ScanMode.tickets && lastResult != null) ...[
+            const SizedBox(height: 12),
             _buildLastScanInfo(lastResult),
-
-          if (_scanMode == ScanMode.tickets && lastResult != null)
-            const SizedBox(height: 16),
-
-          // Control buttons
+          ],
+          const SizedBox(height: 14),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               if (!hardwareOnly) ...[
                 _ControlButton(
-                  icon: _isTorchOn ? Icons.flashlight_on_rounded : Icons.flashlight_off_rounded,
+                  icon: _isTorchOn ? Icons.flashlight_on_rounded : Icons.flashlight_off_outlined,
                   label: 'Torche',
                   onTap: _toggleTorch,
                   isActive: _isTorchOn,
                 ),
                 _ControlButton(
-                  icon: Icons.cameraswitch_rounded,
+                  icon: Icons.cameraswitch_outlined,
                   label: _frontCamera ? 'Avant' : 'Arrière',
                   onTap: _switchCamera,
                   isActive: _frontCamera,
@@ -548,14 +447,9 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
                 isActive: hardwareOnly,
               ),
               if (_scanMode == ScanMode.merch)
-                _ControlButton(
-                  icon: Icons.keyboard_rounded,
-                  label: 'Code',
-                  onTap: _typeMerchCode,
-                  isActive: false,
-                ),
+                _ControlButton(icon: Icons.keyboard_outlined, label: 'Code', onTap: _typeMerchCode, isActive: false),
               _ControlButton(
-                icon: _soundOn ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+                icon: _soundOn ? Icons.volume_up_outlined : Icons.volume_off_outlined,
                 label: _soundOn ? 'Son' : 'Muet',
                 onTap: _toggleSound,
                 isActive: _soundOn,
@@ -567,119 +461,101 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
     );
   }
 
+  /// Billets / Badges / Boutique: the selected one in ink, like the main buttons.
   Widget _buildModeToggle() {
     return Container(
-      height: 44,
+      height: 46,
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.ink),
       ),
       child: Row(
         children: [
-          _ModeTab(
-            label: 'TICKETS',
-            icon: Icons.confirmation_number_outlined,
-            isSelected: _scanMode == ScanMode.tickets,
-            onTap: () => _switchMode(ScanMode.tickets),
-          ),
-          _ModeTab(
-            label: 'BADGES',
-            icon: Icons.badge_outlined,
-            isSelected: _scanMode == ScanMode.badges,
-            selectedColor: const Color(0xFF6366F1),
-            onTap: () => _switchMode(ScanMode.badges),
-          ),
-          _ModeTab(
-            label: 'BOUTIQUE',
-            icon: Icons.shopping_bag_outlined,
-            isSelected: _scanMode == ScanMode.merch,
-            selectedColor: const Color(0xFFF59E0B),
-            onTap: () => _switchMode(ScanMode.merch),
-          ),
+          for (final m in _modes)
+            Expanded(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _switchMode(m.mode),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  decoration: BoxDecoration(
+                    color: _scanMode == m.mode ? AppColors.ink : Colors.transparent,
+                    borderRadius: BorderRadius.circular(7),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(m.icon, size: 16, color: _scanMode == m.mode ? AppColors.onInk : AppColors.ink),
+                      const SizedBox(width: 6),
+                      Text(
+                        m.label,
+                        style: zcText(13, weight: FontWeight.w500, color: _scanMode == m.mode ? AppColors.onInk : AppColors.ink),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
   }
 
+  /// Last ticket scanned, as a line of the guest list.
   Widget _buildLastScanInfo(ValidationResult result) {
-    Color color;
-    String label;
-    IconData icon;
-
-    if (result.isValid) {
-      color = AppColors.validGreen;
-      label = 'Dernier: VALIDE';
-      icon = Icons.check_circle_rounded;
-    } else if (result.isUsed) {
-      color = AppColors.usedRed;
-      label = 'Dernier: UTILISÉ';
-      icon = Icons.do_not_disturb_rounded;
-    } else if (result.isFraudulent) {
-      color = AppColors.fraudOrange;
-      label = 'Dernier: FRAUDULEUX';
-      icon = Icons.gpp_bad_rounded;
-    } else {
-      color = AppColors.textMuted;
-      label = 'Dernier: ERREUR';
-      icon = Icons.error_outline_rounded;
-    }
-
+    final (Color color, String label) = result.isValid
+        ? (AppColors.validGreen, 'Valide')
+        : result.isUsed
+            ? (AppColors.usedRed, 'Déjà utilisé')
+            : result.isFraudulent
+                ? (AppColors.fraudOrange, 'Frauduleux')
+                : (AppColors.grey, 'Refusé');
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.25)),
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.grey.withValues(alpha: 0.4)))),
       child: Row(
         children: [
-          Icon(icon, color: color, size: 18),
-          const SizedBox(width: 8),
-          Text(label, style: GoogleFonts.inter(fontSize: 13, color: color, fontWeight: FontWeight.w700)),
-          if (result.holderName != null) ...[
-            const SizedBox(width: 6),
-            Text(
-              '• ${result.holderName}',
-              style: GoogleFonts.inter(fontSize: 13, color: Colors.white.withOpacity(0.6)),
-            ),
-          ],
-          const Spacer(),
-          Text(
-            AppDateUtils.formatShortTime(result.scannedAt),
-            style: GoogleFonts.inter(fontSize: 11, color: Colors.white38),
-          ),
+          Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          const SizedBox(width: 10),
+          Text('Dernier : $label', style: zcText(13, weight: FontWeight.w500)),
+          if (result.holderName != null)
+            Expanded(
+              child: Text(
+                '  ·  ${result.holderName}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: zcText(13, color: AppColors.grey),
+              ),
+            )
+          else
+            const Spacer(),
+          Text(AppDateUtils.formatShortTime(result.scannedAt), style: zcText(11, color: AppColors.grey)),
         ],
       ),
     );
   }
 
   /// Camera off: the controller scans with the terminal's trigger.
-  Widget _buildTriggerPanel(bool isProcessing) {
-    final color = switch (_scanMode) {
-      ScanMode.badges => const Color(0xFF6366F1),
-      ScanMode.merch => const Color(0xFFF59E0B),
-      ScanMode.tickets => AppColors.scannerFrame,
-    };
+  Widget _buildTriggerPanel(bool isProcessing, Color color) {
     return Positioned.fill(
       child: Container(
-        color: const Color(0xFF0B0B0F),
-        alignment: const Alignment(0, -0.2),
-        padding: const EdgeInsets.symmetric(horizontal: 40),
+        color: AppColors.page,
+        alignment: const Alignment(0, -0.25),
+        padding: const EdgeInsets.symmetric(horizontal: 42),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             isProcessing
-                ? SizedBox(width: 72, height: 72, child: CircularProgressIndicator(color: color, strokeWidth: 3))
-                : Icon(Icons.barcode_reader, size: 84, color: color),
-            const SizedBox(height: 24),
+                ? SizedBox(width: 72, height: 72, child: CircularProgressIndicator(color: AppColors.ink, strokeWidth: 3))
+                : Icon(Icons.barcode_reader, size: 96, color: AppColors.ink),
+            const SizedBox(height: 28),
             Text(
-              isProcessing ? 'Vérification…' : 'Appuyez sur la gâchette',
+              isProcessing ? 'Vérification…' : 'Appuyez sur\nla gâchette',
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.w700, color: Colors.white),
+              style: zcText(28, weight: FontWeight.w600, height: 1.2),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             Text(
               switch (_scanMode) {
                 ScanMode.tickets => 'Visez le QR code du billet avec le scanner du terminal.',
@@ -687,7 +563,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
                 ScanMode.merch => 'Visez le QR de retrait de la commande avec le scanner du terminal.',
               },
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(fontSize: 14, color: Colors.white60, height: 1.5),
+              style: zcText(14, color: AppColors.grey, height: 1.6),
             ),
           ],
         ),
@@ -696,38 +572,25 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
   }
 
   Widget _buildPermissionDenied() {
-    return Container(
-      color: AppColors.backgroundDark,
-      child: SafeArea(
+    return Positioned.fill(
+      child: Container(
+        color: AppColors.page,
+        alignment: const Alignment(0, -0.25),
+        padding: const EdgeInsets.symmetric(horizontal: 42),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.camera_alt_outlined, size: 70, color: AppColors.textMuted),
-            const SizedBox(height: 20),
-            Text(
-              'Accès caméra requis',
-              style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-            ),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 40),
-              child: Text(
-                'Autorisez l\'accès à la caméra pour scanner les tickets et badges.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(fontSize: 14, color: AppColors.textMuted),
-              ),
-            ),
+            Icon(Icons.no_photography_outlined, size: 84, color: AppColors.ink),
             const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () => openAppSettings(),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.brand,
-                foregroundColor: AppColors.onBrand,
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              child: Text('Ouvrir les Paramètres', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+            Text('Accès caméra requis', textAlign: TextAlign.center, style: zcText(24, weight: FontWeight.w600)),
+            const SizedBox(height: 10),
+            Text(
+              "Autorisez la caméra pour scanner les billets et badges, ou passez sur la gâchette du terminal.",
+              textAlign: TextAlign.center,
+              style: zcText(14, color: AppColors.grey, height: 1.6),
             ),
+            const SizedBox(height: 28),
+            ZcButton(label: 'Ouvrir les réglages', onPressed: openAppSettings),
           ],
         ),
       ),
@@ -735,98 +598,60 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
   }
 }
 
-// ── Mode Tab ──────────────────────────────────────────────────────────────────
-
-class _ModeTab extends StatelessWidget {
-  final String label;
+/// Small rounded status label over the camera (network, entries to send).
+class _Pill extends StatelessWidget {
+  final Color color;
   final IconData icon;
-  final bool isSelected;
-  final Color selectedColor;
-  final VoidCallback onTap;
+  final String label;
 
-  const _ModeTab({
-    required this.label,
-    required this.icon,
-    required this.isSelected,
-    this.selectedColor = const Color(0xFF22C55E),
-    required this.onTap,
-  });
+  const _Pill({required this.color, required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          decoration: BoxDecoration(
-            color: isSelected ? selectedColor.withOpacity(0.2) : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-            border: isSelected
-                ? Border.all(color: selectedColor.withOpacity(0.5))
-                : null,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 16,
-                color: isSelected ? selectedColor : Colors.white38,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: isSelected ? selectedColor : Colors.white38,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
-          ),
-        ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 5),
+          Text(label, style: zcText(11, weight: FontWeight.w600, color: const Color(0xFF252427))),
+        ],
       ),
     );
   }
 }
 
-// ── Control Button ────────────────────────────────────────────────────────────
-
+/// Round outlined button of the bottom sheet; filled in ink when the option is on.
 class _ControlButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
   final bool isActive;
 
-  const _ControlButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    required this.isActive,
-  });
+  const _ControlButton({required this.icon, required this.label, required this.onTap, required this.isActive});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return InkResponse(
       onTap: onTap,
+      radius: 32,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 48, height: 48,
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
-              color: isActive ? Colors.white.withOpacity(0.2) : Colors.white.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: isActive ? Colors.white.withOpacity(0.4) : Colors.white.withOpacity(0.15),
-              ),
+              color: isActive ? AppColors.ink : Colors.transparent,
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.ink),
             ),
-            child: Icon(icon, color: isActive ? Colors.white : Colors.white60, size: 22),
+            child: Icon(icon, size: 22, color: isActive ? AppColors.onInk : AppColors.ink),
           ),
-          const SizedBox(height: 5),
-          Text(label, style: GoogleFonts.inter(fontSize: 11, color: Colors.white60)),
+          const SizedBox(height: 6),
+          Text(label, style: zcText(11, color: AppColors.navInactive)),
         ],
       ),
     );
