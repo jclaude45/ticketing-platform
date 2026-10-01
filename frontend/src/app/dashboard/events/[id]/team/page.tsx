@@ -9,7 +9,7 @@ import {
   ArrowLeft, Users, Plus, Pencil, Trash2, BadgeCheck,
   BadgeX, Printer, RefreshCw, ShieldCheck, X, Check,
   Phone, Mail, Building2, Camera, Upload, FlipHorizontal, ZapOff,
-  FileSpreadsheet, Download, AlertCircle, CheckCircle2,
+  FileSpreadsheet, Download, AlertCircle, CheckCircle2, Send,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { apiClient, teamApi } from '@/lib/api';
@@ -325,7 +325,7 @@ function MemberModal({ eventId, member, onClose, onSaved }: {
         // TransformInterceptor wraps response: { success, statusCode, data: member, timestamp }
         const created = (res.data as any)?.data ?? res.data;
         const newMemberId: string | undefined = created?.id;
-        toast.success('Membre ajouté');
+        toast.success(created?.email ? 'Membre ajouté — un email de notification lui a été envoyé' : 'Membre ajouté');
 
         if (photoFile) {
           if (!newMemberId) {
@@ -610,6 +610,7 @@ export default function TeamPage() {
   const [accMember, setAccMember] = useState<TeamMember | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [printingId, setPrintingId] = useState<string | null>(null);
+  const [sendingBadgeId, setSendingBadgeId] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
   const [importOpen, setImportOpen] = useState(false);
@@ -673,6 +674,18 @@ export default function TeamPage() {
       toast.error('Erreur lors de la génération du badge');
     } finally {
       setPrintingId(null);
+    }
+  };
+
+  const handleSendBadge = async (member: TeamMember) => {
+    setSendingBadgeId(member.id);
+    try {
+      await teamApi.sendBadge(eventId, member.id);
+      toast.success(`Badge envoyé à ${member.email}`);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? "Erreur lors de l'envoi du badge");
+    } finally {
+      setSendingBadgeId(null);
     }
   };
 
@@ -863,6 +876,15 @@ export default function TeamPage() {
                                   ? <RefreshCw className="h-3.5 w-3.5 animate-spin" />
                                   : <Printer className="h-3.5 w-3.5" />}
                               </button>
+                              {member.email && (
+                                <button onClick={() => handleSendBadge(member)} disabled={sendingBadgeId === member.id}
+                                  title="Envoyer le badge par email"
+                                  className="rounded p-1.5 text-gray-400 hover:bg-indigo-50 hover:text-indigo-600 transition-all disabled:opacity-40">
+                                  {sendingBadgeId === member.id
+                                    ? <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                                    : <Send className="h-3.5 w-3.5" />}
+                                </button>
+                              )}
                               <button onClick={() => handleRevoke(member)} disabled={revokingId === member.id}
                                 title="Révoquer"
                                 className="rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-all disabled:opacity-40">

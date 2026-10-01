@@ -381,6 +381,8 @@ export const teamApi = {
     apiClient.delete(`/events/${eventId}/team/${memberId}/accreditation`),
   downloadBadge: (eventId: string, memberId: string) =>
     apiClient.get(`/events/${eventId}/team/${memberId}/accreditation/badge`, { responseType: 'arraybuffer' }),
+  sendBadge: (eventId: string, memberId: string) =>
+    apiClient.post(`/events/${eventId}/team/${memberId}/accreditation/send-badge`),
 };
 
 // --- Super Admin API ---

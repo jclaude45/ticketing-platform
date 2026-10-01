@@ -134,6 +134,14 @@ export class TeamController {
     return this.teamService.revokeAccreditation(eventId, memberId, user.id, user.role);
   }
 
+  @Post(':memberId/accreditation/send-badge')
+  @Roles(Role.ORGANIZER, Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Email the accreditation badge PDF to the member' })
+  sendBadge(@Param('eventId') eventId: string, @Param('memberId') memberId: string, @CurrentUser() user: any) {
+    return this.teamService.sendBadgeByEmail(eventId, memberId, user.id, user.role);
+  }
+
   @Get(':memberId/accreditation/badge')
   @Roles(Role.ORGANIZER, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Download accreditation badge PDF' })
