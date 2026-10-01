@@ -111,7 +111,11 @@ export class ControllerSpaceService {
     };
   }
 
-  /** "Ajouter invité" from the app: free invitation tickets, emailed to the guest. */
+  /**
+   * "Ajouter invité" from the app: free invitation tickets, emailed to the guest.
+   * Not exposed for now (invitations are sent by organizers only): to switch it back on,
+   * add the POST events/:eventId/guests route and set GuestsTab.invitesEnabled in the app.
+   */
   async addGuest(controllerId: string, eventId: string, dto: AddGuestDto) {
     await this.getAssignment(controllerId, eventId);
     return this.invitations.inviteAtDoor(eventId, controllerId, dto);
