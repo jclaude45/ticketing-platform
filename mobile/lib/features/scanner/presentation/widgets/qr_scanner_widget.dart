@@ -114,7 +114,7 @@ class QrScannerWidgetState extends State<QrScannerWidget> {
               Text(
                 message,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   color: AppColors.textSecondary,
                   fontSize: 16,
                 ),

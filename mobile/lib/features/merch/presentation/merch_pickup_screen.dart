@@ -67,7 +67,7 @@ class _MerchPickupScreenState extends State<MerchPickupScreen> {
       backgroundColor: AppColors.backgroundDark,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-        leading: const CloseButton(color: AppColors.textPrimary),
+        leading: CloseButton(color: AppColors.textPrimary),
         title: Text('Retrait boutique', style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
       ),
       body: SafeArea(

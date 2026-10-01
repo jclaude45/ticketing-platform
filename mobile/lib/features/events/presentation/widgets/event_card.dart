@@ -84,7 +84,7 @@ class EventCard extends StatelessWidget {
 
                   Row(
                     children: [
-                      const Icon(Icons.location_on_outlined,
+                      Icon(Icons.location_on_outlined,
                           size: 14, color: AppColors.textMuted),
                       const SizedBox(width: 4),
                       Expanded(
@@ -103,7 +103,7 @@ class EventCard extends StatelessWidget {
 
                   Row(
                     children: [
-                      const Icon(Icons.calendar_today_outlined,
+                      Icon(Icons.calendar_today_outlined,
                           size: 14, color: AppColors.textMuted),
                       const SizedBox(width: 4),
                       Expanded(
@@ -123,7 +123,7 @@ class EventCard extends StatelessWidget {
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        const Icon(Icons.door_front_door_outlined,
+                        Icon(Icons.door_front_door_outlined,
                             size: 14, color: AppColors.textMuted),
                         const SizedBox(width: 4),
                         Text(
@@ -151,8 +151,8 @@ class EventCard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [AppColors.primary, AppColors.primaryDark],
+                          gradient: LinearGradient(
+                            colors: AppColors.brandGradientColors,
                           ),
                           borderRadius: BorderRadius.circular(10),
                         ),
@@ -160,14 +160,14 @@ class EventCard extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             const Icon(Icons.qr_code_scanner_rounded,
-                                color: Colors.white, size: 16),
+                                color: AppColors.onBrand, size: 16),
                             const SizedBox(width: 6),
                             Text(
                               'Scanner',
                               style: GoogleFonts.inter(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
-                                color: Colors.white,
+                                color: AppColors.onBrand,
                               ),
                             ),
                           ],

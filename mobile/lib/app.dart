@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'features/auth/presentation/providers/auth_provider.dart';
@@ -38,6 +39,8 @@ class _TicketScannerAppState extends ConsumerState<TicketScannerApp> with Widget
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    AppColors.isDark = WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark;
+    _applySystemBars();
     // Every minute: send pending entries; the ticket lists when they are due (3 min)
     _syncTimer = Timer.periodic(const Duration(minutes: 1), (_) => _autoSync());
     // Session could not be renewed: back to the login screen with an explanation
@@ -53,6 +56,35 @@ class _TicketScannerAppState extends ConsumerState<TicketScannerApp> with Widget
     _syncTimer?.cancel();
     _sessionSub?.cancel();
     super.dispose();
+  }
+
+  /// Phone switched between light and dark: new palette, then every widget rebuilt (many
+  /// read [AppColors] directly) while keeping the screens open and their state.
+  @override
+  void didChangePlatformBrightness() {
+    final dark = WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark;
+    if (dark == AppColors.isDark) return;
+    setState(() => AppColors.isDark = dark);
+    _applySystemBars();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      void rebuild(Element e) {
+        e.markNeedsBuild();
+        e.visitChildren(rebuild);
+      }
+      (context as Element).visitChildren(rebuild);
+    });
+  }
+
+  /// Status / navigation bar icons readable on the current background
+  void _applySystemBars() {
+    final dark = AppColors.isDark;
+    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+      statusBarBrightness: dark ? Brightness.dark : Brightness.light, // iOS
+      systemNavigationBarColor: AppColors.backgroundDark,
+      systemNavigationBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+    ));
   }
 
   @override
@@ -82,11 +114,9 @@ class _TicketScannerAppState extends ConsumerState<TicketScannerApp> with Widget
     return MaterialApp(
       navigatorKey: appNavigatorKey,
       scaffoldMessengerKey: appMessengerKey,
-      title: 'ZAYA Contrôle',
+      title: 'ZControle',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.dark,
+      theme: AppTheme.current,
       initialRoute: '/',
       onGenerateRoute: (settings) {
         switch (settings.name) {

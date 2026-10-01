@@ -168,13 +168,13 @@ class _EventsListScreenState extends ConsumerState<EventsListScreen> {
           ),
           // Actions
           IconButton(
-            icon: const Icon(Icons.sync_rounded, color: AppColors.textSecondary),
+            icon: Icon(Icons.sync_rounded, color: AppColors.textSecondary),
             onPressed: () =>
                 ref.read(eventsNotifierProvider.notifier).sync(),
             tooltip: 'Sync',
           ),
           IconButton(
-            icon: const Icon(Icons.logout_rounded,
+            icon: Icon(Icons.logout_rounded,
                 color: AppColors.textSecondary),
             onPressed: _confirmLogout,
             tooltip: 'Déconnexion',
@@ -195,7 +195,7 @@ class _EventsListScreenState extends ConsumerState<EventsListScreen> {
       ),
       child: Row(
         children: [
-          const SizedBox(
+          SizedBox(
             width: 16,
             height: 16,
             child: CircularProgressIndicator(
@@ -247,7 +247,7 @@ class _EventsListScreenState extends ConsumerState<EventsListScreen> {
                 color: AppColors.backgroundSurface,
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Icon(Icons.event_busy_rounded,
+              child: Icon(Icons.event_busy_rounded,
                   size: 40, color: AppColors.textMuted),
             ),
             const SizedBox(height: 20),

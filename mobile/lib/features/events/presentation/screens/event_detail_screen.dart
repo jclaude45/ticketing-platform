@@ -66,7 +66,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen>
         backgroundColor: AppColors.backgroundDark,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
-          leading: const BackButton(color: AppColors.textPrimary),
+          leading: BackButton(color: AppColors.textPrimary),
         ),
         body: Center(
           child: detail.hasError
@@ -88,7 +88,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen>
                     ],
                   ),
                 )
-              : const CircularProgressIndicator(color: AppColors.primary),
+              : CircularProgressIndicator(color: AppColors.primary),
         ),
       );
     }
@@ -244,7 +244,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen>
 
   Widget _defaultBanner() {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -292,7 +292,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen>
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
+                Icon(
                   Icons.door_front_door_outlined,
                   size: 13,
                   color: AppColors.primary,
@@ -363,14 +363,14 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen>
             value: event.venue,
           ),
           if (event.address != null) ...[
-            const Divider(color: AppColors.borderDefault, height: 24),
+            Divider(color: AppColors.borderDefault, height: 24),
             _InfoRow(
               icon: Icons.map_outlined,
               label: 'Adresse',
               value: event.address!,
             ),
           ],
-          const Divider(color: AppColors.borderDefault, height: 24),
+          Divider(color: AppColors.borderDefault, height: 24),
           _InfoRow(
             icon: Icons.calendar_today_outlined,
             label: 'Date et heure',
@@ -380,7 +380,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen>
             ),
           ),
           if (event.description.isNotEmpty) ...[
-            const Divider(color: AppColors.borderDefault, height: 24),
+            Divider(color: AppColors.borderDefault, height: 24),
             _InfoRow(
               icon: Icons.info_outline_rounded,
               label: 'Description',
@@ -444,7 +444,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen>
               Expanded(child: Text(status, style: small)),
             ],
           ),
-          const Divider(color: AppColors.borderDefault, height: 24),
+          Divider(color: AppColors.borderDefault, height: 24),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -456,7 +456,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen>
             ],
           ),
           if (sync.pending > 0) ...[
-            const Divider(color: AppColors.borderDefault, height: 24),
+            Divider(color: AppColors.borderDefault, height: 24),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -488,10 +488,10 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen>
       child: Container(
         height: 64,
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
+          gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [AppColors.primary, AppColors.primaryDark],
+            colors: AppColors.brandGradientColors,
           ),
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
@@ -508,7 +508,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen>
           children: [
             const Icon(
               Icons.qr_code_scanner_rounded,
-              color: Colors.white,
+              color: AppColors.onBrand,
               size: 26,
             ),
             const SizedBox(width: 12),
@@ -517,7 +517,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen>
               style: GoogleFonts.inter(
                 fontSize: 17,
                 fontWeight: FontWeight.w700,
-                color: Colors.white,
+                color: AppColors.onBrand,
               ),
             ),
           ],

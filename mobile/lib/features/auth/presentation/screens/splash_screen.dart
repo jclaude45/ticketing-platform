@@ -109,7 +109,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     return Scaffold(
       backgroundColor: AppColors.backgroundDark,
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -190,7 +190,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                           child: Column(
                             children: [
                               Text(
-                                'TICKET SCANNER',
+                                'ZCONTROLE',
                                 style: GoogleFonts.rajdhani(
                                   fontSize: 28,
                                   fontWeight: FontWeight.w700,
@@ -260,29 +260,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   }
 
   Widget _buildLogo() {
-    return Container(
-      width: 100,
-      height: 100,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.primary, AppColors.primaryDark],
-        ),
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withOpacity(0.4),
-            blurRadius: 32,
-            spreadRadius: 4,
-          ),
-        ],
-      ),
-      child: const Icon(
-        Icons.qr_code_scanner_rounded,
-        color: Colors.white,
-        size: 52,
-      ),
-    );
+    return Image.asset(
+        AppColors.isDark ? 'assets/images/logo_dark.png' : 'assets/images/logo_light.png',
+        width: 100,
+        height: 100,
+        filterQuality: FilterQuality.high,
+      );
   }
+
 }

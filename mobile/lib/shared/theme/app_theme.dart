@@ -6,17 +6,19 @@ import '../../core/constants/colors.dart';
 class AppTheme {
   AppTheme._();
 
-  static ThemeData get darkTheme {
+  /// Theme of the current mode ([AppColors.isDark]): ZControle charter, light or dark.
+  static ThemeData get current {
     return ThemeData(
       useMaterial3: true,
-      brightness: Brightness.dark,
+      brightness: AppColors.isDark ? Brightness.dark : Brightness.light,
       scaffoldBackgroundColor: AppColors.backgroundDark,
-      colorScheme: const ColorScheme.dark(
+      colorScheme: ColorScheme(
+        brightness: AppColors.isDark ? Brightness.dark : Brightness.light,
         primary: AppColors.primary,
         secondary: AppColors.accent,
         surface: AppColors.backgroundCard,
         error: AppColors.usedRed,
-        onPrimary: Colors.white,
+        onPrimary: AppColors.isDark ? AppColors.onBrand : Colors.white,
         onSecondary: Colors.white,
         onSurface: AppColors.textPrimary,
         onError: Colors.white,
@@ -27,7 +29,7 @@ class AppTheme {
         backgroundColor: AppColors.backgroundDark,
         elevation: 0,
         centerTitle: false,
-        iconTheme: const IconThemeData(color: AppColors.textPrimary),
+        iconTheme: IconThemeData(color: AppColors.textPrimary),
         titleTextStyle: GoogleFonts.inter(
           fontSize: 18,
           fontWeight: FontWeight.w700,
@@ -37,7 +39,7 @@ class AppTheme {
 
       // Text
       textTheme: GoogleFonts.interTextTheme(
-        const TextTheme(
+        TextTheme(
           headlineLarge: TextStyle(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w800,
@@ -68,15 +70,15 @@ class AppTheme {
             const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.borderDefault),
+          borderSide: BorderSide(color: AppColors.borderDefault),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.borderDefault),
+          borderSide: BorderSide(color: AppColors.borderDefault),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.borderFocus, width: 1.5),
+          borderSide: BorderSide(color: AppColors.borderFocus, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -86,20 +88,20 @@ class AppTheme {
           borderRadius: BorderRadius.circular(14),
           borderSide: const BorderSide(color: AppColors.borderError, width: 1.5),
         ),
-        hintStyle: const TextStyle(
+        hintStyle: TextStyle(
           color: AppColors.textDisabled,
           fontSize: 14,
         ),
-        labelStyle: const TextStyle(color: AppColors.textMuted),
-        floatingLabelStyle: const TextStyle(color: AppColors.primary),
+        labelStyle: TextStyle(color: AppColors.textMuted),
+        floatingLabelStyle: TextStyle(color: AppColors.primary),
         errorStyle: const TextStyle(color: AppColors.usedRed, fontSize: 12),
       ),
 
       // Elevated button
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
+          backgroundColor: AppColors.brand,
+          foregroundColor: AppColors.onBrand,
           elevation: 0,
           padding:
               const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
@@ -119,18 +121,18 @@ class AppTheme {
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: AppColors.borderDefault),
+          side: BorderSide(color: AppColors.borderDefault),
         ),
       ),
 
       // Divider
-      dividerTheme: const DividerThemeData(
+      dividerTheme: DividerThemeData(
         color: AppColors.borderDefault,
         thickness: 1,
       ),
 
       // Progress indicator
-      progressIndicatorTheme: const ProgressIndicatorThemeData(
+      progressIndicatorTheme: ProgressIndicatorThemeData(
         color: AppColors.primary,
       ),
 
@@ -155,25 +157,6 @@ class AppTheme {
         ),
         behavior: SnackBarBehavior.floating,
       ),
-    );
-  }
-
-  static ThemeData get lightTheme {
-    return ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.light,
-      colorScheme: const ColorScheme.light(
-        primary: AppColors.primary,
-        secondary: AppColors.accent,
-      ),
-      appBarTheme: AppBarTheme(
-        titleTextStyle: GoogleFonts.inter(
-          fontSize: 18,
-          fontWeight: FontWeight.w700,
-          color: Colors.black,
-        ),
-      ),
-      textTheme: GoogleFonts.interTextTheme(),
     );
   }
 }

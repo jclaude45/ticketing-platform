@@ -120,7 +120,7 @@ class _LoginFormState extends ConsumerState<LoginForm> {
                   onChanged: isLoading
                       ? null
                       : (v) => setState(() => _rememberMe = v ?? false),
-                  side: const BorderSide(color: AppColors.borderDefault),
+                  side: BorderSide(color: AppColors.borderDefault),
                   fillColor: WidgetStateProperty.resolveWith((states) {
                     if (states.contains(WidgetState.selected)) {
                       return AppColors.primary;
@@ -202,7 +202,7 @@ class _LoginFormState extends ConsumerState<LoginForm> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
+              Icon(
                 Icons.security_rounded,
                 size: 14,
                 color: AppColors.textMuted,

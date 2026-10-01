@@ -47,6 +47,6 @@ class AppConstants {
   static const String offlinePacksTable = 'offline_packs';
 
   // App Info
-  static const String appName = 'ZAYA Contrôle';
+  static const String appName = 'ZControle';
   static const String appVersion = '1.0.0';
 }

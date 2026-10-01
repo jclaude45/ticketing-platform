@@ -617,7 +617,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.camera_alt_outlined, size: 70, color: AppColors.textMuted),
+            Icon(Icons.camera_alt_outlined, size: 70, color: AppColors.textMuted),
             const SizedBox(height: 20),
             Text(
               'Accès caméra requis',
@@ -636,7 +636,8 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
             ElevatedButton(
               onPressed: () => openAppSettings(),
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
+                backgroundColor: AppColors.brand,
+                foregroundColor: AppColors.onBrand,
                 padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),

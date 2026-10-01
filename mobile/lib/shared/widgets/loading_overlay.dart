@@ -36,7 +36,7 @@ class LoadingOverlay extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const SizedBox(
+                      SizedBox(
                         width: 36,
                         height: 36,
                         child: CircularProgressIndicator(

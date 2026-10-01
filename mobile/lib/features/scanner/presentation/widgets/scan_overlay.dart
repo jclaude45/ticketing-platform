@@ -147,7 +147,7 @@ class _ScanOverlayState extends State<ScanOverlay>
                     color: Colors.black.withOpacity(0.7),
                     borderRadius: BorderRadius.circular(30),
                   ),
-                  child: const Padding(
+                  child: Padding(
                     padding: EdgeInsets.all(14),
                     child: CircularProgressIndicator(
                       strokeWidth: 3,

@@ -169,36 +169,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   Widget _buildLogoSection() {
     return Row(
       children: [
-        Container(
+        Image.asset(
+          AppColors.isDark ? 'assets/images/logo_dark.png' : 'assets/images/logo_light.png',
           width: 52,
           height: 52,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [AppColors.primary, AppColors.primaryDark],
-            ),
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withOpacity(0.35),
-                blurRadius: 16,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-          child: const Icon(
-            Icons.qr_code_scanner_rounded,
-            color: Colors.white,
-            size: 28,
-          ),
+          filterQuality: FilterQuality.high,
         ),
         const SizedBox(width: 14),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'TICKET SCANNER',
+              'ZCONTROLE',
               style: GoogleFonts.rajdhani(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
@@ -307,7 +289,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       children: [
         Row(
           children: [
-            const Expanded(child: Divider(color: AppColors.borderDefault)),
+            Expanded(child: Divider(color: AppColors.borderDefault)),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
@@ -318,7 +300,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                 ),
               ),
             ),
-            const Expanded(child: Divider(color: AppColors.borderDefault)),
+            Expanded(child: Divider(color: AppColors.borderDefault)),
           ],
         ),
         const SizedBox(height: 16),

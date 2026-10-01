@@ -43,6 +43,7 @@ class AppButton extends StatelessWidget {
     if (onPressed == null) return AppColors.textDisabled;
     switch (variant) {
       case AppButtonVariant.primary:
+        return AppColors.onBrand;
       case AppButtonVariant.danger:
         return Colors.white;
       case AppButtonVariant.secondary:
@@ -60,10 +61,10 @@ class AppButton extends StatelessWidget {
         duration: const Duration(milliseconds: 150),
         decoration: BoxDecoration(
           gradient: variant == AppButtonVariant.primary && onPressed != null
-              ? const LinearGradient(
+              ? LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [AppColors.primary, AppColors.primaryDark],
+                  colors: AppColors.brandGradientColors,
                 )
               : null,
           color: variant == AppButtonVariant.primary ? null : _backgroundColor,
