@@ -8,6 +8,7 @@ import axios from 'axios';
 import * as crypto from 'crypto';
 
 import { InitiatePaymentDto } from './dto/initiate-payment.dto';
+import { ShopService } from '../shop/shop.service';
 
 export type PaymentMethod = 'mobile_money' | 'card';
 
@@ -26,6 +27,7 @@ export class PaymentService {
     private readonly config: ConfigService,
     private readonly ticketGeneration: TicketGenerationService,
     private readonly publicService: PublicService,
+    private readonly shop: ShopService,
   ) {
     this.FLEXPAY_TOKEN = this.config.get<string>('FLEXPAY_TOKEN') || '';
     this.FLEXPAY_MERCHANT = this.config.get<string>('FLEXPAY_MERCHANT') || '';
@@ -39,40 +41,61 @@ export class PaymentService {
     if (!event) throw new NotFoundException('Événement introuvable');
     if (event.status !== 'PUBLISHED') throw new BadRequestException('Cet événement n\'accepte plus d\'inscriptions');
 
-    const templateIds = dto.items.map(i => i.templateId);
+    const ticketItems = dto.items ?? [];
+    const merchItems = dto.merch ?? [];
+    if (!ticketItems.length && !merchItems.length) {
+      throw new BadRequestException('Votre commande est vide');
+    }
+    if (dto.paymentMethod === 'mobile_money' && !dto.holderPhone) {
+      throw new BadRequestException('Le numéro de téléphone est requis pour Mobile Money');
+    }
+
+    // ── Tickets ──
+    const templateIds = ticketItems.map(i => i.templateId);
     if (new Set(templateIds).size !== templateIds.length) {
       throw new BadRequestException('Chaque catégorie de billet ne doit apparaître qu\'une fois');
     }
-    const templates = await this.prisma.ticketTemplate.findMany({
-      where: { id: { in: templateIds }, eventId },
-      select: { id: true, name: true, price: true, currency: true, availableCount: true },
-    });
+    const templates = templateIds.length
+      ? await this.prisma.ticketTemplate.findMany({
+          where: { id: { in: templateIds }, eventId },
+          select: { id: true, name: true, price: true, currency: true, availableCount: true },
+        })
+      : [];
     if (templates.length !== templateIds.length) throw new NotFoundException('Catégorie de billet introuvable');
 
-    for (const item of dto.items) {
+    for (const item of ticketItems) {
       const tpl = templates.find(t => t.id === item.templateId)!;
       if (tpl.availableCount < item.quantity) {
         throw new BadRequestException(`Seulement ${tpl.availableCount} place(s) restante(s) pour "${tpl.name}"`);
       }
     }
-
-    // Never trust a currency sent by the client: it comes from the ticket categories
-    const currency = templates[0].currency;
-    if (templates.some(t => t.currency !== currency)) {
-      throw new BadRequestException('Les billets d\'une même commande doivent avoir la même devise');
-    }
-    const total = dto.items.reduce((sum, item) => {
+    const ticketTotal = ticketItems.reduce((sum, item) => {
       const tpl = templates.find(t => t.id === item.templateId)!;
       return sum + Number(tpl.price) * item.quantity;
     }, 0);
 
-    // Free tickets — generate directly without payment
-    if (total === 0) {
+    // ── Shop items (priced and checked from the database) ──
+    const merchQuote = merchItems.length
+      ? await this.shop.quote(eventId, merchItems, dto.fulfillment, {
+          address: dto.deliveryAddress, city: dto.deliveryCity, notes: dto.deliveryNotes,
+        })
+      : null;
+
+    // Never trust a currency sent by the client: it comes from the catalog
+    const currencies = new Set([...templates.map(t => t.currency), ...(merchQuote ? [merchQuote.currency] : [])]);
+    if (currencies.size > 1) {
+      throw new BadRequestException('Les articles d\'une même commande doivent avoir la même devise');
+    }
+    const currency = [...currencies][0];
+    const total = ticketTotal + (merchQuote?.total ?? 0);
+
+    // Free tickets only — generate directly without payment
+    if (total === 0 && !merchQuote) {
       return this.publicService.purchaseTicket(eventId, {
         holderName: dto.holderName,
         holderEmail: dto.holderEmail,
         holderPhone: dto.holderPhone,
-        items: dto.items,
+        items: ticketItems,
       });
     }
 
@@ -90,14 +113,26 @@ export class PaymentService {
         amount: total,
         currency,
         paymentMethod: dto.paymentMethod,
-        items: dto.items as any,
+        items: ticketItems as any,
       },
     });
 
-    if (dto.paymentMethod === 'mobile_money') {
-      return this.initiateMobileMoney(payment, dto, total, currency, apiBackend);
-    } else {
-      return this.initiateCard(payment, event, total, currency, apiBase, apiBackend);
+    try {
+      // Reserves the stock; throws if an item sold out in the meantime
+      if (merchQuote) {
+        await this.shop.createPendingOrder(eventId, payment.id, {
+          name: dto.holderName, email: dto.holderEmail, phone: dto.holderPhone,
+        }, merchQuote);
+      }
+      if (dto.paymentMethod === 'mobile_money') {
+        return await this.initiateMobileMoney(payment, dto, total, currency, apiBackend);
+      }
+      return await this.initiateCard(payment, event, total, currency, apiBase, apiBackend);
+    } catch (err) {
+      // Nothing will be paid: free the reserved items and close the payment
+      await this.shop.cancelForPayment(payment.id);
+      await this.prisma.payment.updateMany({ where: { id: payment.id, status: 'PENDING' }, data: { status: 'FAILED' } });
+      throw err;
     }
   }
 
@@ -214,7 +249,7 @@ export class PaymentService {
 
     if (String(body.code) !== '0') {
       this.logger.log(`FlexPay callback reported failure for ${body.reference}: code=${body.code}`);
-      await this.prisma.payment.updateMany({ where: { reference: body.reference, status: 'PENDING' }, data: { status: 'FAILED' } });
+      await this.failPayment(payment);
       return { received: true };
     }
 
@@ -222,14 +257,14 @@ export class PaymentService {
     const verifyRef = payment.orderNumber || body.orderNumber;
     if (!verifyRef) {
       this.logger.warn(`No orderNumber to verify for ${body.reference} — rejecting`);
-      await this.prisma.payment.updateMany({ where: { reference: body.reference, status: 'PENDING' }, data: { status: 'FAILED' } });
+      await this.failPayment(payment);
       return { received: true };
     }
 
     const verification = await this.verifyWithFlexPay(verifyRef, Number(payment.amount));
     if (verification === 'UNREACHABLE') return { received: true }; // stays PENDING: a later check can complete it
     if (verification === 'REJECTED') {
-      await this.prisma.payment.updateMany({ where: { reference: body.reference, status: 'PENDING' }, data: { status: 'FAILED' } });
+      await this.failPayment(payment);
       return { received: true };
     }
 
@@ -247,11 +282,17 @@ export class PaymentService {
       if (verification === 'VERIFIED') {
         await this.claimAndGenerate(payment);
         const updated = await this.prisma.payment.findUnique({ where: { reference } });
-        return { status: updated!.status, tickets: updated!.ticketsData };
+        return { status: updated!.status, tickets: updated!.ticketsData, merchOrder: await this.shop.orderSummaryForPayment(payment.id) };
       }
     }
 
-    return { status: payment.status, tickets: payment.ticketsData };
+    return { status: payment.status, tickets: payment.ticketsData, merchOrder: await this.shop.orderSummaryForPayment(payment.id) };
+  }
+
+  /** Marks a pending payment failed and releases any shop items it reserved. */
+  private async failPayment(payment: { id: string }) {
+    const failed = await this.prisma.payment.updateMany({ where: { id: payment.id, status: 'PENDING' }, data: { status: 'FAILED' } });
+    if (failed.count) await this.shop.cancelForPayment(payment.id);
   }
 
   /** Confirms with FlexPay that the transaction succeeded for the expected amount. */
@@ -335,6 +376,13 @@ export class PaymentService {
       where: { id: payment.id },
       data: { status: 'COMPLETED', providerRef, ticketsData: ticketRows as any },
     });
+
+    // Shop items bought in the same checkout (sends its own confirmation email)
+    await this.shop.markPaidForPayment(payment.id).catch((err) =>
+      this.logger.error(`Marking shop order paid failed for ${payment.reference}: ${err.message}`),
+    );
+
+    if (!ticketRows.length) return; // shop-only order: no ticket email
 
     // Send confirmation email via PublicService
     try {

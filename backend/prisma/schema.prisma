@@ -161,6 +161,11 @@ model Event {
   campaigns          NotificationCampaign[]
   payments           Payment[]
   views           EventView[]
+  products         Product[]
+  merchOrders      MerchOrder[]
+  // Shop settings: delivery is offered when merchDeliveryFee is set (0 = free delivery)
+  merchDeliveryFee Decimal? @db.Decimal(10, 2)
+  merchPickupInfo  String?
 }
 
 model TeamMember {
@@ -559,6 +564,7 @@ model Payment {
   @@index([reference])
   @@index([orderNumber])
   @@index([status])
+  merchOrder    MerchOrder?
 }
 
 // Collaborators of an organizer account: a person (with their own ZAYA login) who works
@@ -615,4 +621,81 @@ model EventView {
 
   @@index([eventId, createdAt])
   @@index([eventId, visitorHash])
+}
+
+// ─── Shop (event merchandise) ─────────────────────────────────────────────────
+
+model Product {
+  id          String           @id @default(uuid())
+  eventId     String
+  event       Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  imageUrl    String?          @db.Text
+  price       Decimal          @db.Decimal(10, 2)
+  currency    String
+  isActive    Boolean          @default(true)
+  position    Int              @default(0)
+  variants    ProductVariant[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([eventId])
+}
+
+// One sellable combination (size / color), with its own stock. A product without
+// options has a single variant with size and color null.
+model ProductVariant {
+  id         String           @id @default(uuid())
+  productId  String
+  product    Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  size       String?
+  color      String?
+  stock      Int              @default(0)
+  position   Int              @default(0)
+  orderItems MerchOrderItem[]
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+}
+
+// PENDING_PAYMENT → PAID → READY → PICKED_UP (pickup) | SHIPPED → DELIVERED (delivery); CANCELLED
+model MerchOrder {
+  id              String           @id @default(uuid())
+  code            String           @unique // short code shown to the buyer / stand, e.g. B-7K3P9Q
+  eventId         String
+  event           Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  paymentId       String?          @unique
+  payment         Payment?         @relation(fields: [paymentId], references: [id])
+  buyerName       String
+  buyerEmail      String
+  buyerPhone      String?
+  fulfillment     String           // PICKUP | DELIVERY
+  deliveryAddress String?
+  deliveryCity    String?
+  deliveryNotes   String?
+  subtotal        Decimal          @db.Decimal(10, 2)
+  deliveryFee     Decimal          @default(0) @db.Decimal(10, 2)
+  total           Decimal          @db.Decimal(10, 2)
+  currency        String
+  status          String           @default("PENDING_PAYMENT")
+  paidAt          DateTime?
+  fulfilledAt     DateTime?
+  items           MerchOrderItem[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([eventId, status])
+}
+
+model MerchOrderItem {
+  id          String         @id @default(uuid())
+  orderId     String
+  order       MerchOrder     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variantId   String
+  variant     ProductVariant @relation(fields: [variantId], references: [id])
+  productName String
+  size        String?
+  color       String?
+  unitPrice   Decimal        @db.Decimal(10, 2)
+  quantity    Int
 }

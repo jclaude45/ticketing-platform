@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
-  AlertTriangle, BarChart3, Calendar, CheckCircle2, Edit, ExternalLink, FolderKanban, Globe, Lock, Mail, MapPin,
+  AlertTriangle, BarChart3, Calendar, CheckCircle2, Edit, ExternalLink, FolderKanban, Globe, Lock, Mail, MapPin, ShoppingBag,
   Play, Ticket, Trash2, Users, X,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -248,6 +248,12 @@ export default function EventDetailPage() {
                 <Lock className="h-3.5 w-3.5 ml-0.5 opacity-70" />
               )}
             </Link>
+            <Link
+              href={`/dashboard/events/${id}/boutique`}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 rounded-lg hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors"
+            >
+              <ShoppingBag className="h-4 w-4" />Boutique
+            </Link>
             {/* Public sales page — only reachable once the event is published */}
             {event.status === 'PUBLISHED' ? (
               <a
@@ -331,6 +337,7 @@ export default function EventDetailPage() {
           { label: 'Design du billet', href: `/dashboard/events/${id}/tickets/template`, icon: Ticket, desc: 'Éditeur visuel des billets' },
           { label: 'Générer des billets', href: `/dashboard/events/${id}/tickets/generate`, icon: Play, desc: 'Créer des billets en lot' },
           { label: 'Invitations', href: `/dashboard/events/${id}/invitations`, icon: Mail, desc: 'Inviter des personnes par email ou Excel' },
+          { label: 'Boutique', href: `/dashboard/events/${id}/boutique`, icon: ShoppingBag, desc: 'T-shirts, souvenirs et commandes' },
           { label: 'Statistiques', href: `/dashboard/events/${id}/analytics`, icon: BarChart3, desc: 'Taux de scan et occupation' },
           { label: 'Gérer l\'équipe', href: `/dashboard/events/${id}/team`, icon: Users, desc: 'Personnel et accréditations' },
           { label: 'Gestion de projet', href: `/dashboard/events/${id}/project`, icon: FolderKanban, desc: 'Rétroplanning et budget' },

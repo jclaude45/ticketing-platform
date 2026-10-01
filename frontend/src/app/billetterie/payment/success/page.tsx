@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { CheckCircle2, Loader2, Ticket, AlertCircle, Download, Printer } from 'lucide-react';
+import { CheckCircle2, Loader2, Ticket, AlertCircle, Download, Printer, ShoppingBag, Store, Truck } from 'lucide-react';
 import { publicApi } from '@/lib/api';
 
 type TicketRow = {
@@ -16,6 +16,12 @@ type TicketRow = {
 };
 
 type Status = 'checking' | 'completed' | 'failed';
+
+type MerchOrder = {
+  code: string;
+  fulfillment: 'PICKUP' | 'DELIVERY';
+  items: { productName: string; size: string | null; color: string | null; quantity: number }[];
+};
 
 function downloadPdf(reference: string, ticket: TicketRow) {
   // Open PDF directly in a new tab — works on all devices including mobile.
@@ -62,6 +68,7 @@ function SuccessContent() {
   const reference = params.get('reference');
   const [status, setStatus] = useState<Status>('checking');
   const [tickets, setTickets] = useState<TicketRow[]>([]);
+  const [merchOrder, setMerchOrder] = useState<MerchOrder | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -74,6 +81,7 @@ function SuccessContent() {
         if (d.status === 'COMPLETED') {
           if (intervalRef.current) clearInterval(intervalRef.current);
           setTickets(d.tickets ?? []);
+          setMerchOrder(d.merchOrder ?? null);
           setStatus('completed');
         } else if (d.status === 'FAILED' || d.status === 'CANCELLED') {
           if (intervalRef.current) clearInterval(intervalRef.current);
@@ -112,8 +120,32 @@ function SuccessContent() {
             <p className="text-sm text-gray-500">
               {tickets.length > 0
                 ? `${tickets.length} billet${tickets.length > 1 ? 's' : ''} généré${tickets.length > 1 ? 's' : ''}. Téléchargez-les ci-dessous.`
-                : 'Vos billets ont été générés et envoyés par email.'}
+                : merchOrder
+                  ? 'Votre commande est confirmée. Le récapitulatif vous a été envoyé par email.'
+                  : 'Vos billets ont été générés et envoyés par email.'}
             </p>
+
+            {merchOrder && (
+              <div className="rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/60 dark:bg-indigo-900/20 p-4 text-left">
+                <p className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+                  <ShoppingBag className="h-4 w-4 text-indigo-600" />
+                  Commande boutique <span className="font-mono">{merchOrder.code}</span>
+                </p>
+                <ul className="mt-2 space-y-0.5 text-sm text-gray-700 dark:text-gray-300">
+                  {merchOrder.items.map((i, idx) => (
+                    <li key={idx}>
+                      {i.quantity} × {i.productName}
+                      {(i.size || i.color) && ` (${[i.size, i.color].filter(Boolean).join(' · ')})`}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 flex items-start gap-1.5 text-xs text-gray-500">
+                  {merchOrder.fulfillment === 'PICKUP'
+                    ? <><Store className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" /> À retirer sur place avec le QR code reçu par email (code {merchOrder.code}).</>
+                    : <><Truck className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" /> Livraison : vous serez prévenu(e) par email de l&apos;expédition.</>}
+                </p>
+              </div>
+            )}
 
             {tickets.length > 0 && (
               <>

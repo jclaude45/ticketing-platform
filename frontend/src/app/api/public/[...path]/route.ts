@@ -10,6 +10,7 @@ const ALLOWED: RegExp[] = [
   /^\/public\/events\/[\w-]+$/,
   /^\/public\/events\/[\w-]+\/register$/,
   /^\/public\/events\/[\w-]+\/view$/,
+  /^\/public\/events\/[\w-]+\/shop$/,
   /^\/public\/events\/[\w-]+\/initiate-payment$/,
   /^\/public\/payments\/[\w-]+\/status$/,
   /^\/public\/payments\/[\w-]+\/tickets\/[\w-]+\/pdf$/,

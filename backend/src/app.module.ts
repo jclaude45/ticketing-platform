@@ -32,6 +32,7 @@ import { PublicModule } from './public/public.module';
 import { InvitationsModule } from './invitations/invitations.module';
 import { AccountModule } from './account/account.module';
 import { AudienceModule } from './audience/audience.module';
+import { ShopModule } from './shop/shop.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PaymentModule } from './payment/payment.module';
 
@@ -89,6 +90,7 @@ import { SecurityMiddleware } from './common/middleware/security.middleware';
     InvitationsModule,
     AccountModule,
     AudienceModule,
+    ShopModule,
     NotificationsModule,
     PaymentModule,
   ],

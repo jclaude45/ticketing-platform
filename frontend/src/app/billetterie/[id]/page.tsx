@@ -9,10 +9,13 @@ import { publicApi, resolveMediaUrl } from '@/lib/api';
 import {
   ArrowLeft, MapPin, Calendar, Clock, Users, Ticket,
   CheckCircle2, Loader2, X, AlertCircle,
-  Plus, Minus, ShoppingCart, Phone, CreditCard, Smartphone,
+  Plus, Minus, ShoppingCart, Phone, CreditCard, Smartphone, ShoppingBag, Store, Truck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TicketVisual, ExportPDFButton, type TicketData } from '@/components/billetterie/TicketCard';
+import {
+  ProductCard, CartSummary, cartLines, money, variantLabel, type Cart, type ShopCatalog,
+} from '@/components/billetterie/Shop';
 
 interface TicketTemplate {
   id: string;
@@ -53,6 +56,15 @@ interface PurchasedTicket {
   qrCode?: string;
 }
 
+interface MerchOrderSummary {
+  code: string;
+  status: string;
+  fulfillment: 'PICKUP' | 'DELIVERY';
+  total: number;
+  currency: string;
+  items: { productName: string; size: string | null; color: string | null; quantity: number }[];
+}
+
 interface PurchaseResult {
   eventName: string;
   holderName: string;
@@ -60,6 +72,7 @@ interface PurchaseResult {
   tickets: PurchasedTicket[];
   total: number;
   currency: string;
+  merchOrder?: MerchOrderSummary | null;
 }
 
 function formatDate(iso: string) {
@@ -123,6 +136,7 @@ function MobileMoneyWaiting({
             tickets: Array.isArray(d.tickets) ? d.tickets : [],
             total,
             currency,
+            merchOrder: d.merchOrder ?? null,
           });
         } else if (d.status === 'FAILED' || d.status === 'CANCELLED') {
           if (intervalRef.current) clearInterval(intervalRef.current);
@@ -175,14 +189,27 @@ function MobileMoneyWaiting({
 
 function PurchaseModal({
   event,
+  catalog,
+  cart,
+  onCartChange,
+  shopOnly,
   onClose,
   onSuccess,
 }: {
   event: PublicEvent;
+  catalog?: ShopCatalog;
+  cart: Cart;
+  onCartChange: (cart: Cart) => void;
+  /** Opened from the shop: buy items without tickets */
+  shopOnly: boolean;
   onClose: () => void;
   onSuccess: (result: PurchaseResult) => void;
 }) {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [fulfillment, setFulfillment] = useState<'PICKUP' | 'DELIVERY'>('PICKUP');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [deliveryCity, setDeliveryCity] = useState(event.city ?? '');
+  const [deliveryNotes, setDeliveryNotes] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -213,13 +240,26 @@ function PurchaseModal({
     return s + (tpl ? tpl.price * i.quantity : 0);
   }, 0);
 
-  const currency = event.ticketTemplates[0]?.currency ?? 'USD';
-  const totalLabel = totalPrice === 0 ? 'Gratuit' : `${totalPrice.toFixed(2)} ${currency}`;
-  const isPaid = totalPrice > 0;
+  // Shop items in the same checkout
+  const lines = cartLines(catalog, cart);
+  const merchCount = lines.reduce((s, l) => s + l.quantity, 0);
+  const merchSubtotal = lines.reduce((s, l) => s + l.product.price * l.quantity, 0);
+  const deliveryFee = merchCount > 0 && fulfillment === 'DELIVERY' ? catalog?.delivery?.fee ?? 0 : 0;
+  const grandTotal = totalPrice + merchSubtotal + deliveryFee;
+  const hasProducts = (catalog?.products.length ?? 0) > 0;
+
+  const currency = event.ticketTemplates[0]?.currency ?? lines[0]?.product.currency ?? 'USD';
+  const totalLabel = grandTotal === 0 ? 'Gratuit' : `${grandTotal.toFixed(2)} ${currency}`;
+  const isPaid = grandTotal > 0;
 
   const contactOk = name.trim().length >= 2 && email.includes('@');
   const phoneRequiredForMM = paymentMethod === 'mobile_money' && !phone.trim();
-  const canSubmit = items.length > 0 && contactOk && (!isPaid || paymentMethod !== null) && !phoneRequiredForMM && !honeypot;
+  const deliveryOk = merchCount === 0 || fulfillment === 'PICKUP' || (deliveryAddress.trim().length > 3 && deliveryCity.trim().length > 1);
+  const canSubmit = (items.length > 0 || merchCount > 0) && contactOk && deliveryOk && (!isPaid || paymentMethod !== null) && !phoneRequiredForMM && !honeypot;
+  const orderLabel = [
+    totalCount > 0 && `${totalCount} billet${totalCount > 1 ? 's' : ''}`,
+    merchCount > 0 && `${merchCount} article${merchCount > 1 ? 's' : ''}`,
+  ].filter(Boolean).join(' + ');
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -230,7 +270,17 @@ function PurchaseModal({
       }
       return publicApi.initiatePayment(event.id, {
         holderName: name.trim(), holderEmail: email.trim(), holderPhone: phone.trim() || undefined,
-        items, paymentMethod: paymentMethod!, currency,
+        items,
+        ...(merchCount > 0 && {
+          merch: lines.map(l => ({ variantId: l.variant.id, quantity: l.quantity })),
+          fulfillment,
+          ...(fulfillment === 'DELIVERY' && {
+            deliveryAddress: deliveryAddress.trim(),
+            deliveryCity: deliveryCity.trim(),
+            deliveryNotes: deliveryNotes.trim() || undefined,
+          }),
+        }),
+        paymentMethod: paymentMethod!,
       });
     },
     onSuccess: (res) => {
@@ -244,7 +294,7 @@ function PurchaseModal({
         return;
       }
       if (d.paymentMethod === 'mobile_money') {
-        setMmWaiting({ reference: d.reference, total: totalPrice, currency });
+        setMmWaiting({ reference: d.reference, total: grandTotal, currency });
       }
     },
   });
@@ -271,7 +321,7 @@ function PurchaseModal({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
           <div>
-            <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Inscription</p>
+            <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">{shopOnly ? 'Boutique' : 'Inscription'}</p>
             <h3 className="text-base font-bold text-gray-900 dark:text-white">{event.name}</h3>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
@@ -283,6 +333,7 @@ function PurchaseModal({
         <div className="overflow-y-auto flex-1 p-6 space-y-6">
 
           {/* Step 1: ticket selection */}
+          {!shopOnly && (
           <div>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
               1 — Choisissez vos billets
@@ -325,10 +376,81 @@ function PurchaseModal({
                   <ShoppingCart className="h-4 w-4" />
                   {totalCount} billet{totalCount > 1 ? 's' : ''}
                 </div>
-                <span className="text-sm font-bold">{totalLabel}</span>
+                <span className="text-sm font-bold">{totalPrice === 0 ? 'Gratuit' : `${totalPrice.toFixed(2)} ${currency}`}</span>
               </div>
             )}
           </div>
+          )}
+
+          {/* Shop items: the cart, plus suggestions when buying tickets */}
+          {(merchCount > 0 || (hasProducts && !shopOnly)) && (
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                <ShoppingBag className="h-3.5 w-3.5" />
+                {shopOnly ? 'Vos articles' : 'Ajouter un souvenir ? (facultatif)'}
+              </p>
+              {merchCount > 0 && <CartSummary lines={lines} cart={cart} onCartChange={onCartChange} />}
+              {!shopOnly && hasProducts && (
+                <div className="mt-2.5 space-y-2.5">
+                  {catalog!.products.map(p => (
+                    <ProductCard key={p.id} product={p} cart={cart} onCartChange={onCartChange} compact />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Pickup or delivery */}
+          {merchCount > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Retrait de vos articles</p>
+              <div className={cn('grid gap-3', catalog?.delivery ? 'grid-cols-2' : 'grid-cols-1')}>
+                {([
+                  { id: 'PICKUP' as const, icon: <Store className="h-5 w-5" />, label: 'Retrait sur place', sub: catalog?.pickupInfo || "À l'événement" },
+                  ...(catalog?.delivery ? [{
+                    id: 'DELIVERY' as const, icon: <Truck className="h-5 w-5" />, label: 'Livraison',
+                    sub: catalog.delivery.fee > 0 ? `+ ${money(catalog.delivery.fee, currency)}` : 'Gratuite',
+                  }] : []),
+                ]).map(m => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setFulfillment(m.id)}
+                    className={cn(
+                      'flex flex-col items-center gap-1.5 rounded-xl border-2 p-3 text-center transition-all',
+                      fulfillment === m.id
+                        ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
+                        : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300',
+                    )}
+                  >
+                    {m.icon}
+                    <p className="text-sm font-semibold">{m.label}</p>
+                    <p className="text-xs opacity-70">{m.sub}</p>
+                  </button>
+                ))}
+              </div>
+              {fulfillment === 'DELIVERY' && (
+                <div className="mt-3 space-y-2.5">
+                  <input value={deliveryAddress} onChange={e => setDeliveryAddress(e.target.value)} maxLength={200} placeholder="Adresse de livraison *"
+                    className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                  <input value={deliveryCity} onChange={e => setDeliveryCity(e.target.value)} maxLength={80} placeholder="Ville *"
+                    className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                  <input value={deliveryNotes} onChange={e => setDeliveryNotes(e.target.value)} maxLength={300} placeholder="Précisions (repère, étage…)"
+                    className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Order total */}
+          {merchCount > 0 && (
+            <div className="rounded-xl bg-gray-50 dark:bg-gray-800/60 px-4 py-3 space-y-1 text-sm">
+              {totalCount > 0 && <div className="flex justify-between text-gray-600 dark:text-gray-300"><span>Billets</span><span>{money(totalPrice, currency)}</span></div>}
+              <div className="flex justify-between text-gray-600 dark:text-gray-300"><span>Articles</span><span>{money(merchSubtotal, currency)}</span></div>
+              {fulfillment === 'DELIVERY' && <div className="flex justify-between text-gray-600 dark:text-gray-300"><span>Livraison</span><span>{deliveryFee > 0 ? money(deliveryFee, currency) : 'Gratuite'}</span></div>}
+              <div className="flex justify-between font-bold text-gray-900 dark:text-white pt-1 border-t border-gray-200 dark:border-gray-700"><span>Total</span><span>{money(grandTotal, currency)}</span></div>
+            </div>
+          )}
 
           {/* Step 2: contact info */}
           <div>
@@ -379,7 +501,7 @@ function PurchaseModal({
           </div>
 
           {/* Step 3: payment method (only for paid tickets) */}
-          {isPaid && totalCount > 0 && (
+          {isPaid && (totalCount > 0 || merchCount > 0) && (
             <div>
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
                 3 — Mode de paiement
@@ -425,7 +547,9 @@ function PurchaseModal({
           )}
 
           <p className="text-xs text-gray-400 leading-relaxed">
-            Vos billets seront envoyés par email. Présentez le QR code ou le numéro de série à l&apos;entrée.
+            {shopOnly
+              ? 'La confirmation de votre commande vous sera envoyée par email.'
+              : "Vos billets seront envoyés par email. Présentez le QR code ou le numéro de série à l'entrée."}
           </p>
         </div>
 
@@ -440,13 +564,15 @@ function PurchaseModal({
               ? <><Loader2 className="h-4 w-4 animate-spin" /> Traitement…</>
               : <>
                   <Ticket className="h-4 w-4" />
-                  {totalCount === 0
-                    ? 'Sélectionnez des billets'
-                    : isPaid && !paymentMethod
-                      ? 'Choisissez un mode de paiement'
-                      : isPaid
-                        ? `Payer ${totalLabel} — ${totalCount} billet${totalCount > 1 ? 's' : ''}`
-                        : `Obtenir ${totalCount} billet${totalCount > 1 ? 's' : ''} — Gratuit`
+                  {totalCount === 0 && merchCount === 0
+                    ? (shopOnly ? 'Ajoutez des articles' : 'Sélectionnez des billets')
+                    : !deliveryOk
+                      ? "Complétez l'adresse de livraison"
+                      : isPaid && !paymentMethod
+                        ? 'Choisissez un mode de paiement'
+                        : isPaid
+                          ? `Payer ${totalLabel} — ${orderLabel}`
+                          : `Obtenir ${orderLabel} — Gratuit`
                   }
                 </>
             }
@@ -500,13 +626,15 @@ function SuccessScreen({
             </div>
             <div>
               <h2 className="text-base font-bold text-white">
-                {result.tickets.length} billet{result.tickets.length > 1 ? 's' : ''} confirmé{result.tickets.length > 1 ? 's' : ''}
+                {result.tickets.length > 0
+                  ? `${result.tickets.length} billet${result.tickets.length > 1 ? 's' : ''} confirmé${result.tickets.length > 1 ? 's' : ''}`
+                  : 'Commande confirmée'}
               </h2>
               <p className="text-emerald-100 text-xs">{result.eventName}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <ExportPDFButton tickets={ticketDataList} />
+            {ticketDataList.length > 0 && <ExportPDFButton tickets={ticketDataList} />}
             <button onClick={onClose} className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors">
               <X className="h-4 w-4" />
             </button>
@@ -531,10 +659,32 @@ function SuccessScreen({
             </div>
           ))}
 
+          {/* Shop order */}
+          {result.merchOrder && (
+            <div className="rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/60 dark:bg-indigo-900/20 p-4">
+              <p className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+                <ShoppingBag className="h-4 w-4 text-indigo-600" />
+                Commande boutique <span className="font-mono">{result.merchOrder.code}</span>
+              </p>
+              <ul className="mt-2 space-y-0.5 text-sm text-gray-700 dark:text-gray-300">
+                {result.merchOrder.items.map((i, idx) => (
+                  <li key={idx}>{i.quantity} × {i.productName}{variantLabel(i) ? ` (${variantLabel(i)})` : ''}</li>
+                ))}
+              </ul>
+              <p className="mt-2 flex items-start gap-1.5 text-xs text-gray-500">
+                {result.merchOrder.fulfillment === 'PICKUP'
+                  ? <><Store className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" /> À retirer sur place : présentez le QR code reçu par email ou le code {result.merchOrder.code}.</>
+                  : <><Truck className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" /> Livraison : vous serez prévenu(e) par email de l&apos;expédition.</>}
+              </p>
+            </div>
+          )}
+
           {/* Email notice */}
           <div className="flex items-start gap-2 text-xs text-gray-500 bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3">
             <CheckCircle2 className="h-4 w-4 text-blue-500 flex-shrink-0 mt-0.5" />
-            <span>Un email de confirmation avec tous vos billets a été envoyé à <strong>{result.holderEmail}</strong>.</span>
+            <span>
+              Un email de confirmation {result.tickets.length > 0 ? 'avec tous vos billets ' : ''}a été envoyé à <strong>{result.holderEmail}</strong>.
+            </span>
           </div>
         </div>
 
@@ -556,8 +706,9 @@ function SuccessScreen({
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const [modalOpen, setModalOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState<false | 'tickets' | 'shop'>(false);
   const [purchaseResult, setPurchaseResult] = useState<PurchaseResult | null>(null);
+  const [cart, setCart] = useState<Cart>({});
 
   const { data: event, isLoading, isError } = useQuery<PublicEvent>({
     queryKey: ['public-event', id],
@@ -567,6 +718,15 @@ export default function EventDetailPage() {
     }),
     retry: false,
   });
+
+  const { data: catalog } = useQuery<ShopCatalog>({
+    queryKey: ['public-shop', id],
+    queryFn: () => publicApi.getShop(id).then(r => (r.data as any).data ?? r.data),
+    enabled: !!event,
+    retry: false,
+  });
+  const cartCount = Object.values(cart).reduce((s, q) => s + q, 0);
+  const cartTotal = cartLines(catalog, cart).reduce((s, l) => s + l.product.price * l.quantity, 0);
 
   // Audience statistics: count this visit once per tab session (no cookie, anonymous)
   useEffect(() => {
@@ -722,7 +882,7 @@ export default function EventDetailPage() {
 
                 {availableTemplates.length > 0 && (
                   <button
-                    onClick={() => setModalOpen(true)}
+                    onClick={() => setModalOpen('tickets')}
                     className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-semibold hover:from-indigo-700 hover:to-purple-700 shadow-md transition-all"
                   >
                     <Ticket className="h-4 w-4" />
@@ -733,13 +893,52 @@ export default function EventDetailPage() {
             )}
           </div>
         </div>
+
+        {/* Shop: buy souvenirs with or without a ticket */}
+        {(catalog?.products.length ?? 0) > 0 && (
+          <section id="boutique" className="space-y-4">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-white">
+                  <ShoppingBag className="h-5 w-5 text-indigo-500" /> Boutique
+                </h2>
+                <p className="text-sm text-gray-500">
+                  Souvenirs officiels de l&apos;événement — à retirer sur place{catalog?.delivery ? ' ou en livraison' : ''}.
+                </p>
+              </div>
+              {cartCount > 0 && (
+                <button
+                  onClick={() => setModalOpen('shop')}
+                  className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-indigo-700"
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                  Commander {cartCount} article{cartCount > 1 ? 's' : ''} — {money(cartTotal, catalog!.products[0].currency)}
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {catalog!.products.map(p => (
+                <ProductCard key={p.id} product={p} cart={cart} onCartChange={setCart} />
+              ))}
+            </div>
+            {cartCount > 0 && availableTemplates.length > 0 && (
+              <p className="text-xs text-gray-500">
+                Vous prenez aussi un billet ? Cliquez sur « {availableTemplates.length > 1 ? 'Choisir mes billets' : 'Acheter un billet'} » : vos articles seront dans la même commande.
+              </p>
+            )}
+          </section>
+        )}
       </div>
 
       {modalOpen && !purchaseResult && (
         <PurchaseModal
           event={event}
+          catalog={catalog}
+          cart={cart}
+          onCartChange={setCart}
+          shopOnly={modalOpen === 'shop'}
           onClose={() => setModalOpen(false)}
-          onSuccess={(result) => { setModalOpen(false); setPurchaseResult(result); }}
+          onSuccess={(result) => { setModalOpen(false); setCart({}); setPurchaseResult(result); }}
         />
       )}
 

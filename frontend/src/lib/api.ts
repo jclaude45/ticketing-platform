@@ -399,6 +399,29 @@ export const teamApi = {
     apiClient.post(`/events/${eventId}/team/${memberId}/accreditation/send-badge`),
 };
 
+// --- Shop (event merchandise) API ---
+export const shopApi = {
+  listProducts: (eventId: string) => apiClient.get(`/events/${eventId}/shop/products`),
+  createProduct: (eventId: string, data: unknown) => apiClient.post(`/events/${eventId}/shop/products`, data),
+  updateProduct: (eventId: string, productId: string, data: unknown) =>
+    apiClient.patch(`/events/${eventId}/shop/products/${productId}`, data),
+  deleteProduct: (eventId: string, productId: string) => apiClient.delete(`/events/${eventId}/shop/products/${productId}`),
+  uploadImage: (eventId: string, productId: string, file: File) => {
+    const form = new FormData();
+    form.append('image', file);
+    return apiClient.post(`/events/${eventId}/shop/products/${productId}/image`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  getSettings: (eventId: string) => apiClient.get(`/events/${eventId}/shop/settings`),
+  updateSettings: (eventId: string, data: { deliveryEnabled: boolean; deliveryFee?: number; pickupInfo?: string }) =>
+    apiClient.patch(`/events/${eventId}/shop/settings`, data),
+  listOrders: (eventId: string, status?: string) =>
+    apiClient.get(`/events/${eventId}/shop/orders`, { params: status ? { status } : undefined }),
+  updateOrder: (eventId: string, orderId: string, status: string) =>
+    apiClient.patch(`/events/${eventId}/shop/orders/${orderId}`, { status }),
+};
+
 // --- Super Admin API ---
 export const adminApi = {
   getOverview: () => apiClient.get('/admin/overview'),
@@ -602,6 +625,9 @@ export const publicApi = {
     publicClient.get('/public/events/cities'),
   getEvent: (id: string) =>
     publicClient.get(`/public/events/${id}`),
+  /** Event shop: products on sale, delivery options */
+  getShop: (id: string) =>
+    publicClient.get(`/public/events/${id}/shop`),
   /** Audience stats: one visit of the event's public page (no cookie, anonymous) */
   trackView: (id: string, data: { referrer?: string; source?: string }) =>
     publicClient.post(`/public/events/${id}/view`, data),
@@ -618,6 +644,11 @@ export const publicApi = {
     holderEmail: string;
     holderPhone?: string;
     items: { templateId: string; quantity: number }[];
+    merch?: { variantId: string; quantity: number }[];
+    fulfillment?: 'PICKUP' | 'DELIVERY';
+    deliveryAddress?: string;
+    deliveryCity?: string;
+    deliveryNotes?: string;
     paymentMethod: 'mobile_money' | 'card';
     currency?: string;
   }) =>
