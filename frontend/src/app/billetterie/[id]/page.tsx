@@ -149,7 +149,15 @@ function MobileMoneyWaiting({
 
     poll();
     intervalRef.current = setInterval(poll, 5000);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+    // Timers are paused while the Mac sleeps / the tab is hidden: check right away on return
+    const onVisible = () => { if (document.visibilityState === 'visible') poll(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
   }, [reference, holderName, holderEmail, total, currency, eventName, onSuccess, onCancel]);
 
   return (
@@ -710,14 +718,15 @@ export default function EventDetailPage() {
   const [purchaseResult, setPurchaseResult] = useState<PurchaseResult | null>(null);
   const [cart, setCart] = useState<Cart>({});
 
-  const { data: event, isLoading, isError } = useQuery<PublicEvent>({
+  // No `retry: false`: a network hiccup (Mac waking up, Wi-Fi) is retried; 404s never are (QueryProvider)
+  const { data: event, isLoading, isError, error, refetch } = useQuery<PublicEvent>({
     queryKey: ['public-event', id],
     queryFn: () => publicApi.getEvent(id).then(r => {
       const d = (r.data as any);
       return d.data ?? d;
     }),
-    retry: false,
   });
+  const notFound = (error as any)?.response?.status === 404;
 
   const { data: catalog } = useQuery<ShopCatalog>({
     queryKey: ['public-shop', id],
@@ -748,14 +757,27 @@ export default function EventDetailPage() {
     );
   }
 
-  if (isError || !event) {
+  // A failed background refresh keeps the event on screen (and any payment in progress):
+  // the error page is only for an event that never loaded
+  if (!event) {
     return (
       <div className="max-w-xl mx-auto px-4 py-24 text-center space-y-4">
         <div className="w-16 h-16 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto">
           <AlertCircle className="h-8 w-8 text-gray-400" />
         </div>
-        <h2 className="text-lg font-bold text-gray-900 dark:text-white">Événement introuvable</h2>
-        <p className="text-sm text-gray-500">Cet événement n&apos;existe pas ou n&apos;est plus disponible.</p>
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+          {isError && !notFound ? 'Connexion impossible' : 'Événement introuvable'}
+        </h2>
+        <p className="text-sm text-gray-500">
+          {isError && !notFound
+            ? "Impossible de charger l'événement. Vérifiez votre connexion internet."
+            : "Cet événement n'existe pas ou n'est plus disponible."}
+        </p>
+        {isError && !notFound && (
+          <button onClick={() => refetch()} className="text-sm font-medium text-indigo-600 hover:text-indigo-700">
+            Réessayer
+          </button>
+        )}
         <Link href="/billetterie" className="inline-flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-700">
           <ArrowLeft className="h-4 w-4" /> Retour à la billetterie
         </Link>
