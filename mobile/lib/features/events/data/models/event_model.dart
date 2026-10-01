@@ -28,7 +28,7 @@ class EventModel extends EventEntity {
     final endDateRaw = json['endDate'] as String? ?? json['end_date'] as String?;
     final createdAtRaw = json['createdAt'] as String? ?? json['created_at'] as String?;
 
-    // /controller-space/events/:id returns { stats: { checkedIn, myScans, myValidScans } }
+    // /controller-space/events/:id returns { stats: { checkedIn, totalTickets, myScans, myValidScans } }
     final stats = json['stats'] as Map<String, dynamic>?;
     final checkedIn = stats?['checkedIn'] as int? ?? json['checkedIn'] as int? ?? json['checked_in'] as int? ?? 0;
     final address = [json['address'], json['city']]
@@ -55,7 +55,12 @@ class EventModel extends EventEntity {
       // The controller's own counters, shown on the event screen
       extraData: stats == null
           ? null
-          : {'myScans': stats['myScans'] as int? ?? 0, 'myValidScans': stats['myValidScans'] as int? ?? 0},
+          : {
+              'myScans': stats['myScans'] as int? ?? 0,
+              'myValidScans': stats['myValidScans'] as int? ?? 0,
+              // Tickets that can enter (valid + used); absent from older servers
+              if (stats['totalTickets'] is int) 'totalTickets': stats['totalTickets'] as int,
+            },
     );
   }
 

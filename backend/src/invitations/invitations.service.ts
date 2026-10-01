@@ -148,6 +148,91 @@ export class InvitationsService {
     };
   }
 
+  /**
+   * Guest added at the door by a controller (scanner app). The caller has checked the
+   * controller's assignment. `count` tickets (the guest + companions) on the cheapest
+   * category with enough places, "Invitation" categories first; emailed in the background.
+   */
+  async inviteAtDoor(
+    eventId: string,
+    controllerId: string,
+    guest: { firstName: string; lastName: string; email: string; phone?: string; address?: string; count?: number },
+  ) {
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        id: true, name: true, organizerId: true, status: true,
+        startDate: true, endDate: true, city: true, venue: true,
+        address: true, description: true, bannerUrl: true,
+        organizer: { select: { firstName: true, lastName: true, email: true } },
+      },
+    });
+    if (!event) throw new NotFoundException('Événement introuvable');
+
+    const count = guest.count ?? 1;
+    const name = `${guest.firstName.trim()} ${guest.lastName.trim()}`;
+    const email = guest.email.trim().toLowerCase();
+
+    const already = await this.prisma.ticket.count({
+      where: {
+        eventId,
+        holderEmail: email,
+        status: { not: TicketStatus.CANCELLED },
+        metadata: { path: ['source'], equals: INVITATION_SOURCE },
+      },
+    });
+    if (already) throw new BadRequestException('Cette personne est déjà invitée à cet événement');
+
+    const templates = await this.prisma.ticketTemplate.findMany({
+      where: { eventId, availableCount: { gte: count } },
+      select: { id: true, name: true, price: true },
+      orderBy: { price: 'asc' },
+    });
+    const template = templates.find((t) => /invit/i.test(t.name)) ?? templates[0];
+    if (!template) throw new BadRequestException("Plus assez de places disponibles pour ajouter cet invité");
+
+    const metadata = {
+      source: INVITATION_SOURCE,
+      invitedBy: controllerId,
+      invitedByRole: 'CONTROLLER',
+      invitedAt: new Date().toISOString(),
+      message: null,
+      emailStatus: 'PENDING',
+      guest: { phone: guest.phone?.trim() || null, address: guest.address?.trim() || null },
+    };
+
+    const result = await this.ticketGeneration.generateTickets(
+      eventId,
+      event.organizerId,
+      Role.ORGANIZER,
+      {
+        templateId: template.id,
+        holders: Array.from({ length: count }, (_, i) => ({
+          holderName: i === 0 ? name : `${name} (+${i})`,
+          holderEmail: email,
+        })),
+      },
+      { price: 0, metadata: metadata as unknown as Prisma.InputJsonValue },
+    );
+
+    const tickets = await this.prisma.ticket.findMany({
+      where: { id: { in: result.tickets.map((t) => t.id) } },
+      select: {
+        id: true, serialNumber: true, holderName: true, holderEmail: true, qrCode: true,
+        metadata: true, template: { select: { name: true, currency: true } },
+      },
+    });
+    this.deliver(event, tickets, null).catch((err) =>
+      this.logger.error(`Door invitation delivery crashed for event ${eventId}: ${err?.message}`),
+    );
+
+    return {
+      created: tickets.length,
+      templateName: template.name,
+      guests: tickets.map((t) => ({ id: t.id, serialNumber: t.serialNumber, holderName: t.holderName })),
+    };
+  }
+
   async importInvitations(
     eventId: string,
     userId: string,

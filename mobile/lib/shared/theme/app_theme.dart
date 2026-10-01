@@ -38,7 +38,7 @@ class AppTheme {
       ),
 
       // Text
-      textTheme: GoogleFonts.interTextTheme(
+      textTheme: GoogleFonts.poppinsTextTheme(
         TextTheme(
           headlineLarge: TextStyle(
             color: AppColors.textPrimary,
@@ -148,7 +148,7 @@ class AppTheme {
       // Snackbar
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.backgroundSurface,
-        contentTextStyle: GoogleFonts.inter(
+        contentTextStyle: GoogleFonts.poppins(
           color: AppColors.textPrimary,
           fontSize: 14,
         ),

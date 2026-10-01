@@ -6,9 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'features/auth/presentation/providers/auth_provider.dart';
 import 'features/auth/presentation/screens/login_screen.dart';
+import 'features/auth/presentation/screens/onboarding_screen.dart';
 import 'features/auth/presentation/screens/splash_screen.dart';
-import 'features/events/presentation/screens/events_list_screen.dart';
-import 'features/events/presentation/screens/event_detail_screen.dart';
+import 'features/auth/presentation/screens/welcome_screen.dart';
+import 'features/events/presentation/screens/select_event_screen.dart';
+import 'features/home/presentation/home_shell.dart';
 import 'features/scanner/presentation/screens/scanner_screen.dart';
 import 'features/scanner/presentation/screens/validation_result_screen.dart';
 import 'features/scanner/domain/entities/validation_result.dart';
@@ -114,7 +116,7 @@ class _TicketScannerAppState extends ConsumerState<TicketScannerApp> with Widget
     return MaterialApp(
       navigatorKey: appNavigatorKey,
       scaffoldMessengerKey: appMessengerKey,
-      title: 'ZControle',
+      title: 'zcontrole',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.current,
       initialRoute: '/',
@@ -124,23 +126,23 @@ class _TicketScannerAppState extends ConsumerState<TicketScannerApp> with Widget
             return MaterialPageRoute(
               builder: (_) => const SplashScreen(),
             );
+          case '/onboarding':
+            return MaterialPageRoute(builder: (_) => const OnboardingScreen());
+          case '/welcome':
+            return MaterialPageRoute(builder: (_) => const WelcomeScreen());
           case '/login':
-            return MaterialPageRoute(
-              builder: (_) => const LoginScreen(),
-            );
+            return MaterialPageRoute(builder: (_) => const LoginScreen());
           case '/events':
-            return MaterialPageRoute(
-              builder: (_) => const EventsListScreen(),
-            );
-          case '/event-detail':
+            return MaterialPageRoute(builder: (_) => const SelectEventScreen());
+          case '/home':
             final eventId = settings.arguments as String;
-            return MaterialPageRoute(
-              builder: (_) => EventDetailScreen(eventId: eventId),
-            );
+            return MaterialPageRoute(builder: (_) => HomeShell(eventId: eventId));
           case '/scanner':
-            final eventId = settings.arguments as String;
+            // Event id, or (event id, mode) from the Guichet tab
+            final args = settings.arguments;
+            final (eventId, mode) = args is (String, ScanMode) ? args : (args as String, ScanMode.tickets);
             return MaterialPageRoute(
-              builder: (_) => ScannerScreen(eventId: eventId),
+              builder: (_) => ScannerScreen(eventId: eventId, initialMode: mode),
             );
           case '/validation-result':
             final result = settings.arguments as ValidationResult;

@@ -6,10 +6,12 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:ticketing_scanner/core/error/exceptions.dart';
+import 'package:ticketing_scanner/core/network/dio_client.dart';
 import 'package:ticketing_scanner/core/network/network_info.dart';
 import 'package:ticketing_scanner/core/storage/local_database.dart';
 import 'package:ticketing_scanner/core/storage/secure_storage.dart';
 import 'package:ticketing_scanner/features/auth/domain/entities/user_entity.dart';
+import 'package:ticketing_scanner/features/guests/data/guests_repository.dart';
 import 'package:ticketing_scanner/features/scanner/data/models/validation_result_model.dart';
 import 'package:ticketing_scanner/features/scanner/data/repositories/scanner_repository_impl.dart';
 import 'package:ticketing_scanner/features/scanner/data/sources/scanner_local_source.dart';
@@ -259,5 +261,27 @@ void main() {
     expect(cols, contains('ticket_id'));
     expect(await upgraded.getOfflinePack('x'), isNull);
     await d.close();
+  });
+
+  group('Guest tab', () {
+    GuestsRepository guests() => GuestsRepository(db: db, dioClient: DioClient(secureStorage: FakeStorage()));
+
+    test('lists the tickets that can enter, by name, with the entry time', () async {
+      final list = await guests().list(eventId);
+      expect(list.map((g) => g.name), ['Invité t1', 'Invité t2', 'Invité t3']); // t4 cancelled
+      expect(list.last.checkedInAt, DateTime.parse('2026-10-01T19:00:00Z'));
+      expect(list.first.checkedIn, isFalse);
+      final counts = await guests().counts(eventId);
+      expect((counts.checkedIn, counts.total, counts.remaining), (1, 3, 2));
+    });
+
+    test('a guest let in from the list offline is counted in and queued', () async {
+      final guest = (await guests().list(eventId)).first;
+      final result = await repo.validateTicket(eventId: eventId, qrCode: guest.qrContent);
+      expect(result.isValid, isTrue);
+      expect((await guests().list(eventId)).first.checkedIn, isTrue);
+      expect((await guests().counts(eventId)).checkedIn, 2);
+      expect(await db.getPendingScanCountForEvent(eventId), 1);
+    });
   });
 }

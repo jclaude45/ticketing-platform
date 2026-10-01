@@ -25,7 +25,10 @@ enum ScanMode { tickets, badges, merch }
 class ScannerScreen extends ConsumerStatefulWidget {
   final String eventId;
 
-  const ScannerScreen({super.key, required this.eventId});
+  /// Mode on opening (the Guichet tab opens it on shop pickups)
+  final ScanMode initialMode;
+
+  const ScannerScreen({super.key, required this.eventId, this.initialMode = ScanMode.tickets});
 
   @override
   ConsumerState<ScannerScreen> createState() => _ScannerScreenState();
@@ -39,7 +42,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
   bool _frontCamera = false;
   bool _soundOn = ScanFeedback.instance.soundEnabled;
   bool _merchBusy = false;
-  ScanMode _scanMode = ScanMode.tickets;
+  late ScanMode _scanMode = widget.initialMode;
 
   // Flash animation
   late AnimationController _flashController;

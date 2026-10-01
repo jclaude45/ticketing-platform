@@ -15,6 +15,9 @@ class ApiEndpoints {
   // Offline pack: the event's tickets (only the changed ones with ?since=)
   static String offlineTickets(String eventId) => '/controller-space/events/$eventId/tickets';
 
+  // Guest added from the app: invitation ticket(s) emailed to them
+  static String addGuest(String eventId) => '/controller-space/events/$eventId/guests';
+
   // Shop orders picked up at the stand
   static String merchLookup(String eventId) => '/controller-space/events/$eventId/merch/lookup';
   static String merchHandOver(String eventId, String orderId) =>

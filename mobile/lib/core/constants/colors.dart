@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// ZControle colours. Brand: the logo's yellow and white. Neutral colours (backgrounds,
+/// zcontrole colours. Brand: the logo's yellow and white. Neutral colours (backgrounds,
 /// text, borders) follow the phone's light / dark mode through [isDark], set by the app
 /// shell; brand and status colours are the same in both.
 class AppColors {
@@ -25,6 +25,19 @@ class AppColors {
   static Color get primaryDark => _m(0xFFE0A200, 0xFF7A5200);
   static Color get primaryLight => _m(0xFFFFD15C, 0xFFC78A00);
   static const Color accent = Color(0xFF00BFA0);
+
+  // zcontrole screens (mockups): ink buttons / outlines on a white page, grey copy.
+  // Dark mode swaps ink and page.
+  static Color get page => _m(0xFF121216, 0xFFFFFFFF);
+  static Color get ink => _m(0xFFF2F2F2, 0xFF252427);
+  static Color get onInk => _m(0xFF14110A, 0xFFFFFFFF);
+  static Color get grey => _m(0xFFA3A3AD, 0xFF707070);
+  static Color get hint => _m(0xFF71717C, 0xFFA5A3A3);
+  static Color get navInactive => _m(0xFF8A8A94, 0xFF787878);
+  static Color get shadow => _m(0x66000000, 0x736C716E);
+  static const Color eventCard = Color(0xFFFFCC00);
+  static const Color chartDone = Color(0xFFFFDD00);
+  static Color get chartRest => _m(0xFF4A4A54, 0xFF919090);
 
   // Backgrounds
   static Color get backgroundDark => _m(0xFF0B0B0F, 0xFFF7F7F5); // page background

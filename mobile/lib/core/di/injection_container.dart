@@ -24,6 +24,7 @@ import '../../features/scanner/domain/repositories/scanner_repository.dart';
 import '../../features/scanner/domain/usecases/scan_ticket.dart';
 import '../../features/scanner/domain/usecases/sync_offline_scans.dart';
 import '../../features/accreditation/data/sources/accreditation_remote_source.dart';
+import '../../features/guests/data/guests_repository.dart';
 import '../../features/merch/data/merch_pickup.dart';
 import '../../features/sync/data/sync_repository_impl.dart';
 import '../../features/sync/domain/sync_usecase.dart';
@@ -111,6 +112,9 @@ Future<void> configureDependencies() async {
 
   // Shop pickup at the stand
   getIt.registerLazySingleton<MerchRepository>(() => MerchRepository(dioClient: getIt<DioClient>()));
+  getIt.registerLazySingleton<GuestsRepository>(
+    () => GuestsRepository(db: getIt<LocalDatabase>(), dioClient: getIt<DioClient>()),
+  );
 
   // Sync
   getIt.registerLazySingleton<SyncRepositoryImpl>(

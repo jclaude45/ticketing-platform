@@ -8,6 +8,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ControllerAccess } from '../common/decorators/controller-access.decorator';
 import { ControllerSpaceService } from './controller-space.service';
 import { MerchLookupDto } from './dto/merch-lookup.dto';
+import { AddGuestDto } from './dto/add-guest.dto';
 
 /** Endpoints for a logged-in controller (ticket scanner), scoped to their assigned events. */
 @ApiTags('Controller space')
@@ -46,6 +47,12 @@ export class ControllerSpaceController {
     @Query('since') since?: string,
   ) {
     return this.space.offlineTickets(controllerId, eventId, since);
+  }
+
+  @Post('events/:eventId/guests')
+  @ApiOperation({ summary: 'Add a guest: free invitation ticket(s) emailed to them' })
+  addGuest(@CurrentUser('id') controllerId: string, @Param('eventId') eventId: string, @Body() dto: AddGuestDto) {
+    return this.space.addGuest(controllerId, eventId, dto);
   }
 
   @Post('events/:eventId/merch/lookup')

@@ -6,11 +6,13 @@ import { ControllerSpaceService } from './controller-space.service';
 import { AuthModule } from '../auth/auth.module';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { InvitationsModule } from '../invitations/invitations.module';
 
 @Module({
   imports: [
     ConfigModule,
     AuthModule,
+    InvitationsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

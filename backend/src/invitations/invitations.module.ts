@@ -9,5 +9,6 @@ import { InvitationsService } from './invitations.service';
   imports: [PrismaModule, TicketsModule, PublicModule],
   controllers: [InvitationsController],
   providers: [InvitationsService],
+  exports: [InvitationsService],
 })
 export class InvitationsModule {}

@@ -72,14 +72,30 @@ class SecureStorage {
     return id;
   }
 
+  // Event the controller works on (chosen after login)
+  static const _selectedEventKey = 'selected_event_id';
+
+  Future<String?> getSelectedEventId() => _storage.read(key: _selectedEventKey);
+
+  Future<void> saveSelectedEventId(String eventId) => _storage.write(key: _selectedEventKey, value: eventId);
+
+  // The three intro screens are shown once per install
+  static const _onboardingKey = 'onboarding_done';
+
+  Future<bool> get onboardingDone async => await _storage.read(key: _onboardingKey) == '1';
+
+  Future<void> setOnboardingDone() => _storage.write(key: _onboardingKey, value: '1');
+
   // Check if logged in
   Future<bool> get isLoggedIn async {
     final token = await getAccessToken();
     return token != null && token.isNotEmpty;
   }
 
-  // Clear all stored data
+  // Ends the session; the intro flag and the device id stay
   Future<void> clearAll() async {
-    await _storage.deleteAll();
+    for (final key in [AppConstants.tokenKey, AppConstants.refreshTokenKey, AppConstants.userKey, _selectedEventKey]) {
+      await _storage.delete(key: key);
+    }
   }
 }

@@ -3,6 +3,8 @@ import { ScanResult, TicketStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { STATUS_LABELS } from '../shop/shop.service';
 import { MerchLookupDto } from './dto/merch-lookup.dto';
+import { AddGuestDto } from './dto/add-guest.dto';
+import { InvitationsService } from '../invitations/invitations.service';
 
 const HANDABLE_STATUSES = ['PAID', 'READY'];
 
@@ -21,7 +23,10 @@ const EVENT_FIELDS = {
 
 @Injectable()
 export class ControllerSpaceService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly invitations: InvitationsService,
+  ) {}
 
   async getProfile(controllerId: string) {
     const controller = await this.prisma.controller.findUnique({
@@ -56,8 +61,9 @@ export class ControllerSpaceService {
     });
     if (!assignment) throw new ForbiddenException("Vous n'êtes pas assigné(e) à cet événement");
 
-    const [checkedIn, myScans, myValidScans] = await Promise.all([
+    const [checkedIn, totalTickets, myScans, myValidScans] = await Promise.all([
       this.prisma.ticket.count({ where: { eventId, status: TicketStatus.USED } }),
+      this.prisma.ticket.count({ where: { eventId, status: { in: [TicketStatus.VALID, TicketStatus.USED] } } }),
       this.countMyScans(controllerId, eventId),
       this.countMyScans(controllerId, eventId, ScanResult.VALID),
     ]);
@@ -65,7 +71,7 @@ export class ControllerSpaceService {
     return {
       ...assignment.event,
       assignedAt: assignment.assignedAt,
-      stats: { checkedIn, myScans, myValidScans },
+      stats: { checkedIn, totalTickets, myScans, myValidScans },
     };
   }
 
@@ -100,6 +106,12 @@ export class ControllerSpaceService {
         checkedInAt: t.checkedInAt,
       })),
     };
+  }
+
+  /** "Ajouter invité" from the app: free invitation tickets, emailed to the guest. */
+  async addGuest(controllerId: string, eventId: string, dto: AddGuestDto) {
+    await this.getAssignment(controllerId, eventId);
+    return this.invitations.inviteAtDoor(eventId, controllerId, dto);
   }
 
   // ─── Merchandise pickup at the stand ──────────────────────────────────────

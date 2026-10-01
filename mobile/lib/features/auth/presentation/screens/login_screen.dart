@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/constants/colors.dart';
-import '../widgets/login_form.dart';
+import '../../../../shared/widgets/zc_widgets.dart';
+import '../providers/auth_provider.dart';
 
+/// "Bienvenue": controller email + password.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -12,308 +13,94 @@ class LoginScreen extends ConsumerStatefulWidget {
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends ConsumerState<LoginScreen>
-    with TickerProviderStateMixin {
-  late AnimationController _fadeController;
-  late AnimationController _slideController;
-  late Animation<double> _fadeAnimation;
-  late Animation<Offset> _slideAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _fadeController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
-    _slideController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 700),
-    );
-
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _fadeController, curve: Curves.easeIn),
-    );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.2),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
-    );
-
-    Future.delayed(const Duration(milliseconds: 100), () {
-      _fadeController.forward();
-      _slideController.forward();
-    });
-  }
+class _LoginScreenState extends ConsumerState<LoginScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _email = TextEditingController();
+  final _password = TextEditingController();
+  bool _obscure = true;
 
   @override
   void dispose() {
-    _fadeController.dispose();
-    _slideController.dispose();
+    _email.dispose();
+    _password.dispose();
     super.dispose();
+  }
+
+  Future<void> _login() async {
+    FocusScope.of(context).unfocus();
+    if (!_formKey.currentState!.validate()) return;
+    final ok = await ref.read(authNotifierProvider.notifier).login(email: _email.text.trim(), password: _password.text);
+    if (ok && mounted) Navigator.pushNamedAndRemoveUntil(context, '/events', (_) => false);
+  }
+
+  /// Opened after a session expiry, there is no welcome screen behind
+  void _back() {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      Navigator.pushReplacementNamed(context, '/welcome');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.backgroundDark,
-      body: Stack(
-        children: [
-          // Background decorations
-          _buildBackground(),
+    final auth = ref.watch(authNotifierProvider);
+    final error = auth.errorMessage;
 
-          // Content
-          SafeArea(
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: SlideTransition(
-                    position: _slideAnimation,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 60),
-
-                        // Logo
-                        _buildLogoSection(),
-
-                        const SizedBox(height: 48),
-
-                        // Welcome text
-                        _buildWelcomeText(),
-
-                        const SizedBox(height: 40),
-
-                        // Login card
-                        _buildLoginCard(),
-
-                        const SizedBox(height: 40),
-
-                        // Footer
-                        _buildFooter(),
-
-                        const SizedBox(height: 32),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBackground() {
-    return Stack(
-      children: [
-        // Top gradient
-        Container(
-          height: 300,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Color(0xFF0A0A1A),
-                Colors.transparent,
-              ],
-            ),
-          ),
-        ),
-        // Glowing orb top right
-        Positioned(
-          top: -80,
-          right: -80,
-          child: Container(
-            width: 280,
-            height: 280,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                colors: [
-                  AppColors.primary.withOpacity(0.15),
-                  Colors.transparent,
-                ],
-              ),
-            ),
-          ),
-        ),
-        // Glowing orb bottom left
-        Positioned(
-          bottom: 100,
-          left: -60,
-          child: Container(
-            width: 200,
-            height: 200,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                colors: [
-                  AppColors.accent.withOpacity(0.08),
-                  Colors.transparent,
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLogoSection() {
-    return Row(
-      children: [
-        Image.asset(
-          AppColors.isDark ? 'assets/images/logo_dark.png' : 'assets/images/logo_light.png',
-          width: 52,
-          height: 52,
-          filterQuality: FilterQuality.high,
-        ),
-        const SizedBox(width: 14),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return ZcPatternScaffold(
+      sheetTop: 0.42,
+      child: Form(
+        key: _formKey,
+        child: ZcFillScroll(
+          padding: const EdgeInsets.symmetric(horizontal: 42),
           children: [
-            Text(
-              'ZCONTROLE',
-              style: GoogleFonts.rajdhani(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
-                letterSpacing: 3,
-              ),
+            const SizedBox(height: 40),
+            ZcBackButton(onPressed: _back),
+            const SizedBox(height: 40),
+            Text('Bienvenue', style: zcText(36, weight: FontWeight.w600, height: 1.1)),
+            const SizedBox(height: 40),
+            ZcTextField(
+              controller: _email,
+              hint: 'Email',
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.next,
+              autofillHints: const [AutofillHints.email],
+              enabled: !auth.isLoading,
+              onChanged: (_) => ref.read(authNotifierProvider.notifier).clearError(),
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) return "L'email est obligatoire";
+                if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v.trim())) return 'Email invalide';
+                return null;
+              },
             ),
-            Text(
-              'Contrôle des accès',
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                color: AppColors.textMuted,
-                letterSpacing: 1,
+            const SizedBox(height: 33),
+            ZcTextField(
+              controller: _password,
+              hint: 'Mot de passe',
+              obscureText: _obscure,
+              textInputAction: TextInputAction.done,
+              autofillHints: const [AutofillHints.password],
+              enabled: !auth.isLoading,
+              onChanged: (_) => ref.read(authNotifierProvider.notifier).clearError(),
+              onSubmitted: (_) => _login(),
+              suffixIcon: IconButton(
+                tooltip: _obscure ? 'Afficher' : 'Masquer',
+                icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: AppColors.hint, size: 20),
+                onPressed: () => setState(() => _obscure = !_obscure),
               ),
+              validator: (v) => v == null || v.isEmpty ? 'Le mot de passe est obligatoire' : null,
             ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildWelcomeText() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Bienvenue,',
-          style: GoogleFonts.inter(
-            fontSize: 16,
-            color: AppColors.textSecondary,
-            fontWeight: FontWeight.w400,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Connectez-vous pour continuer',
-          style: GoogleFonts.inter(
-            fontSize: 32,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary,
-            height: 1.2,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: AppColors.primary.withOpacity(0.2),
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 7,
-                height: 7,
-                decoration: const BoxDecoration(
-                  color: AppColors.statusOnline,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 7),
-              Text(
-                'Espace contrôleur',
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+            if (error != null && error.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Text(error, textAlign: TextAlign.center, style: zcText(13, color: AppColors.usedRed)),
             ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLoginCard() {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: AppColors.backgroundCard,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: AppColors.borderDefault,
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 20,
-            spreadRadius: 2,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: const LoginForm(),
-    );
-  }
-
-  Widget _buildFooter() {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(child: Divider(color: AppColors.borderDefault)),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                'v1.0.0',
-                style: GoogleFonts.inter(
-                  fontSize: 11,
-                  color: AppColors.textDisabled,
-                ),
-              ),
-            ),
-            Expanded(child: Divider(color: AppColors.borderDefault)),
+            const SizedBox(height: 33),
+            ZcButton(label: 'Connexion', loading: auth.isLoading, onPressed: _login),
+            const Spacer(),
+            const SizedBox(height: 40),
           ],
         ),
-        const SizedBox(height: 16),
-        Text(
-          'Réservé aux contrôleurs autorisés.\nUtilisez l\'email de votre invitation.',
-          textAlign: TextAlign.center,
-          style: GoogleFonts.inter(
-            fontSize: 11,
-            color: AppColors.textMuted,
-            height: 1.6,
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
