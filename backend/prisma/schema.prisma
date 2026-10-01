@@ -530,6 +530,7 @@ model Notification {
 
 enum PaymentStatus {
   PENDING
+  PROCESSING // verified with FlexPay, tickets being generated (claimed by one worker only)
   COMPLETED
   FAILED
   CANCELLED

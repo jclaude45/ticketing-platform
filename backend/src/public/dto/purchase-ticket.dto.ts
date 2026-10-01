@@ -1,6 +1,6 @@
 import {
   IsString, IsEmail, MinLength, MaxLength, IsUUID,
-  IsArray, ValidateNested, IsInt, Min, Max, IsOptional,
+  IsArray, ValidateNested, IsInt, Min, Max, IsOptional, ArrayMinSize, ArrayMaxSize,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -15,6 +15,8 @@ export class PurchaseTicketDto {
   @IsOptional() @IsString() @MaxLength(30) holderPhone?: string;
 
   @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(20)
   @ValidateNested({ each: true })
   @Type(() => TicketItemDto)
   items: TicketItemDto[];

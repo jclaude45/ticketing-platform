@@ -140,6 +140,9 @@ export class PublicService {
 
     // Load and validate all requested templates in one query
     const templateIds = dto.items.map(i => i.templateId);
+    if (new Set(templateIds).size !== templateIds.length) {
+      throw new BadRequestException('Chaque catégorie de billet ne doit apparaître qu\'une fois');
+    }
     const templates = await this.prisma.ticketTemplate.findMany({
       where: { id: { in: templateIds }, eventId },
       select: { id: true, name: true, price: true, currency: true, availableCount: true },
@@ -155,6 +158,12 @@ export class PublicService {
           `Seulement ${tpl.availableCount} place(s) restante(s) pour la catégorie "${tpl.name}"`,
         );
       }
+    }
+
+    // This endpoint issues tickets without payment: free categories only.
+    // Paid tickets must go through initiate-payment.
+    if (templates.some(t => Number(t.price) > 0)) {
+      throw new BadRequestException('Ces billets sont payants : utilisez le paiement en ligne');
     }
 
     // Generate tickets for each item sequentially (each call decrements availableCount)

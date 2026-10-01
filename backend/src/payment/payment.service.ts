@@ -7,16 +7,9 @@ import { Role } from '@prisma/client';
 import axios from 'axios';
 import * as crypto from 'crypto';
 
-export type PaymentMethod = 'mobile_money' | 'card';
+import { InitiatePaymentDto } from './dto/initiate-payment.dto';
 
-export interface InitiatePaymentDto {
-  holderName: string;
-  holderEmail: string;
-  holderPhone?: string;
-  items: { templateId: string; quantity: number }[];
-  paymentMethod: PaymentMethod;
-  currency?: string;
-}
+export type PaymentMethod = 'mobile_money' | 'card';
 
 @Injectable()
 export class PaymentService {
@@ -47,6 +40,9 @@ export class PaymentService {
     if (event.status !== 'PUBLISHED') throw new BadRequestException('Cet événement n\'accepte plus d\'inscriptions');
 
     const templateIds = dto.items.map(i => i.templateId);
+    if (new Set(templateIds).size !== templateIds.length) {
+      throw new BadRequestException('Chaque catégorie de billet ne doit apparaître qu\'une fois');
+    }
     const templates = await this.prisma.ticketTemplate.findMany({
       where: { id: { in: templateIds }, eventId },
       select: { id: true, name: true, price: true, currency: true, availableCount: true },
@@ -60,7 +56,11 @@ export class PaymentService {
       }
     }
 
-    const currency = dto.currency || templates[0].currency;
+    // Never trust a currency sent by the client: it comes from the ticket categories
+    const currency = templates[0].currency;
+    if (templates.some(t => t.currency !== currency)) {
+      throw new BadRequestException('Les billets d\'une même commande doivent avoir la même devise');
+    }
     const total = dto.items.reduce((sum, item) => {
       const tpl = templates.find(t => t.id === item.templateId)!;
       return sum + Number(tpl.price) * item.quantity;
@@ -206,61 +206,34 @@ export class PaymentService {
 
     if (!body.reference) return { received: true };
 
-    // Atomic claim: only the first callback can change PENDING→FAILED.
-    // Concurrent/duplicate callbacks see count=0 and exit immediately.
-    const claimed = await this.prisma.payment.updateMany({
-      where: { reference: body.reference, status: 'PENDING' },
-      data: { status: 'FAILED' },
-    });
-
-    if (claimed.count === 0) {
-      this.logger.warn(`Payment ${body.reference} already processed — ignoring duplicate callback`);
+    const payment = await this.prisma.payment.findUnique({ where: { reference: body.reference } });
+    if (!payment || payment.status !== 'PENDING') {
+      this.logger.warn(`Payment ${body.reference} not pending — ignoring callback`);
       return { received: true };
     }
 
     if (String(body.code) !== '0') {
       this.logger.log(`FlexPay callback reported failure for ${body.reference}: code=${body.code}`);
+      await this.prisma.payment.updateMany({ where: { reference: body.reference, status: 'PENDING' }, data: { status: 'FAILED' } });
       return { received: true };
     }
-
-    const payment = await this.prisma.payment.findUnique({ where: { reference: body.reference } });
-    if (!payment) return { received: true };
 
     // Re-verify the transaction with FlexPay before generating tickets
     const verifyRef = payment.orderNumber || body.orderNumber;
     if (!verifyRef) {
       this.logger.warn(`No orderNumber to verify for ${body.reference} — rejecting`);
+      await this.prisma.payment.updateMany({ where: { reference: body.reference, status: 'PENDING' }, data: { status: 'FAILED' } });
       return { received: true };
     }
 
-    try {
-      const res = await axios.get(
-        `${this.FLEXPAY_CHECK_URL}/${verifyRef}`,
-        { headers: { Authorization: `Bearer ${this.FLEXPAY_TOKEN}` }, timeout: 10000 },
-      );
-      const data = res.data;
-
-      if (data.code !== '0' || data.transaction?.status !== '0') {
-        this.logger.warn(`FlexPay re-verification failed for ${body.reference}: ${JSON.stringify(data)}`);
-        return { received: true };
-      }
-
-      const verifiedAmount = parseFloat(data.transaction?.amount || '0');
-      const expectedAmount = Number(payment.amount);
-      if (Math.abs(verifiedAmount - expectedAmount) > 0.01) {
-        this.logger.warn(
-          `Amount mismatch for ${body.reference}: expected ${expectedAmount}, FlexPay returned ${verifiedAmount}`,
-        );
-        return { received: true };
-      }
-    } catch (err) {
-      // FlexPay API unreachable — revert to PENDING so retry is possible
-      await this.prisma.payment.update({ where: { reference: body.reference }, data: { status: 'PENDING' } });
-      this.logger.warn(`Cannot verify payment ${body.reference} (FlexPay unavailable): ${err.message}`);
+    const verification = await this.verifyWithFlexPay(verifyRef, Number(payment.amount));
+    if (verification === 'UNREACHABLE') return { received: true }; // stays PENDING: a later check can complete it
+    if (verification === 'REJECTED') {
+      await this.prisma.payment.updateMany({ where: { reference: body.reference, status: 'PENDING' }, data: { status: 'FAILED' } });
       return { received: true };
     }
 
-    await this.generateTicketsForPayment(payment, body.provider_reference || body.provider_ref);
+    await this.claimAndGenerate(payment, body.provider_reference || body.provider_ref);
     return { received: true };
   }
 
@@ -268,25 +241,59 @@ export class PaymentService {
     const payment = await this.prisma.payment.findUnique({ where: { reference } });
     if (!payment) throw new NotFoundException('Paiement introuvable');
 
-    // If still pending, check with FlexPay
+    // If still pending, check with FlexPay (the callback may be late or lost)
     if (payment.status === 'PENDING' && payment.orderNumber) {
-      try {
-        const res = await axios.get(
-          `${this.FLEXPAY_CHECK_URL}/${payment.orderNumber}`,
-          { headers: { Authorization: `Bearer ${this.FLEXPAY_TOKEN}` } },
-        );
-        const data = res.data;
-        if (data.code === '0' && data.transaction?.status === '0') {
-          await this.generateTicketsForPayment(payment, data.transaction.provider_reference);
-          const updated = await this.prisma.payment.findUnique({ where: { reference } });
-          return { status: updated!.status, tickets: updated!.ticketsData };
-        }
-      } catch (err) {
-        this.logger.warn(`Check status error: ${err.message}`);
+      const verification = await this.verifyWithFlexPay(payment.orderNumber, Number(payment.amount));
+      if (verification === 'VERIFIED') {
+        await this.claimAndGenerate(payment);
+        const updated = await this.prisma.payment.findUnique({ where: { reference } });
+        return { status: updated!.status, tickets: updated!.ticketsData };
       }
     }
 
     return { status: payment.status, tickets: payment.ticketsData };
+  }
+
+  /** Confirms with FlexPay that the transaction succeeded for the expected amount. */
+  private async verifyWithFlexPay(orderNumber: string, expectedAmount: number): Promise<'VERIFIED' | 'REJECTED' | 'UNREACHABLE'> {
+    try {
+      const res = await axios.get(
+        `${this.FLEXPAY_CHECK_URL}/${orderNumber}`,
+        { headers: { Authorization: `Bearer ${this.FLEXPAY_TOKEN}` }, timeout: 10000 },
+      );
+      const data = res.data;
+      if (data.code !== '0' || data.transaction?.status !== '0') return 'REJECTED';
+      const verifiedAmount = parseFloat(data.transaction?.amount || '0');
+      if (Math.abs(verifiedAmount - expectedAmount) > 0.01) {
+        this.logger.warn(`Amount mismatch for order ${orderNumber}: expected ${expectedAmount}, FlexPay returned ${verifiedAmount}`);
+        return 'REJECTED';
+      }
+      return 'VERIFIED';
+    } catch (err) {
+      this.logger.warn(`Cannot verify FlexPay order ${orderNumber}: ${err.message}`);
+      return 'UNREACHABLE';
+    }
+  }
+
+  /**
+   * Atomic PENDING → PROCESSING claim: when the callback and a status poll confirm the same
+   * payment at the same time, only one of them generates the tickets.
+   */
+  private async claimAndGenerate(payment: any, providerRef?: string) {
+    const claimed = await this.prisma.payment.updateMany({
+      where: { id: payment.id, status: 'PENDING' },
+      data: { status: 'PROCESSING' },
+    });
+    if (claimed.count === 0) {
+      this.logger.log(`Payment ${payment.reference} already being processed — skipping`);
+      return;
+    }
+    try {
+      await this.generateTicketsForPayment(payment, providerRef);
+    } catch (err) {
+      // Left in PROCESSING on purpose: retrying could duplicate partially generated tickets
+      this.logger.error(`Ticket generation failed for paid order ${payment.reference}: ${err.message}`);
+    }
   }
 
   private async generateTicketsForPayment(payment: any, providerRef?: string) {

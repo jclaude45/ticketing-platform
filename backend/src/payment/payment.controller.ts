@@ -1,6 +1,7 @@
 import { Controller, Post, Get, Body, Param, Res, NotFoundException, UseGuards, Logger } from '@nestjs/common';
 import { Response } from 'express';
-import { PaymentService, InitiatePaymentDto } from './payment.service';
+import { PaymentService } from './payment.service';
+import { InitiatePaymentDto } from './dto/initiate-payment.dto';
 import { FlexPayWebhookGuard } from './flexpay-webhook.guard';
 
 @Controller('public')
