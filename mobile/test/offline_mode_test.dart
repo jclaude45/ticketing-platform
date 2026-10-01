@@ -22,8 +22,8 @@ import 'package:ticketing_scanner/features/scanner/domain/entities/validation_re
 const eventId = 'evt-1';
 String qr(String id, String sn) => jsonEncode({'id': id, 'sn': sn, 'v': '2'});
 
-Map<String, dynamic> serverTicket(String id, String sn, {String status = 'VALID', String? checkedInAt}) =>
-    {'id': id, 'serialNumber': sn, 'holderName': 'Invité $id', 'templateName': 'VIP', 'status': status, 'checkedInAt': checkedInAt};
+Map<String, dynamic> serverTicket(String id, String sn, {String status = 'VALID', String? checkedInAt, bool guest = false}) =>
+    {'id': id, 'serialNumber': sn, 'holderName': 'Invité $id', 'templateName': 'VIP', 'status': status, 'checkedInAt': checkedInAt, 'guest': guest};
 
 class FakeStorage extends SecureStorage {
   @override
@@ -94,9 +94,9 @@ void main() {
     );
     await addEvent();
     await db.saveOfflinePack(eventId, [
-      serverTicket('t1', 'SN-1'),
+      serverTicket('t1', 'SN-1', guest: true),
       serverTicket('t2', 'SN-2'),
-      serverTicket('t3', 'SN-3', status: 'USED', checkedInAt: '2026-10-01T19:00:00Z'),
+      serverTicket('t3', 'SN-3', status: 'USED', checkedInAt: '2026-10-01T19:00:00Z', guest: true),
       serverTicket('t4', 'SN-4', status: 'CANCELLED'),
     ], full: true, generatedAt: '2026-10-01T18:30:00Z');
   });
@@ -263,12 +263,29 @@ void main() {
     await d.close();
   });
 
+  test('upgrade to v3: guest flag added, ticket lists downloaded again in full', () async {
+    final path = '${dir.path}/v2.db';
+    final v2 = await openDatabase(path, version: 2, onCreate: (d, _) async {
+      await d.execute('CREATE TABLE tickets (id TEXT PRIMARY KEY, event_id TEXT NOT NULL, serial_number TEXT, '
+          'qr_code TEXT, holder_name TEXT, status TEXT, used_at TEXT)');
+      await d.execute('CREATE TABLE offline_packs (event_id TEXT PRIMARY KEY, generated_at TEXT NOT NULL, downloaded_at TEXT NOT NULL)');
+      await d.insert('offline_packs', {'event_id': 'e', 'generated_at': '2026-10-01T10:00:00Z', 'downloaded_at': '2026-10-01T10:00:00Z'});
+    });
+    await v2.close();
+    final upgraded = LocalDatabase(path: path);
+    final d = await upgraded.database;
+    final cols = (await d.rawQuery('PRAGMA table_info(tickets)')).map((c) => c['name']).toList();
+    expect(cols, contains('is_guest'));
+    expect(await upgraded.getOfflinePack('e'), isNull); // next sync: full download
+    await d.close();
+  });
+
   group('Guest tab', () {
     GuestsRepository guests() => GuestsRepository(db: db, dioClient: DioClient(secureStorage: FakeStorage()));
 
-    test('lists the tickets that can enter, by name, with the entry time', () async {
+    test('lists only the invitations, by name, with the entry time', () async {
       final list = await guests().list(eventId);
-      expect(list.map((g) => g.name), ['Invité t1', 'Invité t2', 'Invité t3']); // t4 cancelled
+      expect(list.map((g) => g.name), ['Invité t1', 'Invité t3']); // t2 bought, t4 cancelled
       expect(list.last.checkedInAt, DateTime.parse('2026-10-01T19:00:00Z'));
       expect(list.first.checkedIn, isFalse);
       final counts = await guests().counts(eventId);

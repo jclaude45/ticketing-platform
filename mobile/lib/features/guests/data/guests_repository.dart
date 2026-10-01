@@ -12,7 +12,7 @@ import '../../scanner/domain/entities/validation_result.dart';
 import '../../scanner/domain/usecases/scan_ticket.dart';
 import '../../sync/presentation/providers/sync_provider.dart';
 
-/// A ticket holder of the event, from the ticket list kept on the phone.
+/// A guest of the event (invitation ticket), from the ticket list kept on the phone.
 class Guest {
   final String id;
   final String serialNumber;
@@ -44,13 +44,13 @@ class GuestsRepository {
 
   const GuestsRepository({required this.db, required this.dioClient});
 
-  /// Valid and used tickets, by name (anonymous tickets show their number).
+  /// The event's guests (invitation tickets, valid or used), by name.
   Future<List<Guest>> list(String eventId) async {
     final database = await db.database;
     final rows = await database.query(
       AppConstants.ticketsTable,
       columns: ['id', 'serial_number', 'holder_name', 'ticket_type', 'status', 'used_at'],
-      where: "event_id = ? AND status IN ('valid', 'used')",
+      where: "event_id = ? AND is_guest = 1 AND status IN ('valid', 'used')",
       whereArgs: [eventId],
     );
     final guests = rows.map((r) {
@@ -116,7 +116,7 @@ class GuestsRepository {
       getIt<ScanTicket>()(eventId: eventId, qrCode: guest.qrContent);
 }
 
-/// Guest list of an event, reloaded after each sync (ticket list refreshed, entries sent).
+/// Guests (invitations) of an event, reloaded after each sync (ticket list refreshed, entries sent).
 final eventGuestsProvider = FutureProvider.autoDispose.family<List<Guest>, String>((ref, eventId) {
   ref.watch(syncNotifierProvider.select((s) => s.lastSyncAt));
   return getIt<GuestsRepository>().list(eventId);

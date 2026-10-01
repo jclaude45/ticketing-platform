@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { STATUS_LABELS } from '../shop/shop.service';
 import { MerchLookupDto } from './dto/merch-lookup.dto';
 import { AddGuestDto } from './dto/add-guest.dto';
-import { InvitationsService } from '../invitations/invitations.service';
+import { InvitationsService, INVITATION_SOURCE } from '../invitations/invitations.service';
 
 const HANDABLE_STATUSES = ['PAID', 'READY'];
 
@@ -91,6 +91,7 @@ export class ControllerSpaceService {
       select: {
         id: true, serialNumber: true, holderName: true, status: true, checkedInAt: true,
         template: { select: { name: true } },
+        metadata: true,
       },
       orderBy: { createdAt: 'asc' },
     });
@@ -104,6 +105,8 @@ export class ControllerSpaceService {
         templateName: t.template.name,
         status: t.status,
         checkedInAt: t.checkedInAt,
+        // Invitation tickets make the app's guest list (the metadata itself stays here)
+        guest: (t.metadata as { source?: string } | null)?.source === INVITATION_SOURCE,
       })),
     };
   }

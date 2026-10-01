@@ -73,6 +73,7 @@ class LocalDatabase {
         seat TEXT,
         zone TEXT,
         synced_at TEXT,
+        is_guest INTEGER DEFAULT 0,
         FOREIGN KEY (event_id) REFERENCES ${AppConstants.eventsTable}(id)
       )
     ''');
@@ -145,6 +146,17 @@ class LocalDatabase {
 
   Future<void> _upgradeDatabase(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) await _createV2(db, alterPendingScans: true);
+    if (oldVersion < 3) await _upgradeV3(db);
+  }
+
+  /// v3: invitation tickets flagged (guest list). The ticket lists already on the phone
+  /// don't have the flag: forgetting them makes the next sync download them in full.
+  Future<void> _upgradeV3(Database db) async {
+    final cols = await db.rawQuery('PRAGMA table_info(${AppConstants.ticketsTable})');
+    if (cols.isNotEmpty && !cols.any((c) => c['name'] == 'is_guest')) {
+      await db.execute('ALTER TABLE ${AppConstants.ticketsTable} ADD COLUMN is_guest INTEGER DEFAULT 0');
+    }
+    await db.delete(AppConstants.offlinePacksTable);
   }
 
   // =========== EVENTS ===========
@@ -278,6 +290,7 @@ class LocalDatabase {
             'status': serverStatus,
             'used_at': t['checkedInAt'],
             'synced_at': generatedAt,
+            'is_guest': t['guest'] == true ? 1 : 0,
           },
           conflictAlgorithm: ConflictAlgorithm.replace,
         );

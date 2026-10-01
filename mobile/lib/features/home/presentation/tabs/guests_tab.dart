@@ -11,8 +11,8 @@ import '../../../sync/presentation/providers/sync_provider.dart';
 import '../home_shell.dart';
 import 'add_guest_view.dart';
 
-/// Ticket holders of the event with their entry time; tap one who is not in yet to let
-/// them in. "Ajouter invité" opens the invitation form.
+/// Guests of the event (invitation tickets) with their entry time; tap one who is not in
+/// yet to let them in. "Ajouter invité" opens the invitation form.
 class GuestsTab extends ConsumerStatefulWidget {
   final String eventId;
 
@@ -136,7 +136,10 @@ class _GuestsTabState extends ConsumerState<GuestsTab> {
                   final list = query.isEmpty
                       ? all
                       : all.where((g) => g.name.toLowerCase().contains(query) || g.serialNumber.toLowerCase().contains(query)).toList();
-                  if (all.isEmpty) return const _Message("La liste des billets n'est pas encore sur le téléphone. Elle se télécharge automatiquement dès que le réseau est là.");
+                  if (all.isEmpty) {
+                    return const _Message(
+                        "Aucun invité pour cet événement.\nAjoutez-en avec « Ajouter invité ». La liste se met à jour automatiquement.");
+                  }
                   if (list.isEmpty) return const _Message('Aucun invité ne correspond à la recherche.');
                   return ListView.builder(
                     physics: const AlwaysScrollableScrollPhysics(),
