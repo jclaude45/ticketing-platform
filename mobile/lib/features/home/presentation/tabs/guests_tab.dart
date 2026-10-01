@@ -12,11 +12,15 @@ import '../home_shell.dart';
 import 'add_guest_view.dart';
 
 /// Guests of the event (invitation tickets) with their entry time; tap one who is not in
-/// yet to let them in. "Ajouter invité" opens the invitation form.
+/// yet to let them in. "Ajouter invité" (invitation form) is hidden for now: see
+/// [GuestsTab.invitesEnabled].
 class GuestsTab extends ConsumerStatefulWidget {
   final String eventId;
 
   const GuestsTab({super.key, required this.eventId});
+
+  /// Sending invitations from the app is switched off (organizer's side only for now)
+  static const invitesEnabled = false;
 
   @override
   ConsumerState<GuestsTab> createState() => _GuestsTabState();
@@ -93,16 +97,19 @@ class _GuestsTabState extends ConsumerState<GuestsTab> {
       bottom: false,
       child: Column(
         children: [
-          Align(
-            alignment: Alignment.centerRight,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(0, 12, 14, 8),
-              child: TextButton(
-                onPressed: () => setState(() => _adding = true),
-                child: Text('Ajouter invité', style: zcText(14, color: AppColors.grey)),
+          if (GuestsTab.invitesEnabled)
+            Align(
+              alignment: Alignment.centerRight,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(0, 12, 14, 8),
+                child: TextButton(
+                  onPressed: () => setState(() => _adding = true),
+                  child: Text('Ajouter invité', style: zcText(14, color: AppColors.grey)),
+                ),
               ),
-            ),
-          ),
+            )
+          else
+            const SizedBox(height: 56), // same place for the card as on the Scanner tab
           if (event != null) ZcEventCard(name: event.name, checkedIn: entries.checkedIn, total: entries.total),
           const SizedBox(height: 40),
           Container(
@@ -138,7 +145,7 @@ class _GuestsTabState extends ConsumerState<GuestsTab> {
                       : all.where((g) => g.name.toLowerCase().contains(query) || g.serialNumber.toLowerCase().contains(query)).toList();
                   if (all.isEmpty) {
                     return const _Message(
-                        "Aucun invité pour cet événement.\nAjoutez-en avec « Ajouter invité ». La liste se met à jour automatiquement.");
+                        "Aucun invité pour cet événement.\nLa liste se met à jour automatiquement.");
                   }
                   if (list.isEmpty) return const _Message('Aucun invité ne correspond à la recherche.');
                   return ListView.builder(
