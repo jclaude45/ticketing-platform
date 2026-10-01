@@ -89,6 +89,19 @@ interface ProjectMember {
   user: { id: string; firstName: string; lastName: string; email: string; avatar?: string };
 }
 
+interface AccountCollaborator {
+  id: string;
+  email: string;
+  permission: 'ADMIN' | 'MANAGER' | 'TICKETING' | 'VIEWER';
+  status: 'ACTIVE' | 'PENDING';
+  name: string | null;
+  avatar: string | null;
+}
+
+const COLLABORATOR_LEVELS: Record<AccountCollaborator['permission'], string> = {
+  ADMIN: 'Administrateur', MANAGER: 'Gestionnaire', TICKETING: 'Billetterie', VIEWER: 'Lecture seule',
+};
+
 interface ProjectInvitation {
   id: string;
   email: string;
@@ -1787,10 +1800,11 @@ export default function ProjectPage() {
     queryKey: ['project-members', eventId],
     queryFn: async () => {
       const res = await projectApi.getMembers(eventId);
-      return res.data.data as { members: ProjectMember[]; invitations: ProjectInvitation[] };
+      return res.data.data as { members: ProjectMember[]; invitations: ProjectInvitation[]; collaborators?: AccountCollaborator[] };
     },
   });
   const members = membersQuery.data?.members ?? [];
+  const collaborators = membersQuery.data?.collaborators ?? [];
 
   const myMembership = members.find(m => m.userId === user?.id);
   const isProjectContributor = myMembership?.projectRole === 'CONTRIBUTOR';
@@ -1871,7 +1885,7 @@ export default function ProjectPage() {
             )}
           >
             <Users className="h-4 w-4" />
-            Membres ({members.length})
+            Membres ({members.length + collaborators.length})
           </button>
         </div>
       </div>
@@ -1949,7 +1963,11 @@ export default function ProjectPage() {
             {membersQuery.isLoading ? (
               <p className="text-gray-500 text-sm">Chargement...</p>
             ) : members.length === 0 ? (
-              <p className="text-gray-500 text-sm">Aucun membre invité pour ce projet.</p>
+              <p className="text-gray-500 text-sm">
+                {collaborators.length > 0
+                  ? 'Aucun membre invité spécifiquement pour ce projet.'
+                  : 'Aucun membre invité pour ce projet.'}
+              </p>
             ) : (
               <div className="divide-y divide-gray-100 dark:divide-gray-700">
                 {members.map(m => (
@@ -1983,6 +2001,50 @@ export default function ProjectPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Account collaborators (Admin tab): they work on every event of the account */}
+            {collaborators.length > 0 && (
+              <div className="mt-6">
+                <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+                  <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">Collaborateurs du compte</h4>
+                  <Link href="/dashboard/administration" className="text-xs text-indigo-600 hover:underline">
+                    Gérés dans Admin
+                  </Link>
+                </div>
+                <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                  {collaborators.map(c => (
+                    <div key={c.id} className="flex items-center justify-between py-2.5">
+                      <div className="flex items-center gap-3 min-w-0">
+                        {c.avatar ? (
+                          <img src={resolveMediaUrl(c.avatar)} alt="" className="w-9 h-9 rounded-full object-cover" />
+                        ) : (
+                          <div className={cn(
+                            'w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0',
+                            c.status === 'ACTIVE'
+                              ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white'
+                              : 'border border-dashed border-gray-400 text-gray-500',
+                          )}>
+                            {(c.name ?? c.email)[0].toUpperCase()}
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{c.name ?? c.email}</p>
+                          {c.name && <p className="text-xs text-gray-500 truncate">{c.email}</p>}
+                        </div>
+                      </div>
+                      <span className={cn(
+                        'px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap',
+                        c.status === 'ACTIVE'
+                          ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400'
+                          : 'bg-amber-100 text-amber-700',
+                      )}>
+                        {c.status === 'ACTIVE' ? COLLABORATOR_LEVELS[c.permission] : 'En attente'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

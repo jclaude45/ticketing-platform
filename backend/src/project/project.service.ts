@@ -668,7 +668,24 @@ export class ProjectService {
         expiresAt: true,
       },
     });
-    return { members, invitations };
+    // Collaborators of the organizer's account (Admin tab) work on every event of the account
+    const event = await this.prisma.event.findUnique({ where: { id: eventId }, select: { organizerId: true } });
+    const collaborators = (await this.prisma.accountMember.findMany({
+      where: { ownerId: event.organizerId },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true, email: true, permission: true,
+        user: { select: { firstName: true, lastName: true, avatar: true } },
+      },
+    })).map((c) => ({
+      id: c.id,
+      email: c.email,
+      permission: c.permission,
+      status: c.user ? 'ACTIVE' : 'PENDING',
+      name: c.user ? `${c.user.firstName} ${c.user.lastName}`.trim() : null,
+      avatar: c.user?.avatar ?? null,
+    }));
+    return { members, invitations, collaborators };
   }
 
   async inviteMember(
