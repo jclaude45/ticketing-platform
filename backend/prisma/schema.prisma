@@ -124,6 +124,9 @@ model User {
   notificationTemplates NotificationTemplate[] @relation("UserTemplates")
   notificationCampaigns NotificationCampaign[] @relation("UserCampaigns")
   notifications         Notification[]
+  accountCollaborators  AccountMember[] @relation("AccountOwner")
+  accountMemberships    AccountMember[] @relation("AccountMemberships")
+  accessZones           AccessZone[]
 }
 
 model Event {
@@ -539,4 +542,38 @@ model Payment {
   @@index([reference])
   @@index([orderNumber])
   @@index([status])
+}
+
+// Collaborators of an organizer account: a person (with their own ZAYA login) who works
+// in the owner's workspace with a permission level: ADMIN | MANAGER | TICKETING | VIEWER.
+// userId stays null until someone signs up / logs in with the invited email.
+model AccountMember {
+  id          String   @id @default(uuid())
+  ownerId     String
+  owner       User     @relation("AccountOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  email       String
+  userId      String?
+  user        User?    @relation("AccountMemberships", fields: [userId], references: [id], onDelete: Cascade)
+  permission  String   @default("VIEWER")
+  invitedById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([ownerId, email])
+  @@index([userId])
+  @@index([email])
+}
+
+// Access zones printed on accreditation badges, managed per organizer account
+model AccessZone {
+  id        String   @id @default(uuid())
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name      String
+  color     String   @default("#64748b")
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([ownerId, name])
 }

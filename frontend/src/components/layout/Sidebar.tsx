@@ -6,8 +6,9 @@ import { motion } from 'framer-motion';
 import {
   BarChart3, Calendar, ChevronLeft, ChevronRight,
   History, LayoutDashboard, LogOut, Settings,
-  Shield, Ticket, Users, Zap, CreditCard, ShieldCheck, LayoutGrid, BadgeCheck,
+  Shield, Ticket, Users, Zap, CreditCard, ShieldCheck, LayoutGrid, BadgeCheck, UserCog,
 } from 'lucide-react';
+import { useWorkspace } from '@/hooks/useWorkspace';
 import { useAuthStore } from '@/store/auth.store';
 import { useUIStore } from '@/store/ui.store';
 import { useLogout } from '@/hooks/useAuth';
@@ -22,7 +23,8 @@ interface NavItem {
   exact?: boolean;
 }
 
-const baseNavSections: { title: string; items: NavItem[]; roles?: string[] }[] = [
+// ownerOnly: hidden inside a collaborator workspace; adminOnly: needs the ADMIN level there
+const baseNavSections: { title: string; items: NavItem[]; roles?: string[]; ownerOnly?: boolean; adminOnly?: boolean }[] = [
   {
     title: 'Principal',
     items: [
@@ -44,8 +46,17 @@ const baseNavSections: { title: string; items: NavItem[]; roles?: string[] }[] =
     ],
   },
   {
+    title: 'Administration',
+    roles: ['ORGANIZER', 'ADMIN'],
+    adminOnly: true,
+    items: [
+      { label: 'Admin', href: '/dashboard/administration', icon: UserCog },
+    ],
+  },
+  {
     title: 'Abonnement',
     roles: ['ORGANIZER', 'ADMIN'],
+    ownerOnly: true,
     items: [
       { label: 'Mon abonnement', href: '/dashboard/subscription', icon: BadgeCheck },
     ],
@@ -110,7 +121,12 @@ export function Sidebar() {
   const { user } = useAuthStore();
   const { sidebarCollapsed, setSidebarCollapsed } = useUIStore();
   const logout = useLogout();
-  const navSections = baseNavSections.filter(s => !s.roles || s.roles.includes(user?.role ?? ''));
+  const { isInWorkspace, can } = useWorkspace();
+  const navSections = baseNavSections.filter(s =>
+    (!s.roles || s.roles.includes(user?.role ?? '')) &&
+    !(s.ownerOnly && isInWorkspace) &&
+    !(s.adminOnly && !can('ADMIN')),
+  );
 
   return (
     <motion.aside

@@ -86,9 +86,37 @@ export function clearTabAccount(accountId: string | null | undefined): void {
   } catch { /* ignore */ }
 }
 
+// ── Workspaces (account collaborators) ───────────────────────────────────────
+// A collaborator works in another organizer's account: the tab remembers which owner
+// account it shows; api.ts sends it as the X-Workspace header. Tied to the tab's signed-in
+// account so switching accounts never carries a workspace over.
+const TAB_WORKSPACE_KEY = 'zaya_workspace';
+
+export function getTabWorkspace(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(TAB_WORKSPACE_KEY);
+    if (!raw) return null;
+    const { accountId, ownerId } = JSON.parse(raw);
+    return accountId && accountId === getTabAccountId() ? ownerId : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Open an organizer's workspace in this tab (null = back to my own account). */
+export function switchWorkspace(ownerId: string | null): void {
+  try {
+    if (ownerId) sessionStorage.setItem(TAB_WORKSPACE_KEY, JSON.stringify({ accountId: getTabAccountId(), ownerId }));
+    else sessionStorage.removeItem(TAB_WORKSPACE_KEY);
+  } catch { /* ignore */ }
+  window.location.href = '/dashboard';
+}
+
 /** Show another signed-in account in this tab. */
 export function switchToAccount(accountId: string, path = '/dashboard'): void {
   setTabAccountId(accountId);
+  try { sessionStorage.removeItem(TAB_WORKSPACE_KEY); } catch { /* ignore */ }
   window.location.href = path;
 }
 

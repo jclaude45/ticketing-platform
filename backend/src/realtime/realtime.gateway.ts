@@ -90,7 +90,14 @@ export class RealtimeGateway
       return !!assignment;
     }
     const event = await this.prisma.event.findUnique({ where: { id: eventId }, select: { organizerId: true } });
-    return event?.organizerId === user.sub;
+    if (!event) return false;
+    if (event.organizerId === user.sub) return true;
+    // Account collaborators follow the owner's events
+    const membership = await this.prisma.accountMember.findFirst({
+      where: { ownerId: event.organizerId, userId: user.sub },
+      select: { id: true },
+    });
+    return !!membership;
   }
 
   handleDisconnect(client: Socket) {

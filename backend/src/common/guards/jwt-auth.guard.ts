@@ -3,6 +3,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { CONTROLLER_ACCESS_KEY } from '../decorators/controller-access.decorator';
+import { hasPermission, requiredPermission, routePath } from '../workspace/workspace';
 import { RedisService } from '../../redis/redis.service';
 
 @Injectable()
@@ -51,6 +52,19 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
         context.getClass(),
       ]);
       if (!allowed) throw new ForbiddenException('Accès réservé à l\'organisateur');
+    }
+
+    // Collaborator acting in an organizer's workspace: enforce their permission level
+    const permission = request.user?.workspacePermission;
+    if (authenticated && permission) {
+      const needed = requiredPermission(request.method, routePath(request));
+      if (!needed || !hasPermission(permission, needed)) {
+        throw new ForbiddenException(
+          needed
+            ? `Votre niveau d'accès sur ce compte ne permet pas cette action`
+            : `Action réservée au propriétaire du compte`,
+        );
+      }
     }
 
     return authenticated;

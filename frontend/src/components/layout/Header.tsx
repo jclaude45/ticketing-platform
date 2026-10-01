@@ -15,6 +15,7 @@ import { getInitials } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { resolveMediaUrl } from '@/lib/api';
 import { AccountSwitcher } from './AccountSwitcher';
+import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
 function getPageTitle(pathname: string): string {
   const segments = pathname.split('/').filter(Boolean);
@@ -245,6 +246,7 @@ export function Header() {
               >
                 <Settings className="h-4 w-4" />Paramètres
               </Link>
+              <WorkspaceSwitcher />
               <AccountSwitcher currentId={user?.id} open={userMenuOpen} />
               <div className="border-t border-gray-100 dark:border-gray-800 mt-1 pt-1">
                 <button

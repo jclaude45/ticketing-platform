@@ -23,6 +23,17 @@ export interface SessionAccount {
   avatar: string | null;
 }
 
+export type WorkspacePermission = 'ADMIN' | 'MANAGER' | 'TICKETING' | 'VIEWER';
+
+/** An organizer account the signed-in person collaborates on */
+export interface Workspace {
+  ownerId: string;
+  ownerName: string;
+  ownerEmail: string;
+  ownerAvatar: string | null;
+  permission: WorkspacePermission;
+}
+
 export interface AuthTokens {
   accessToken: string;
   refreshToken: string;

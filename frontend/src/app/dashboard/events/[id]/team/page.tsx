@@ -14,6 +14,7 @@ import {
 import { cn } from '@/lib/utils';
 import { apiClient, teamApi } from '@/lib/api';
 import { printPDFBlob } from '@/lib/print';
+import { useAccessZones } from '@/hooks/useAccessZones';
 import { BadgeDesigner, BadgeConfig, defaultBadgeConfig } from '@/components/team/BadgeDesigner';
 import toast from 'react-hot-toast';
 
@@ -242,12 +243,6 @@ const ROLES: { value: TeamMemberRole; label: string; color: string; bg: string }
   { value: 'SPONSOR',   label: 'Sponsor',   color: 'text-orange-700',  bg: 'bg-orange-50 ring-1 ring-orange-200' },
 ];
 
-const ZONES = ['SCENE', 'COULISSES', 'VIP', 'PRESSE', 'ACCUEIL', 'TECHNIQUE', 'SECURITE', 'ALL'];
-const ZONE_COLORS: Record<string, string> = {
-  SCENE: 'bg-indigo-500', COULISSES: 'bg-purple-500', VIP: 'bg-amber-500',
-  PRESSE: 'bg-cyan-500', ACCUEIL: 'bg-emerald-500', TECHNIQUE: 'bg-slate-500',
-  SECURITE: 'bg-red-500', ALL: 'bg-gray-800',
-};
 
 const roleConfig = (role: TeamMemberRole) => ROLES.find((r) => r.value === role) ?? ROLES[1];
 
@@ -466,6 +461,9 @@ function AccreditationModal({ eventId, member, onClose, onSaved }: {
 }) {
   const existing = member.accreditation;
   const [zones, setZones] = useState<string[]>(existing?.zones ?? []);
+  const { zones: accountZones, colors: zoneColors, colorOf } = useAccessZones();
+  // Account zones + any zone still on this accreditation but since removed from the account
+  const zoneOptions = [...accountZones.map((z) => z.name), ...zones.filter((z) => !accountZones.some((a) => a.name === z))];
   const [validFrom, setValidFrom] = useState(existing?.validFrom ? existing.validFrom.slice(0, 10) : '');
   const [validUntil, setValidUntil] = useState(existing?.validUntil ? existing.validUntil.slice(0, 10) : '');
   const [badgeConfig, setBadgeConfig] = useState<BadgeConfig>(() => ({
@@ -542,14 +540,15 @@ function AccreditationModal({ eventId, member, onClose, onSaved }: {
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-2">Zones d'accès</label>
                   <div className="flex flex-wrap gap-2">
-                    {ZONES.map((z) => (
+                    {zoneOptions.map((z) => (
                       <button key={z} type="button" onClick={() => toggleZone(z)}
                         className={cn(
                           'flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-all',
                           zones.includes(z)
-                            ? `${ZONE_COLORS[z]} text-white shadow-sm`
+                            ? 'text-white shadow-sm'
                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
-                        )}>
+                        )}
+                        style={zones.includes(z) ? { backgroundColor: colorOf(z) } : undefined}>
                         {zones.includes(z) && <Check className="h-3 w-3" />}
                         {z}
                       </button>
@@ -576,6 +575,7 @@ function AccreditationModal({ eventId, member, onClose, onSaved }: {
                 memberDepartment={member.department ?? undefined}
                 photoPreview={member.photoUrl}
                 zones={zones}
+                zoneColors={zoneColors}
                 value={badgeConfig}
                 onChange={setBadgeConfig}
               />
@@ -603,6 +603,7 @@ function AccreditationModal({ eventId, member, onClose, onSaved }: {
 
 export default function TeamPage() {
   const { id: eventId } = useParams<{ id: string }>();
+  const { colorOf } = useAccessZones();
   const router = useRouter();
   const queryClient = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
@@ -840,7 +841,7 @@ export default function TeamPage() {
                             </div>
                             <div className="flex flex-wrap gap-1">
                               {(acc.zones as string[]).slice(0, 4).map((z) => (
-                                <span key={z} className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-white', ZONE_COLORS[z] ?? 'bg-gray-500')}>
+                                <span key={z} className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-white" style={{ backgroundColor: colorOf(z) }}>
                                   {z}
                                 </span>
                               ))}

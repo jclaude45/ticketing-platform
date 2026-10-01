@@ -24,6 +24,8 @@ interface Props {
   memberDepartment?: string;
   photoPreview?: string | null;
   zones: string[];
+  /** Zone name → color from the organizer account (falls back to the built-in palette) */
+  zoneColors?: Record<string, string>;
   value: BadgeConfig;
   onChange: (cfg: BadgeConfig) => void;
 }
@@ -64,9 +66,9 @@ export function defaultBadgeConfig(role: string): BadgeConfig {
 
 // ─── Badge Preview CSS ────────────────────────────────────────────────────────
 
-function HorizontalPreview({ cfg, name, role, dept, photo, zones }: {
+function HorizontalPreview({ cfg, name, role, dept, photo, zones, zoneColors }: {
   cfg: BadgeConfig; name: string; role: string; dept?: string;
-  photo?: string | null; zones: string[];
+  photo?: string | null; zones: string[]; zoneColors?: Record<string, string>;
 }) {
   const roleLabel = ROLE_LABELS[role] ?? role;
   return (
@@ -120,7 +122,7 @@ function HorizontalPreview({ cfg, name, role, dept, photo, zones }: {
         <div className="absolute bottom-7 left-4 flex gap-1 flex-wrap">
           {zones.slice(0, 5).map((z) => (
             <span key={z} className="rounded-full px-2 py-0.5 text-[9px] font-bold text-white"
-              style={{ backgroundColor: ZONE_COLORS[z] ?? '#64748b' }}>
+              style={{ backgroundColor: zoneColors?.[z] ?? ZONE_COLORS[z] ?? '#64748b' }}>
               {z}
             </span>
           ))}
@@ -135,9 +137,9 @@ function HorizontalPreview({ cfg, name, role, dept, photo, zones }: {
   );
 }
 
-function VerticalPreview({ cfg, name, role, dept, photo, zones }: {
+function VerticalPreview({ cfg, name, role, dept, photo, zones, zoneColors }: {
   cfg: BadgeConfig; name: string; role: string; dept?: string;
-  photo?: string | null; zones: string[];
+  photo?: string | null; zones: string[]; zoneColors?: Record<string, string>;
 }) {
   const roleLabel = ROLE_LABELS[role] ?? role;
   return (
@@ -176,7 +178,7 @@ function VerticalPreview({ cfg, name, role, dept, photo, zones }: {
         <div className="absolute bottom-20 left-2 right-2 flex flex-wrap justify-center gap-1">
           {zones.slice(0, 4).map((z) => (
             <span key={z} className="rounded-full px-1.5 py-0.5 text-[8px] font-bold text-white"
-              style={{ backgroundColor: ZONE_COLORS[z] ?? '#64748b' }}>
+              style={{ backgroundColor: zoneColors?.[z] ?? ZONE_COLORS[z] ?? '#64748b' }}>
               {z}
             </span>
           ))}
@@ -236,7 +238,7 @@ function Toggle({ label, icon: Icon, checked, onChange }: {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function BadgeDesigner({ memberName, memberRole, memberDepartment, photoPreview, zones, value, onChange }: Props) {
+export function BadgeDesigner({ memberName, memberRole, memberDepartment, photoPreview, zones, zoneColors, value, onChange }: Props) {
   const update = useCallback(<K extends keyof BadgeConfig>(key: K, val: BadgeConfig[K]) => {
     onChange({ ...value, [key]: val });
   }, [value, onChange]);
@@ -301,9 +303,9 @@ export function BadgeDesigner({ memberName, memberRole, memberDepartment, photoP
       {/* Live preview */}
       <div className="flex-1 flex items-center justify-center rounded-xl bg-gray-100 p-6 min-h-[280px]">
         {value.layout === 'horizontal' ? (
-          <HorizontalPreview cfg={value} name={memberName} role={memberRole} dept={memberDepartment} photo={photoPreview} zones={zones} />
+          <HorizontalPreview cfg={value} name={memberName} role={memberRole} dept={memberDepartment} photo={photoPreview} zones={zones} zoneColors={zoneColors} />
         ) : (
-          <VerticalPreview cfg={value} name={memberName} role={memberRole} dept={memberDepartment} photo={photoPreview} zones={zones} />
+          <VerticalPreview cfg={value} name={memberName} role={memberRole} dept={memberDepartment} photo={photoPreview} zones={zones} zoneColors={zoneColors} />
         )}
       </div>
     </div>

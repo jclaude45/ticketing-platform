@@ -1,5 +1,5 @@
 import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios';
-import { getAccessToken, setTokens, clearTokens, tokenSubject, getTabAccountId } from './auth';
+import { getAccessToken, setTokens, clearTokens, tokenSubject, getTabAccountId, getTabWorkspace, switchWorkspace } from './auth';
 import { useAuthStore } from '@/store/auth.store';
 import type {
   ApiResponse,
@@ -24,6 +24,7 @@ import type {
   OrganizerSubscription,
   OrganizerLimits,
   SessionAccount,
+  Workspace,
 } from '@/types';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
@@ -63,6 +64,9 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // Collaborator working in an organizer's account (ignored by personal routes)
+    const workspace = getTabWorkspace();
+    if (workspace) config.headers['X-Workspace'] = workspace;
     return config;
   },
   error => Promise.reject(error)
@@ -78,6 +82,13 @@ apiClient.interceptors.response.use(
     // Never retry these endpoints — they handle their own auth logic
     const skipRetryUrls = ['/auth/refresh', '/auth/login', '/auth/controller-login', '/auth/register', '/auth/forgot-password', '/auth/reset-password'];
     const shouldSkipRetry = skipRetryUrls.some(u => originalRequest.url?.includes(u));
+
+    // Access to the workspace was withdrawn: go back to the person's own account
+    const message = (error.response?.data as any)?.message;
+    if (error.response?.status === 403 && message === 'Accès à cet espace de travail refusé' && getTabWorkspace()) {
+      switchWorkspace(null);
+      return new Promise(() => {}); // page is reloading
+    }
 
     if (error.response?.status === 401 && !originalRequest._retry && !shouldSkipRetry) {
       if (isRefreshing) {
@@ -144,6 +155,9 @@ export const authApi = {
     ),
 
   logout: () => apiClient.post('/auth/logout'),
+
+  /** Organizer accounts the signed-in person collaborates on */
+  workspaces: () => apiClient.get<ApiResponse<Workspace[]>>('/workspaces'),
 
   /** Accounts signed in on this browser (multi-account switcher) */
   sessionAccounts: () =>

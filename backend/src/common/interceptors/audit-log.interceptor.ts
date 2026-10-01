@@ -37,7 +37,10 @@ export class AuditLogInterceptor implements NestInterceptor {
                 action: `${method} ${url}`,
                 entity: this.extractEntity(url),
                 entityId: responseData?.id || this.extractEntityId(url),
-                newValues: this.sanitizeBody(body),
+                // Collaborator acting in the owner's workspace: keep who really did it
+                newValues: user.actor
+                  ? { ...(this.sanitizeBody(body) ?? {}), _actor: { id: user.actor.id, email: user.actor.email } }
+                  : this.sanitizeBody(body),
                 ipAddress: ip,
                 userAgent: headers['user-agent'],
               },

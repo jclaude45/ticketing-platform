@@ -585,7 +585,7 @@ export class TeamService {
       where: { id: memberId, eventId },
       include: {
         accreditation: true,
-        event: { select: { name: true, venue: true, city: true, startDate: true } },
+        event: { select: { name: true, venue: true, city: true, startDate: true, organizerId: true } },
       },
     });
     if (!member) throw new NotFoundException('Team member not found');
@@ -597,6 +597,12 @@ export class TeamService {
     const acc = member.accreditation;
     const cfg = mergeConfig(member.role, acc.badgeConfig);
     const zones = (acc.zones as string[]) ?? [];
+    // Zone colors are configured per organizer account (Admin → Zones d'accès)
+    const accountZones = await this.prisma.accessZone.findMany({
+      where: { ownerId: member.event.organizerId },
+      select: { name: true, color: true },
+    });
+    const zoneColors = { ...ZONE_COLORS, ...Object.fromEntries(accountZones.map((z) => [z.name, z.color])) };
     const isVertical = cfg.layout === 'vertical';
 
     // Dimensions in points (1mm ≈ 2.835pt)
@@ -638,9 +644,9 @@ export class TeamService {
       doc.addPage({ size: [W, H], margin: 0 });
 
       if (isVertical) {
-        this._renderVertical(doc, W, H, member, acc, cfg, zones, photoBuffer, qrBuffer, logoBuf);
+        this._renderVertical(doc, W, H, member, acc, cfg, zones, photoBuffer, qrBuffer, logoBuf, zoneColors);
       } else {
-        this._renderHorizontal(doc, W, H, member, acc, cfg, zones, photoBuffer, qrBuffer, logoBuf);
+        this._renderHorizontal(doc, W, H, member, acc, cfg, zones, photoBuffer, qrBuffer, logoBuf, zoneColors);
       }
 
       doc.end();
@@ -648,7 +654,7 @@ export class TeamService {
     });
   }
 
-  private _renderHorizontal(doc: any, W: number, H: number, member: any, acc: any, cfg: BadgeConfig, zones: string[], photo: Buffer | null, qr: Buffer, logoBuf?: Buffer) {
+  private _renderHorizontal(doc: any, W: number, H: number, member: any, acc: any, cfg: BadgeConfig, zones: string[], photo: Buffer | null, qr: Buffer, logoBuf?: Buffer, zoneColors: Record<string, string> = ZONE_COLORS) {
     // Background
     doc.rect(0, 0, W, H).fill(cfg.backgroundColor);
 
@@ -715,7 +721,7 @@ export class TeamService {
       const zoneY = H - 26;
       let zx = 8;
       zones.slice(0, 6).forEach((z) => {
-        const bg = ZONE_COLORS[z] ?? '#64748b';
+        const bg = zoneColors[z] ?? '#64748b';
         const label = z.length > 8 ? z.slice(0, 8) : z;
         const tw = label.length * 5 + 8;
         doc.roundedRect(zx, zoneY, tw, 12, 3).fill(bg);
@@ -739,7 +745,7 @@ export class TeamService {
     this._renderRevokedWatermark(doc, W, H, acc);
   }
 
-  private _renderVertical(doc: any, W: number, H: number, member: any, acc: any, cfg: BadgeConfig, zones: string[], photo: Buffer | null, qr: Buffer, logoBuf?: Buffer) {
+  private _renderVertical(doc: any, W: number, H: number, member: any, acc: any, cfg: BadgeConfig, zones: string[], photo: Buffer | null, qr: Buffer, logoBuf?: Buffer, zoneColors: Record<string, string> = ZONE_COLORS) {
     // Background
     doc.rect(0, 0, W, H).fill(cfg.backgroundColor);
 
@@ -813,7 +819,7 @@ export class TeamService {
         const rowWidth = rowZones.length * BADGE_W + (rowZones.length - 1) * GAP;
         let zx = (W - rowWidth) / 2;
         rowZones.forEach((z) => {
-          const bg = ZONE_COLORS[z] ?? '#64748b';
+          const bg = zoneColors[z] ?? '#64748b';
           const label = z.length > 9 ? z.slice(0, 9) : z;
           doc.roundedRect(zx, zy, BADGE_W, BADGE_H, 3).fill(bg);
           doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(7)
