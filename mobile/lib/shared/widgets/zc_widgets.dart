@@ -121,6 +121,7 @@ class ZcButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       height: 58,
+      width: double.infinity,
       child: FilledButton(
         style: FilledButton.styleFrom(
           backgroundColor: AppColors.ink,
