@@ -93,6 +93,9 @@ services:
       FLEXPAY_TOKEN: ${FLEXPAY_TOKEN}
       FLEXPAY_MERCHANT: ${FLEXPAY_MERCHANT:-}
       APP_BASE_URL: ${APP_BASE_URL}
+      # Audience stats: optional ipinfo.io token for city-level geolocation (offline DB otherwise)
+      IPINFO_TOKEN: ${IPINFO_TOKEN:-}
+      AUDIENCE_SALT: ${AUDIENCE_SALT:-}
     volumes:
       - ./keys:/app/keys:ro
       - backend_uploads:/app/public/uploads

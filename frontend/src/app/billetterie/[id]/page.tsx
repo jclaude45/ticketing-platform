@@ -568,6 +568,18 @@ export default function EventDetailPage() {
     retry: false,
   });
 
+  // Audience statistics: count this visit once per tab session (no cookie, anonymous)
+  useEffect(() => {
+    if (!id) return;
+    const key = `zaya_view_${id}`;
+    try {
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, '1');
+    } catch { /* storage blocked: still count the visit */ }
+    const source = new URLSearchParams(window.location.search).get('utm_source') ?? undefined;
+    publicApi.trackView(id, { referrer: document.referrer || undefined, source }).catch(() => {});
+  }, [id]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">

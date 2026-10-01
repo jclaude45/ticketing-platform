@@ -15,6 +15,7 @@ import {
   RefreshCw, Trophy, Clock, TrendingUp,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { AudienceSection } from '@/components/analytics/AudienceSection';
 
 export default function EventAnalyticsPage() {
   const { id: eventId } = useParams<{ id: string }>();
@@ -230,6 +231,9 @@ export default function EventAnalyticsPage() {
           <RealtimeFeed eventId={eventId} />
         </div>
       </div>
+
+      {/* Public sales page audience */}
+      <AudienceSection eventId={eventId} />
     </div>
   );
 }

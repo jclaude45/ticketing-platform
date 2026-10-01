@@ -160,6 +160,7 @@ model Event {
   projectMembers     ProjectMember[]
   campaigns          NotificationCampaign[]
   payments           Payment[]
+  views           EventView[]
 }
 
 model TeamMember {
@@ -591,4 +592,26 @@ model AccessZone {
   updatedAt DateTime @updatedAt
 
   @@unique([ownerId, name])
+}
+
+// A visit to an event's public sales page (audience statistics). Privacy: no IP or cookie
+// is stored — visitorHash is a salted daily hash (ip + user agent + day), the location is
+// city-level from an offline GeoIP database with coordinates rounded to ~10 km.
+model EventView {
+  id          String   @id @default(uuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  visitorHash String
+  country     String?
+  region      String?
+  city        String?
+  lat         Float?
+  lng         Float?
+  referrer    String?
+  source      String?
+  device      String?
+  createdAt   DateTime @default(now())
+
+  @@index([eventId, createdAt])
+  @@index([eventId, visitorHash])
 }

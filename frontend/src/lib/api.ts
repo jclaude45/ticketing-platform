@@ -602,6 +602,9 @@ export const publicApi = {
     publicClient.get('/public/events/cities'),
   getEvent: (id: string) =>
     publicClient.get(`/public/events/${id}`),
+  /** Audience stats: one visit of the event's public page (no cookie, anonymous) */
+  trackView: (id: string, data: { referrer?: string; source?: string }) =>
+    publicClient.post(`/public/events/${id}/view`, data),
   purchaseTicket: (eventId: string, data: {
     holderName: string;
     holderEmail: string;

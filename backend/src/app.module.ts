@@ -31,6 +31,7 @@ import { CommunicationModule } from './communication/communication.module';
 import { PublicModule } from './public/public.module';
 import { InvitationsModule } from './invitations/invitations.module';
 import { AccountModule } from './account/account.module';
+import { AudienceModule } from './audience/audience.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PaymentModule } from './payment/payment.module';
 
@@ -87,6 +88,7 @@ import { SecurityMiddleware } from './common/middleware/security.middleware';
     PublicModule,
     InvitationsModule,
     AccountModule,
+    AudienceModule,
     NotificationsModule,
     PaymentModule,
   ],
