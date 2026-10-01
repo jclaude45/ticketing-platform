@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import {
   BarChart3, Calendar, ChevronLeft, ChevronRight,
   History, LayoutDashboard, LogOut, Settings,
-  Shield, Ticket, Users, Zap, CreditCard, ShieldCheck, LayoutGrid, BadgeCheck, UserCog,
+  Shield, Users, Zap, CreditCard, ShieldCheck, LayoutGrid, BadgeCheck, UserCog,
 } from 'lucide-react';
 import { useWorkspace } from '@/hooks/useWorkspace';
 import { useAuthStore } from '@/store/auth.store';
@@ -73,12 +73,6 @@ const baseNavSections: { title: string; items: NavItem[]; roles?: string[]; owne
     title: 'Compte',
     items: [
       { label: 'Paramètres', href: '/dashboard/settings', icon: Settings },
-    ],
-  },
-  {
-    title: 'Billetterie',
-    items: [
-      { label: 'Page publique', href: '/billetterie', icon: Ticket },
     ],
   },
 ];

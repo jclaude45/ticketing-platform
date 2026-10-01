@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
-  AlertTriangle, BarChart3, Calendar, CheckCircle2, Edit, FolderKanban, Globe, Lock, Mail, MapPin,
+  AlertTriangle, BarChart3, Calendar, CheckCircle2, Edit, ExternalLink, FolderKanban, Globe, Lock, Mail, MapPin,
   Play, Ticket, Trash2, Users, X,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -248,6 +248,24 @@ export default function EventDetailPage() {
                 <Lock className="h-3.5 w-3.5 ml-0.5 opacity-70" />
               )}
             </Link>
+            {/* Public sales page — only reachable once the event is published */}
+            {event.status === 'PUBLISHED' ? (
+              <a
+                href={`/billetterie/${id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 rounded-lg hover:bg-sky-200 dark:hover:bg-sky-900/50 transition-colors"
+              >
+                <ExternalLink className="h-4 w-4" />Page de vente
+              </a>
+            ) : (
+              <span
+                title="Publiez l'événement pour activer sa page de vente"
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 rounded-lg cursor-not-allowed"
+              >
+                <ExternalLink className="h-4 w-4" />Page de vente
+              </span>
+            )}
             {/* Publish / Cancel / Delete — uniquement pour l'organisateur réel (pas les MANAGERs invités) */}
             {!isManager && event.status === 'DRAFT' && (
               <button
