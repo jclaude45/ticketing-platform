@@ -374,8 +374,23 @@ model EventTask {
   position     Int       @default(0)
   startDate    DateTime?
   assignees    TaskAssignee[]
+  pendingAssignees TaskPendingAssignee[]
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+}
+
+// A task assigned to someone who has no account yet (pending project invitation or
+// pending account collaborator). Turned into a TaskAssignee when they sign in.
+model TaskPendingAssignee {
+  id        String    @id @default(uuid())
+  taskId    String
+  task      EventTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  email     String
+  name      String?
+  createdAt DateTime  @default(now())
+
+  @@unique([taskId, email])
+  @@index([email])
 }
 
 model BudgetLine {

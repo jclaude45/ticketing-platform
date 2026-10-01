@@ -138,6 +138,11 @@ export class ProjectController {
 
   // ── Members ───────────────────────────────────────────────────────────────
 
+  @Get('assignees')
+  getAssignees(@Param('eventId') eventId: string, @CurrentUser() user: any) {
+    return this.projectService.getAssignees(eventId, user.id, user.role);
+  }
+
   @Get('members')
   getMembers(@Param('eventId') eventId: string, @CurrentUser() user: any) {
     return this.projectService.getMembers(eventId, user.id, user.role);

@@ -15,6 +15,8 @@ export class CreateTaskDto {
   @IsOptional() @IsDateString() dueDate?: string;
   @IsOptional() @IsNumber() @Type(() => Number) position?: number;
   @IsOptional() @IsArray() @IsString({ each: true }) assigneeIds?: string[];
+  /** People without an account yet (pending invitation), assigned by email */
+  @IsOptional() @IsArray() @IsEmail({}, { each: true }) pendingAssigneeEmails?: string[];
   @IsOptional() @IsDateString() startDate?: string;
 }
 
@@ -29,6 +31,8 @@ export class UpdateTaskDto {
   @IsOptional() @IsDateString() dueDate?: string;
   @IsOptional() @IsNumber() @Type(() => Number) position?: number;
   @IsOptional() @IsArray() @IsString({ each: true }) assigneeIds?: string[];
+  /** People without an account yet (pending invitation), assigned by email */
+  @IsOptional() @IsArray() @IsEmail({}, { each: true }) pendingAssigneeEmails?: string[];
   @IsOptional() @IsDateString() startDate?: string;
 }
 

@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { Role } from '@prisma/client';
+import { claimPendingTaskAssignments } from './pending-assignees';
 import { NotificationsService } from '../notifications/notifications.service';
 import * as nodemailer from 'nodemailer';
 import * as crypto from 'crypto';
@@ -22,6 +23,19 @@ import {
   InviteMemberDto,
   AcceptInvitationDto,
 } from './dto/project.dto';
+
+// Budget alerts: a line is "WARNING" from 80% of its planned amount, "OVER" above 100%
+const BUDGET_WARNING_RATIO = 0.8;
+export type BudgetAlertLevel = 'OK' | 'WARNING' | 'OVER';
+const ALERT_RANK: Record<BudgetAlertLevel, number> = { OK: 0, WARNING: 1, OVER: 2 };
+
+export function budgetAlertLevel(planned: number, spent: number): BudgetAlertLevel {
+  if (spent > planned) return 'OVER';
+  if (planned > 0 && spent >= planned * BUDGET_WARNING_RATIO) return 'WARNING';
+  return 'OK';
+}
+
+const formatAmount = (n: number) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(n);
 
 @Injectable()
 export class ProjectService {
@@ -85,6 +99,7 @@ export class ProjectService {
             user: { select: { id: true, firstName: true, lastName: true, email: true, avatar: true } },
           },
         },
+        pendingAssignees: { select: { email: true, name: true } },
       },
     });
   }
@@ -95,7 +110,8 @@ export class ProjectService {
       where: { eventId, status: dto.status ?? 'TODO' },
       _max: { position: true },
     });
-    const { assigneeIds, ...taskData } = dto;
+    const { assigneeIds, pendingAssigneeEmails, ...taskData } = dto;
+    const pendingEmails = await this.validateAssignees(eventId, assigneeIds, pendingAssigneeEmails);
     const task = await this.prisma.eventTask.create({
       data: {
         ...taskData,
@@ -105,6 +121,8 @@ export class ProjectService {
         position: dto.position ?? (maxPos._max.position ?? -1) + 1,
       },
     });
+
+    await this.syncPendingAssignees(task.id, pendingEmails);
 
     if (assigneeIds && assigneeIds.length > 0) {
       await this.prisma.taskAssignee.createMany({
@@ -139,6 +157,7 @@ export class ProjectService {
             user: { select: { id: true, firstName: true, lastName: true, email: true, avatar: true } },
           },
         },
+        pendingAssignees: { select: { email: true, name: true } },
       },
     });
   }
@@ -154,7 +173,8 @@ export class ProjectService {
     const task = await this.prisma.eventTask.findFirst({ where: { id: taskId, eventId } });
     if (!task) throw new NotFoundException('Task not found');
 
-    const { assigneeIds, ...updateData } = dto;
+    const { assigneeIds, pendingAssigneeEmails, ...updateData } = dto;
+    const pendingEmails = await this.validateAssignees(eventId, assigneeIds, pendingAssigneeEmails, taskId);
     const updated = await this.prisma.eventTask.update({
       where: { id: taskId },
       data: {
@@ -187,6 +207,8 @@ export class ProjectService {
         );
       }
     }
+
+    if (pendingAssigneeEmails !== undefined) await this.syncPendingAssignees(taskId, pendingEmails);
 
     // Sync multi-assignees
     if (assigneeIds !== undefined) {
@@ -321,6 +343,7 @@ export class ProjectService {
             user: { select: { id: true, firstName: true, lastName: true, email: true, avatar: true } },
           },
         },
+        pendingAssignees: { select: { email: true, name: true } },
       },
     });
   }
@@ -342,13 +365,34 @@ export class ProjectService {
       include: { expenses: { orderBy: { date: 'desc' } } },
       orderBy: { createdAt: 'asc' },
     });
-    const linesWithTotals = lines.map((l) => ({
-      ...l,
-      totalSpent: l.expenses.reduce((sum, e) => sum + e.amount, 0),
-    }));
+    const linesWithTotals = lines.map((l) => {
+      const totalSpent = l.expenses.reduce((sum, e) => sum + e.amount, 0);
+      return {
+        ...l,
+        totalSpent,
+        consumption: l.plannedAmount > 0 ? totalSpent / l.plannedAmount : null,
+        alertLevel: budgetAlertLevel(l.plannedAmount, totalSpent),
+      };
+    });
+    const totalPlanned = linesWithTotals.reduce((s, l) => s + l.plannedAmount, 0);
+    const totalSpent = linesWithTotals.reduce((s, l) => s + l.totalSpent, 0);
     return {
-      totalPlanned: linesWithTotals.reduce((s, l) => s + l.plannedAmount, 0),
-      totalSpent: linesWithTotals.reduce((s, l) => s + l.totalSpent, 0),
+      totalPlanned,
+      totalSpent,
+      alertLevel: budgetAlertLevel(totalPlanned, totalSpent),
+      // Lines needing attention, worst first
+      alerts: linesWithTotals
+        .filter((l) => l.alertLevel !== 'OK')
+        .sort((a, b) => ALERT_RANK[b.alertLevel] - ALERT_RANK[a.alertLevel] || b.totalSpent - b.plannedAmount - (a.totalSpent - a.plannedAmount))
+        .map((l) => ({
+          lineId: l.id,
+          label: l.label,
+          category: l.category,
+          level: l.alertLevel,
+          planned: l.plannedAmount,
+          spent: l.totalSpent,
+          overBy: Math.max(0, l.totalSpent - l.plannedAmount),
+        })),
       lines: linesWithTotals,
     };
   }
@@ -396,13 +440,57 @@ export class ProjectService {
     await this.checkBudgetAccess(eventId, userId, role);
     const line = await this.prisma.budgetLine.findFirst({ where: { id: lineId, eventId } });
     if (!line) throw new NotFoundException('Budget line not found');
-    return this.prisma.budgetExpense.create({
+    const spentBefore = await this.lineSpent(lineId);
+    const expense = await this.prisma.budgetExpense.create({
       data: {
         ...dto,
         budgetLineId: lineId,
         date: dto.date ? new Date(dto.date) : new Date(),
       },
     });
+    const budgetAlert = await this.checkBudgetThreshold(eventId, line, spentBefore);
+    return { ...expense, budgetAlert };
+  }
+
+  private async lineSpent(lineId: string): Promise<number> {
+    const agg = await this.prisma.budgetExpense.aggregate({ where: { budgetLineId: lineId }, _sum: { amount: true } });
+    return agg._sum.amount ?? 0;
+  }
+
+  /**
+   * After an expense change: if the line got worse (OK → Attention, or → Dépassé), notify the
+   * event organizer in-app and return the alert so the UI can warn right away.
+   */
+  private async checkBudgetThreshold(
+    eventId: string,
+    line: { id: string; label: string; plannedAmount: number },
+    spentBefore: number,
+  ) {
+    const spentAfter = await this.lineSpent(line.id);
+    const before = budgetAlertLevel(line.plannedAmount, spentBefore);
+    const after = budgetAlertLevel(line.plannedAmount, spentAfter);
+    const alert = { level: after, label: line.label, planned: line.plannedAmount, spent: spentAfter };
+    if (ALERT_RANK[after] <= ALERT_RANK[before]) return after === 'OK' ? null : alert;
+
+    const event = await this.prisma.event.findUnique({ where: { id: eventId }, select: { name: true, organizerId: true } });
+    if (event) {
+      const pct = line.plannedAmount > 0 ? Math.round((spentAfter / line.plannedAmount) * 100) : null;
+      await this.notificationsService.create(event.organizerId, after === 'OVER'
+        ? {
+            title: 'Budget dépassé',
+            message: `"${line.label}" (${event.name}) : ${formatAmount(spentAfter)} dépensés pour ${formatAmount(line.plannedAmount)} prévus — dépassement de ${formatAmount(spentAfter - line.plannedAmount)}.`,
+            type: 'error',
+            link: `/dashboard/events/${eventId}/project`,
+          }
+        : {
+            title: 'Budget bientôt atteint',
+            message: `"${line.label}" (${event.name}) a consommé ${pct}% de son budget prévu.`,
+            type: 'warning',
+            link: `/dashboard/events/${eventId}/project`,
+          },
+      ).catch((err) => this.logger.warn(`Budget alert notification failed: ${err?.message}`));
+    }
+    return alert;
   }
 
   async updateExpense(
@@ -418,7 +506,10 @@ export class ProjectService {
       where: { id: expId, budgetLineId: lineId },
     });
     if (!exp) throw new NotFoundException('Expense not found');
-    return this.prisma.budgetExpense.update({
+    const line = await this.prisma.budgetLine.findFirst({ where: { id: lineId, eventId } });
+    if (!line) throw new NotFoundException('Budget line not found');
+    const spentBefore = await this.lineSpent(lineId);
+    const expense = await this.prisma.budgetExpense.update({
       where: { id: expId },
       data: {
         ...dto,
@@ -430,6 +521,8 @@ export class ProjectService {
             : undefined,
       },
     });
+    const budgetAlert = await this.checkBudgetThreshold(eventId, line, spentBefore);
+    return { ...expense, budgetAlert };
   }
 
   async deleteExpense(
@@ -449,6 +542,103 @@ export class ProjectService {
   }
 
   // ── Members ───────────────────────────────────────────────────────────────
+
+  /**
+   * Everyone a task can be assigned to: the organizer, project members, the organizer's
+   * account collaborators, and people still invited (assigned by email until they sign in).
+   */
+  async getAssignees(eventId: string, userId: string, role: Role) {
+    await this.checkEventAccess(eventId, userId, role);
+    return this.listAssignees(eventId);
+  }
+
+  private async listAssignees(eventId: string) {
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        organizer: { select: { id: true, firstName: true, lastName: true, email: true, avatar: true } },
+        organizerId: true,
+      },
+    });
+    const userSelect = { id: true, firstName: true, lastName: true, email: true, avatar: true } as const;
+    const [members, collaborators, invitations] = await Promise.all([
+      this.prisma.projectMember.findMany({ where: { eventId }, select: { projectRole: true, user: { select: userSelect } } }),
+      this.prisma.accountMember.findMany({
+        where: { ownerId: event.organizerId },
+        select: { email: true, permission: true, user: { select: userSelect } },
+      }),
+      this.prisma.projectInvitation.findMany({
+        where: { eventId, status: 'PENDING', expiresAt: { gt: new Date() } },
+        select: { email: true, firstName: true, lastName: true },
+      }),
+    ]);
+
+    type Assignee = {
+      userId: string | null; email: string; name: string; avatar: string | null;
+      source: 'OWNER' | 'MEMBER' | 'COLLABORATOR' | 'PENDING';
+      detail: string | null;
+    };
+    const byUser = new Map<string, Assignee>();
+    const pending = new Map<string, Assignee>();
+    const fullName = (u: { firstName: string; lastName: string }) => `${u.firstName} ${u.lastName}`.trim();
+    const addUser = (u: typeof event.organizer, source: Assignee['source'], detail: string | null) => {
+      if (!byUser.has(u.id)) byUser.set(u.id, { userId: u.id, email: u.email, name: fullName(u), avatar: u.avatar, source, detail });
+    };
+
+    addUser(event.organizer, 'OWNER', 'Organisateur');
+    members.forEach((m) => addUser(m.user, 'MEMBER', m.projectRole === 'MANAGER' ? 'Responsable du projet' : 'Membre du projet'));
+    const permissionLabels: Record<string, string> = {
+      ADMIN: 'Administrateur', MANAGER: 'Gestionnaire', TICKETING: 'Billetterie', VIEWER: 'Lecture seule',
+    };
+    for (const c of collaborators) {
+      if (c.user) addUser(c.user, 'COLLABORATOR', `Collaborateur · ${permissionLabels[c.permission] ?? c.permission}`);
+      else pending.set(c.email, { userId: null, email: c.email, name: c.email, avatar: null, source: 'PENDING', detail: 'Collaborateur — invitation en attente' });
+    }
+    for (const inv of invitations) {
+      const email = inv.email.toLowerCase();
+      pending.set(email, { userId: null, email, name: `${inv.firstName} ${inv.lastName}`.trim() || email, avatar: null, source: 'PENDING', detail: 'Membre du projet — invitation en attente' });
+    }
+    // Someone with an account already listed is never offered twice
+    const knownEmails = new Set([...byUser.values()].map((a) => a.email.toLowerCase()));
+    return [...byUser.values(), ...[...pending.values()].filter((p) => !knownEmails.has(p.email))];
+  }
+
+  /** Assignees must come from the assignable list (or already be on the task). Returns pending emails. */
+  private async validateAssignees(eventId: string, assigneeIds?: string[], pendingEmails?: string[], taskId?: string) {
+    if (!assigneeIds?.length && !pendingEmails?.length) return (pendingEmails ?? []).map((e) => e.toLowerCase());
+    const allowed = await this.listAssignees(eventId);
+    const current = taskId
+      ? await this.prisma.eventTask.findUnique({
+          where: { id: taskId },
+          select: { assignees: { select: { userId: true } }, pendingAssignees: { select: { email: true } } },
+        })
+      : null;
+    const allowedIds = new Set([...allowed.filter((a) => a.userId).map((a) => a.userId!), ...(current?.assignees.map((a) => a.userId) ?? [])]);
+    const allowedEmails = new Set([...allowed.filter((a) => !a.userId).map((a) => a.email), ...(current?.pendingAssignees.map((a) => a.email) ?? [])]);
+
+    if (assigneeIds?.some((id) => !allowedIds.has(id))) {
+      throw new BadRequestException("Une des personnes assignées ne fait pas partie de l'équipe du projet");
+    }
+    const emails = (pendingEmails ?? []).map((e) => e.trim().toLowerCase());
+    if (emails.some((e) => !allowedEmails.has(e))) {
+      throw new BadRequestException("Une des personnes assignées n'a pas d'invitation en cours");
+    }
+    return emails;
+  }
+
+  private async syncPendingAssignees(taskId: string, emails: string[]) {
+    const task = await this.prisma.eventTask.findUnique({ where: { id: taskId }, select: { eventId: true } });
+    const names = new Map<string, string>(
+      (await this.listAssignees(task.eventId)).filter((a) => !a.userId).map((a) => [a.email, a.name]),
+    );
+    await this.prisma.$transaction([
+      this.prisma.taskPendingAssignee.deleteMany({ where: { taskId, email: { notIn: emails } } }),
+      this.prisma.taskPendingAssignee.createMany({
+        data: emails.map((email) => ({ taskId, email, name: names.get(email) ?? null })),
+        skipDuplicates: true,
+      }),
+    ]);
+  }
 
   async getMembers(eventId: string, userId: string, role: Role) {
     await this.checkEventAccess(eventId, userId, role);
@@ -594,6 +784,7 @@ export class ProjectService {
       update: { projectRole: inv.projectRole },
       create: { eventId: inv.eventId, userId: user.id, projectRole: inv.projectRole },
     });
+    await claimPendingTaskAssignments(this.prisma, user.id, user.email);
 
     await this.prisma.projectInvitation.update({
       where: { token },

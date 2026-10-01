@@ -23,7 +23,11 @@ import {
   Loader2,
   LayoutGrid,
   GanttChartSquare,
+  AlertTriangle,
+  Receipt,
+  CheckCircle2,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import {
   PieChart as RechartsPieChart,
   Pie,
@@ -65,6 +69,17 @@ interface ProjectTask {
     userId: string;
     user: { id: string; firstName: string; lastName: string; email: string; avatar?: string };
   }>;
+  /** Assigned by email: invitation not accepted yet */
+  pendingAssignees?: Array<{ email: string; name?: string | null }>;
+}
+
+interface Assignee {
+  userId: string | null;
+  email: string;
+  name: string;
+  avatar: string | null;
+  source: 'OWNER' | 'MEMBER' | 'COLLABORATOR' | 'PENDING';
+  detail: string | null;
 }
 
 interface ProjectMember {
@@ -92,20 +107,46 @@ interface BudgetExpense {
   notes?: string;
 }
 
+type BudgetAlertLevel = 'OK' | 'WARNING' | 'OVER';
+
 interface BudgetLine {
   id: string;
   category: string;
   label: string;
   plannedAmount: number;
   totalSpent: number;
+  consumption: number | null;
+  alertLevel: BudgetAlertLevel;
   expenses: BudgetExpense[];
+}
+
+interface BudgetAlert {
+  lineId: string;
+  label: string;
+  category: string;
+  level: BudgetAlertLevel;
+  planned: number;
+  spent: number;
+  overBy: number;
 }
 
 interface BudgetData {
   totalPlanned: number;
   totalSpent: number;
+  alertLevel: BudgetAlertLevel;
+  alerts: BudgetAlert[];
   lines: BudgetLine[];
 }
+
+// Same thresholds as the backend: "Attention" from 80% of planned, "Dépassé" above 100%
+const budgetLevel = (planned: number, spent: number): BudgetAlertLevel =>
+  spent > planned ? 'OVER' : planned > 0 && spent >= planned * 0.8 ? 'WARNING' : 'OK';
+
+const ALERT_STYLES: Record<BudgetAlertLevel, { label: string; badge: string; bar: string }> = {
+  OK: { label: 'OK', badge: 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400', bar: 'bg-green-500' },
+  WARNING: { label: 'Attention', badge: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400', bar: 'bg-amber-500' },
+  OVER: { label: 'Dépassé', badge: 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400', bar: 'bg-red-500' },
+};
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -258,10 +299,9 @@ interface TaskModalProps {
   task?: ProjectTask;
   defaultStatus?: TaskStatus;
   onClose: () => void;
-  members: ProjectMember[];
 }
 
-function TaskModal({ eventId, task, defaultStatus, onClose, members }: TaskModalProps) {
+function TaskModal({ eventId, task, defaultStatus, onClose }: TaskModalProps) {
   const queryClient = useQueryClient();
   const isEdit = Boolean(task);
 
@@ -270,11 +310,23 @@ function TaskModal({ eventId, task, defaultStatus, onClose, members }: TaskModal
     description: task?.description ?? '',
     category: (task?.category ?? '') as TaskCategory | '',
     assigneeIds: task?.assignees?.map(a => a.userId) ?? (task?.assigneeId ? [task.assigneeId] : []),
+    pendingEmails: task?.pendingAssignees?.map(p => p.email) ?? [],
     startDate: task?.startDate ? task.startDate.slice(0, 10) : '',
     dueDate: task?.dueDate ? task.dueDate.slice(0, 10) : '',
     priority: (task?.priority ?? 'MEDIUM') as TaskPriority,
     status: (task?.status ?? defaultStatus ?? 'TODO') as TaskStatus,
   });
+
+  const { data: assignees = [], isLoading: assigneesLoading } = useQuery<Assignee[]>({
+    queryKey: ['project-assignees', eventId],
+    queryFn: () => projectApi.getAssignees(eventId).then(r => (r.data as { data: Assignee[] }).data ?? []),
+  });
+  const isChecked = (a: Assignee) =>
+    a.userId ? form.assigneeIds.includes(a.userId) : form.pendingEmails.includes(a.email);
+  const toggleAssignee = (a: Assignee, checked: boolean) =>
+    setForm(f => a.userId
+      ? { ...f, assigneeIds: checked ? [...f.assigneeIds, a.userId] : f.assigneeIds.filter(id => id !== a.userId) }
+      : { ...f, pendingEmails: checked ? [...f.pendingEmails, a.email] : f.pendingEmails.filter(e => e !== a.email) });
 
   const createMutation = useMutation({
     mutationFn: (data: Parameters<typeof projectApi.createTask>[1]) =>
@@ -313,6 +365,7 @@ function TaskModal({ eventId, task, defaultStatus, onClose, members }: TaskModal
       description: form.description.trim() || undefined,
       category: form.category || undefined,
       assigneeIds: form.assigneeIds,
+      pendingAssigneeEmails: form.pendingEmails,
       startDate: form.startDate || undefined,
       dueDate: form.dueDate || undefined,
       priority: form.priority,
@@ -407,43 +460,49 @@ function TaskModal({ eventId, task, defaultStatus, onClose, members }: TaskModal
           {/* Assignees multi-select */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Assignés ({form.assigneeIds.length})
+              Assignés ({form.assigneeIds.length + form.pendingEmails.length})
             </label>
-            {members.length === 0 ? (
-              <p className="text-xs text-gray-400 italic">Aucun membre dans ce projet.</p>
+            {assigneesLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
             ) : (
-              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                {members.map(m => {
-                  const checked = form.assigneeIds.includes(m.userId);
+              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                {assignees.map(a => {
+                  const checked = isChecked(a);
+                  const [first = '', ...rest] = a.name.split(' ');
                   return (
-                    <label key={m.userId} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer border transition-colors ${checked ? 'border-indigo-300 bg-indigo-50 dark:border-indigo-700 dark:bg-indigo-900/20' : 'border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30'}`}>
+                    <label key={a.userId ?? `pending:${a.email}`} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer border transition-colors ${checked ? 'border-indigo-300 bg-indigo-50 dark:border-indigo-700 dark:bg-indigo-900/20' : 'border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30'}`}>
                       <input
                         type="checkbox"
                         checked={checked}
-                        onChange={e => {
-                          setForm(f => ({
-                            ...f,
-                            assigneeIds: e.target.checked
-                              ? [...f.assigneeIds, m.userId]
-                              : f.assigneeIds.filter(id => id !== m.userId),
-                          }));
-                        }}
+                        onChange={e => toggleAssignee(a, e.target.checked)}
                         className="w-4 h-4 rounded text-indigo-600 accent-indigo-600"
                       />
-                      {m.user.avatar ? (
-                        <img src={resolveMediaUrl(m.user.avatar)} alt="" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                      {a.avatar ? (
+                        <img src={resolveMediaUrl(a.avatar)} alt="" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
                       ) : (
-                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
-                          {m.user.firstName[0]}{m.user.lastName[0]}
+                        <div className={cn(
+                          'w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0',
+                          a.userId
+                            ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white'
+                            : 'border border-dashed border-gray-400 text-gray-500 dark:text-gray-400',
+                        )}>
+                          {(first[0] ?? '?').toUpperCase()}{(rest.join(' ')[0] ?? '').toUpperCase()}
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{m.user.firstName} {m.user.lastName}</p>
-                        <p className="text-xs text-gray-400">{m.projectRole === 'MANAGER' ? 'Responsable' : 'Collaborateur'}</p>
+                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{a.name}</p>
+                        <p className={cn('text-xs truncate', a.source === 'PENDING' ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400')}>
+                          {a.detail}
+                        </p>
                       </div>
                     </label>
                   );
                 })}
+                {form.pendingEmails.some(e => assignees.some(a => !a.userId && a.email === e)) && (
+                  <p className="text-xs text-gray-400 pt-1">
+                    Les personnes en attente verront la tâche dès qu&apos;elles auront accepté leur invitation.
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -588,10 +647,10 @@ function TaskCard({ task, onEdit, onDragStart }: TaskCardProps) {
         )}
       </div>
 
-      {/* Assignee avatars */}
-      {(task.assignees && task.assignees.length > 0) ? (
+      {/* Assignee avatars (pending invitees: dashed outline) */}
+      {((task.assignees?.length ?? 0) + (task.pendingAssignees?.length ?? 0)) > 0 ? (
         <div className="flex -space-x-1.5 mt-2">
-          {task.assignees.slice(0, 4).map(a => (
+          {(task.assignees ?? []).slice(0, 4).map(a => (
             a.user.avatar ? (
               <img
                 key={a.userId}
@@ -610,9 +669,18 @@ function TaskCard({ task, onEdit, onDragStart }: TaskCardProps) {
               </div>
             )
           ))}
-          {task.assignees.length > 4 && (
+          {(task.pendingAssignees ?? []).slice(0, Math.max(0, 4 - (task.assignees?.length ?? 0))).map(p => (
+            <div
+              key={p.email}
+              title={`${p.name || p.email} — invitation en attente`}
+              className="w-6 h-6 rounded-full bg-white dark:bg-gray-800 border border-dashed border-gray-400 flex items-center justify-center text-gray-500 text-[10px] font-bold ring-2 ring-white dark:ring-gray-800 flex-shrink-0"
+            >
+              {(p.name || p.email)[0].toUpperCase()}
+            </div>
+          ))}
+          {(task.assignees?.length ?? 0) + (task.pendingAssignees?.length ?? 0) > 4 && (
             <div className="w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 text-[10px] font-bold ring-2 ring-white dark:ring-gray-800">
-              +{task.assignees.length - 4}
+              +{(task.assignees?.length ?? 0) + (task.pendingAssignees?.length ?? 0) - 4}
             </div>
           )}
         </div>
@@ -633,10 +701,9 @@ function TaskCard({ task, onEdit, onDragStart }: TaskCardProps) {
 interface KanbanBoardProps {
   eventId: string;
   tasks: ProjectTask[];
-  members: ProjectMember[];
 }
 
-function KanbanBoard({ eventId, tasks, members }: KanbanBoardProps) {
+function KanbanBoard({ eventId, tasks }: KanbanBoardProps) {
   const queryClient = useQueryClient();
   const [dragOverColumn, setDragOverColumn] = useState<TaskStatus | null>(null);
   const [editTask, setEditTask] = useState<ProjectTask | undefined>(undefined);
@@ -748,7 +815,6 @@ function KanbanBoard({ eventId, tasks, members }: KanbanBoardProps) {
           eventId={eventId}
           task={editTask}
           onClose={() => setEditTask(undefined)}
-          members={members}
         />
       )}
 
@@ -758,7 +824,6 @@ function KanbanBoard({ eventId, tasks, members }: KanbanBoardProps) {
           eventId={eventId}
           defaultStatus={addStatus}
           onClose={() => setAddStatus(null)}
-          members={members}
         />
       )}
     </>
@@ -880,36 +945,55 @@ function AddLineModal({ eventId, onClose }: AddLineModalProps) {
 
 interface AddExpenseModalProps {
   eventId: string;
-  lineId: string;
+  /** Preselected budget line (from a line's "+" button); otherwise the user picks one */
+  lineId: string | null;
+  lines: BudgetLine[];
   onClose: () => void;
 }
 
-function AddExpenseModal({ eventId, lineId, onClose }: AddExpenseModalProps) {
+function AddExpenseModal({ eventId, lineId, lines, onClose }: AddExpenseModalProps) {
   const queryClient = useQueryClient();
+  const [selectedLineId, setSelectedLineId] = useState(lineId ?? lines[0]?.id ?? '');
   const [label, setLabel] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState('');
   const [notes, setNotes] = useState('');
 
+  const line = lines.find(l => l.id === selectedLineId);
+  const amountValue = parseFloat(amount) || 0;
+  const spentAfter = (line?.totalSpent ?? 0) + amountValue;
+  const levelAfter = line ? budgetLevel(line.plannedAmount, spentAfter) : 'OK';
+
   const mutation = useMutation({
     mutationFn: () =>
-      projectApi.addExpense(eventId, lineId, {
+      projectApi.addExpense(eventId, selectedLineId, {
         label: label.trim(),
         amount: parseFloat(amount),
         date: date || undefined,
         notes: notes.trim() || undefined,
       }),
-    onSuccess: () => {
+    onSuccess: (res) => {
+      const alert = (res.data as any)?.data?.budgetAlert;
+      if (alert?.level === 'OVER') {
+        toast.error(`Budget dépassé sur "${alert.label}" : ${formatCurrency(alert.spent)} pour ${formatCurrency(alert.planned)} prévus`);
+      } else if (alert?.level === 'WARNING') {
+        toast(`Attention : "${alert.label}" a atteint ${Math.round((alert.spent / alert.planned) * 100)}% du budget prévu`, { icon: '⚠️' });
+      } else {
+        toast.success('Dépense enregistrée');
+      }
       queryClient.invalidateQueries({ queryKey: ['project-budget', eventId] });
       onClose();
     },
+    onError: () => toast.error("Erreur lors de l'enregistrement de la dépense"),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!label.trim() || !amount) return;
+    if (!selectedLineId || !label.trim() || !amount) return;
     mutation.mutate();
   };
+
+  const inputCls = 'w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500';
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -926,6 +1010,19 @@ function AddExpenseModal({ eventId, lineId, onClose }: AddExpenseModalProps) {
         <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Ligne budgétaire <span className="text-red-500">*</span>
+            </label>
+            <select value={selectedLineId} onChange={e => setSelectedLineId(e.target.value)} required className={inputCls}>
+              {lines.map(l => (
+                <option key={l.id} value={l.id}>
+                  {l.category ? `${l.category} — ` : ''}{l.label} ({formatCurrency(l.totalSpent)} / {formatCurrency(l.plannedAmount)})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Libellé <span className="text-red-500">*</span>
             </label>
             <input
@@ -933,7 +1030,8 @@ function AddExpenseModal({ eventId, lineId, onClose }: AddExpenseModalProps) {
               value={label}
               onChange={e => setLabel(e.target.value)}
               required
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="ex. Acompte sonorisation"
+              className={inputCls}
             />
           </div>
 
@@ -949,19 +1047,14 @@ function AddExpenseModal({ eventId, lineId, onClose }: AddExpenseModalProps) {
                 required
                 min="0"
                 step="0.01"
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className={inputCls}
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Date
               </label>
-              <input
-                type="date"
-                value={date}
-                onChange={e => setDate(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
+              <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inputCls} />
             </div>
           </div>
 
@@ -973,14 +1066,28 @@ function AddExpenseModal({ eventId, lineId, onClose }: AddExpenseModalProps) {
               value={notes}
               onChange={e => setNotes(e.target.value)}
               rows={2}
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+              className={cn(inputCls, 'resize-none')}
             />
           </div>
+
+          {/* Impact on the planned amount, before saving */}
+          {line && amountValue > 0 && (
+            <div className={cn('rounded-lg px-3 py-2 text-xs', ALERT_STYLES[levelAfter].badge)}>
+              <p className="font-medium">
+                Après cette dépense : {formatCurrency(spentAfter)} / {formatCurrency(line.plannedAmount)} prévus
+                {line.plannedAmount > 0 && ` (${Math.round((spentAfter / line.plannedAmount) * 100)}%)`}
+              </p>
+              {levelAfter === 'OVER' && (
+                <p>Dépassement de {formatCurrency(spentAfter - line.plannedAmount)} sur cette ligne.</p>
+              )}
+              {levelAfter === 'WARNING' && <p>La ligne approche de son budget prévu.</p>}
+            </div>
+          )}
 
           <div className="flex gap-2 pt-2">
             <button
               type="submit"
-              disabled={mutation.isPending}
+              disabled={mutation.isPending || !selectedLineId}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
             >
               {mutation.isPending ? 'Enregistrement…' : 'Enregistrer'}
@@ -1009,7 +1116,8 @@ function BudgetTab({ eventId }: BudgetTabProps) {
   const queryClient = useQueryClient();
   const [expandedLines, setExpandedLines] = useState<Set<string>>(new Set());
   const [showAddLine, setShowAddLine] = useState(false);
-  const [addExpenseLineId, setAddExpenseLineId] = useState<string | null>(null);
+  // null = closed; lineId null = pick the line in the modal
+  const [expenseModal, setExpenseModal] = useState<{ lineId: string | null } | null>(null);
 
   const { data: budget, isLoading, error } = useQuery<BudgetData>({
     queryKey: ['project-budget', eventId],
@@ -1079,8 +1187,67 @@ function BudgetTab({ eventId }: BudgetTabProps) {
     value,
   }));
 
+  const alerts = budget.alerts ?? [];
+
   return (
     <div className="space-y-6">
+      {/* Actions */}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <button
+          onClick={() => setShowAddLine(true)}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+        >
+          <Plus className="h-4 w-4" />
+          Ligne prévue
+        </button>
+        <button
+          onClick={() => setExpenseModal({ lineId: null })}
+          disabled={budget.lines.length === 0}
+          title={budget.lines.length === 0 ? "Créez d'abord une ligne budgétaire" : undefined}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Receipt className="h-4 w-4" />
+          Ajouter une dépense
+        </button>
+      </div>
+
+      {/* Alerts: lines close to or above their planned amount */}
+      {alerts.length > 0 && (
+        <div className={cn(
+          'rounded-xl border p-4',
+          alerts.some(a => a.level === 'OVER')
+            ? 'border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30'
+            : 'border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30',
+        )}>
+          <p className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white mb-2">
+            <AlertTriangle className={cn('h-4 w-4', alerts.some(a => a.level === 'OVER') ? 'text-red-600' : 'text-amber-600')} />
+            {alerts.length} alerte{alerts.length > 1 ? 's' : ''} budgétaire{alerts.length > 1 ? 's' : ''}
+          </p>
+          <ul className="space-y-1">
+            {alerts.map(a => (
+              <li key={a.lineId} className="flex flex-wrap items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                <span className={cn('rounded-full px-2 py-0.5 text-xs font-semibold', ALERT_STYLES[a.level].badge)}>
+                  {ALERT_STYLES[a.level].label}
+                </span>
+                <span className="font-medium">{a.label}</span>
+                <span className="text-gray-500">
+                  {formatCurrency(a.spent)} / {formatCurrency(a.planned)}
+                  {a.level === 'OVER'
+                    ? ` — dépassement de ${formatCurrency(a.overBy)}`
+                    : a.planned > 0 && ` — ${Math.round((a.spent / a.planned) * 100)}% consommé`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {alerts.length === 0 && budget.lines.length > 0 && budget.totalSpent > 0 && (
+        <p className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400">
+          <CheckCircle2 className="h-4 w-4" /> Toutes les lignes sont dans le budget prévu.
+        </p>
+      )}
+
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm p-4">
@@ -1218,6 +1385,9 @@ function BudgetTab({ eventId }: BudgetTabProps) {
                     <th className="text-right px-4 py-2 font-medium text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wide">
                       Réel
                     </th>
+                    <th className="px-4 py-2 font-medium text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wide">
+                      Consommé
+                    </th>
                     <th className="text-right px-4 py-2 font-medium text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wide">
                       Écart
                     </th>
@@ -1228,11 +1398,16 @@ function BudgetTab({ eventId }: BudgetTabProps) {
                   {budget.lines.map(line => {
                     const gap = line.plannedAmount - line.totalSpent;
                     const isExpanded = expandedLines.has(line.id);
+                    const level = line.alertLevel ?? budgetLevel(line.plannedAmount, line.totalSpent);
+                    const pct = line.plannedAmount > 0 ? (line.totalSpent / line.plannedAmount) * 100 : null;
                     return (
                       <>
                         <tr
                           key={line.id}
-                          className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/30"
+                          className={cn(
+                            'border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/30',
+                            level === 'OVER' && 'bg-red-50/60 dark:bg-red-950/20',
+                          )}
                         >
                           <td className="px-4 py-3">
                             <span
@@ -1253,13 +1428,26 @@ function BudgetTab({ eventId }: BudgetTabProps) {
                           <td className="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
                             {formatCurrency(line.totalSpent)}
                           </td>
+                          <td className="px-4 py-3 min-w-[130px]">
+                            <div className="flex items-center gap-2">
+                              <div className="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-gray-700">
+                                <div
+                                  className={cn('h-1.5 rounded-full', ALERT_STYLES[level].bar)}
+                                  style={{ width: `${Math.min(pct ?? (line.totalSpent > 0 ? 100 : 0), 100)}%` }}
+                                />
+                              </div>
+                              <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap', ALERT_STYLES[level].badge)}>
+                                {pct !== null ? `${Math.round(pct)}%` : ALERT_STYLES[level].label}
+                              </span>
+                            </div>
+                          </td>
                           <td className={cn('px-4 py-3 text-right font-medium', gap >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400')}>
                             {formatCurrency(gap)}
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center justify-end gap-1">
                               <button
-                                onClick={() => setAddExpenseLineId(line.id)}
+                                onClick={() => setExpenseModal({ lineId: line.id })}
                                 title="Ajouter une dépense"
                                 className="p-1.5 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded transition-colors"
                               >
@@ -1306,6 +1494,7 @@ function BudgetTab({ eventId }: BudgetTabProps) {
                               <td className="px-4 py-2 text-right text-xs text-gray-700 dark:text-gray-300">
                                 {formatCurrency(expense.amount)}
                               </td>
+                              <td />
                               <td className="px-4 py-2 text-right text-xs text-gray-500 dark:text-gray-400">
                                 {expense.date ? formatDate(expense.date) : '—'}
                               </td>
@@ -1329,7 +1518,7 @@ function BudgetTab({ eventId }: BudgetTabProps) {
                           ))}
                         {isExpanded && line.expenses.length === 0 && (
                           <tr className="bg-gray-50/50 dark:bg-gray-800/10">
-                            <td colSpan={6} className="px-8 py-2 text-xs text-gray-400 dark:text-gray-600 italic">
+                            <td colSpan={7} className="px-8 py-2 text-xs text-gray-400 dark:text-gray-600 italic">
                               Aucune dépense enregistrée
                             </td>
                           </tr>
@@ -1358,11 +1547,12 @@ function BudgetTab({ eventId }: BudgetTabProps) {
       {showAddLine && (
         <AddLineModal eventId={eventId} onClose={() => setShowAddLine(false)} />
       )}
-      {addExpenseLineId && (
+      {expenseModal && (
         <AddExpenseModal
           eventId={eventId}
-          lineId={addExpenseLineId}
-          onClose={() => setAddExpenseLineId(null)}
+          lineId={expenseModal.lineId}
+          lines={budget.lines}
+          onClose={() => setExpenseModal(null)}
         />
       )}
     </div>
@@ -1613,6 +1803,7 @@ export default function ProjectPage() {
       await projectApi.removeMember(eventId, memberId);
       membersQuery.refetch();
       queryClient.invalidateQueries({ queryKey: ['project-members', eventId] });
+      queryClient.invalidateQueries({ queryKey: ['project-assignees', eventId] });
     } catch {
       // silent
     }
@@ -1721,7 +1912,7 @@ export default function ProjectPage() {
                 </button>
               </div>
               {projectView === 'kanban' ? (
-                <KanbanBoard eventId={eventId} tasks={tasks ?? []} members={members} />
+                <KanbanBoard eventId={eventId} tasks={tasks ?? []} />
               ) : (
                 <GanttView
                   tasks={tasks ?? []}
@@ -1743,7 +1934,13 @@ export default function ProjectPage() {
         <div className="space-y-6">
           {/* Invite form — only for non-contributors (organizer/admin/manager) */}
           {!isProjectContributor && (
-            <InviteMemberPanel eventId={eventId} onSuccess={() => membersQuery.refetch()} />
+            <InviteMemberPanel
+              eventId={eventId}
+              onSuccess={() => {
+                membersQuery.refetch();
+                queryClient.invalidateQueries({ queryKey: ['project-assignees', eventId] });
+              }}
+            />
           )}
 
           {/* Current members list */}
@@ -1818,7 +2015,6 @@ export default function ProjectPage() {
           eventId={eventId}
           task={ganttEditTask}
           onClose={() => setGanttEditTask(undefined)}
-          members={members}
         />
       )}
     </div>

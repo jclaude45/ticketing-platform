@@ -449,6 +449,7 @@ export const projectApi = {
       category?: string;
       assigneeName?: string;
       assigneeIds?: string[];
+      pendingAssigneeEmails?: string[];
       startDate?: string;
       dueDate?: string;
     }
@@ -465,10 +466,15 @@ export const projectApi = {
       category?: string;
       assigneeName?: string;
       assigneeIds?: string[];
+      pendingAssigneeEmails?: string[];
       startDate?: string;
       dueDate?: string;
     }
   ) => apiClient.patch(`/events/${eventId}/project/tasks/${taskId}`, data),
+
+  /** Everyone a task can be assigned to (organizer, members, collaborators, pending invitees) */
+  getAssignees: (eventId: string) =>
+    apiClient.get(`/events/${eventId}/project/assignees`),
 
   deleteTask: (eventId: string, taskId: string) =>
     apiClient.delete(`/events/${eventId}/project/tasks/${taskId}`),

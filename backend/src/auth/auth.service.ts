@@ -15,6 +15,7 @@ import { CryptoService } from '../crypto/crypto.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcryptjs';
+import { claimPendingTaskAssignments } from '../project/pending-assignees';
 import { authenticator } from 'otplib';
 import * as QRCode from 'qrcode';
 import { Role } from '@prisma/client';
@@ -237,6 +238,11 @@ export class AuthService {
         ipAddress,
       },
       7 * 24 * 60 * 60, // 7 days
+    );
+
+    // Tasks assigned to this email while the person had no account yet
+    await claimPendingTaskAssignments(this.prisma, user.id, user.email).catch((err) =>
+      this.logger.warn(`Claiming pending task assignments failed: ${err?.message}`),
     );
 
     const { password: _, refreshToken: __, ...safeUser } = user as any;
