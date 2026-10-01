@@ -10,7 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from '../crypto/crypto.service';
 import { QrcodeService } from '../qrcode/qrcode.service';
 import { GenerateTicketsDto } from './dto/generate-tickets.dto';
-import { Role, TicketStatus } from '@prisma/client';
+import { Prisma, Role, TicketStatus } from '@prisma/client';
 import { SubscriptionService } from '../subscription/subscription.service';
 
 @Injectable()
@@ -30,6 +30,7 @@ export class TicketGenerationService {
     organizerId: string,
     organizerRole: Role,
     dto: GenerateTicketsDto,
+    options?: { price?: number; metadata?: Prisma.InputJsonValue },
   ) {
     // Validate event
     const event = await this.prisma.event.findUnique({
@@ -136,11 +137,12 @@ export class TicketGenerationService {
         holderName: holderName || null,
         holderEmail: holderEmail || null,
         status: TicketStatus.VALID,
-        price: template.price,
+        price: options?.price ?? template.price,
         currency: template.currency,
         purchasedAt: new Date(),
         eventId,
         templateId: dto.templateId,
+        ...(options?.metadata !== undefined && { metadata: options.metadata }),
       });
     }
 

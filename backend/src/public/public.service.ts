@@ -267,8 +267,9 @@ export class PublicService {
     bannerUrl?: string | null,
     reference?: string | null,
     organizer?: { firstName: string; lastName: string; email?: string } | null,
-  ) {
-    if (!this.mailer) return;
+    invitation?: { message?: string | null } | null,
+  ): Promise<boolean> {
+    if (!this.mailer) return false;
 
     const from        = this.config.get<string>('email.from') || this.config.get<string>('email.user');
     const frontendUrl = this.config.get<string>('frontend.publicUrl') || 'https://zaya.live';
@@ -337,7 +338,7 @@ export class PublicService {
 
     for (const t of tickets) {
       try {
-        const pdfBuf = await this.buildTicketPdf(t, event, holder.holderName, bannerUrl, {
+        const pdfBuf = await this.buildTicketPdf({ ...t, isInvitation: !!invitation }, event, holder.holderName, bannerUrl, {
           holderEmail: holder.holderEmail,
           purchasedAt: new Date(),
           organizer,
@@ -351,6 +352,16 @@ export class PublicService {
     const uniqueCategories = [...new Set(tickets.map(t => t.templateName))];
     const categoryLine     = uniqueCategories.length === 1 ? uniqueCategories[0] : `${tickets.length} billets`;
     const organizerName    = organizer ? `${organizer.firstName} ${organizer.lastName}` : '';
+    const escapeHtml = (v: string) =>
+      v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    const invitationIntro = invitation
+      ? `<p style="margin:0 0 18px;font-size:15px;color:#374151;font-family:Arial,sans-serif;line-height:1.5;">
+           ${organizerName ? `<strong>${escapeHtml(organizerName)}</strong> vous invite` : 'Vous &ecirc;tes invit&eacute;(e)'} &agrave; cet &eacute;v&eacute;nement.
+         </p>
+         ${invitation.message?.trim()
+           ? `<p style="margin:0 0 18px;padding:12px 16px;border-left:3px solid #4f46e5;background:#f5f3ff;font-size:14px;color:#374151;font-family:Arial,sans-serif;line-height:1.5;white-space:pre-line;">${escapeHtml(invitation.message.trim())}</p>`
+           : ''}`
+      : '';
     const organizerEmail   = organizer?.email ?? '';
 
     const ctaBtn = reference
@@ -367,7 +378,7 @@ export class PublicService {
     await this.mailer.sendMail({
       from,
       to: holder.holderEmail,
-      subject: `${event.name} — votre billet`,
+      subject: invitation ? `Invitation — ${event.name}` : `${event.name} — votre billet`,
       attachments,
       html: `<!DOCTYPE html>
 <html lang="fr">
@@ -392,8 +403,9 @@ export class PublicService {
 
   <!-- Main content -->
   <tr><td style="padding:36px 40px 28px;">
-    <p style="margin:0 0 12px;font-size:11px;font-weight:700;color:#4f46e5;font-family:Arial,sans-serif;text-transform:uppercase;letter-spacing:0.1em;">Billet confirm&eacute;</p>
+    <p style="margin:0 0 12px;font-size:11px;font-weight:700;color:#4f46e5;font-family:Arial,sans-serif;text-transform:uppercase;letter-spacing:0.1em;">${invitation ? 'Invitation' : 'Billet confirm&eacute;'}</p>
     <h1 style="margin:0 0 18px;font-size:22px;font-weight:700;color:#111827;font-family:Arial,sans-serif;line-height:1.3;">${event.name}</h1>
+    ${invitationIntro}
 
     <!-- Date + Lieu -->
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
@@ -421,7 +433,7 @@ export class PublicService {
       </tr>
     </table>
 
-    <p style="margin:16px 0 0;font-size:13px;color:#9ca3af;font-family:Arial,sans-serif;">${categoryLine}</p>
+    <p style="margin:16px 0 0;font-size:13px;color:#9ca3af;font-family:Arial,sans-serif;">${invitation ? `Invitation &middot; ${categoryLine}` : categoryLine}</p>
 
     ${ctaBtn}
   </td></tr>
@@ -469,7 +481,7 @@ export class PublicService {
           ${organizerEmail ? `<p style="margin:2px 0 0;font-size:12px;color:#9ca3af;font-family:Arial,sans-serif;">${organizerEmail}</p>` : ''}
         </td>` : ''}
         <td style="vertical-align:top;">
-          <p style="margin:0 0 3px;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:#d1d5db;font-family:Arial,sans-serif;">Acheteur</p>
+          <p style="margin:0 0 3px;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:#d1d5db;font-family:Arial,sans-serif;">${invitation ? 'Invit&eacute;(e)' : 'Acheteur'}</p>
           <p style="margin:0;font-size:12px;color:#9ca3af;font-family:Arial,sans-serif;">${holder.holderName}</p>
           <p style="margin:2px 0 0;font-size:12px;color:#9ca3af;font-family:Arial,sans-serif;">${holder.holderEmail}</p>
         </td>
@@ -490,6 +502,7 @@ export class PublicService {
 </body>
 </html>`,
     });
+    return true;
   }
 
   /** Raw banner bytes from a base64 data URI or a file under public/, or null. */
@@ -519,7 +532,7 @@ export class PublicService {
   }
 
   async buildTicketPdf(
-    ticket: { ticketId?: string; serialNumber: string; templateName: string; price: number; currency: string; qrCode: string | null },
+    ticket: { ticketId?: string; isInvitation?: boolean; serialNumber: string; templateName: string; price: number; currency: string; qrCode: string | null },
     event: { name: string; startDate: Date; endDate?: Date | null; city: string; venue: string; address?: string | null },
     holderName: string,
     bannerUrl?: string | null,
@@ -626,7 +639,8 @@ export class PublicService {
 
       // ── Info table ────────────────────────────────────────────────────────
       const organizerName = extra?.organizer ? `${extra.organizer.firstName} ${extra.organizer.lastName}` : '—';
-      const priceLabel = ticket.price > 0 ? `${Number(ticket.price).toFixed(2)} ${ticket.currency}` : 'Gratuit';
+      const priceLabel = ticket.isInvitation ? 'Invitation'
+        : ticket.price > 0 ? `${Number(ticket.price).toFixed(2)} ${ticket.currency}` : 'Gratuit';
       const place = [event.venue, event.address, event.city].filter(Boolean).join(', ');
       const rows: [string, string][][] = [
         [['Événement', event.name],        ['Prix', priceLabel]],

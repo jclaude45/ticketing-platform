@@ -312,6 +312,7 @@ export default function EventDetailPage() {
         {[
           { label: 'Design du billet', href: `/dashboard/events/${id}/tickets/template`, icon: Ticket, desc: 'Éditeur visuel des billets' },
           { label: 'Générer des billets', href: `/dashboard/events/${id}/tickets/generate`, icon: Play, desc: 'Créer des billets en lot' },
+          { label: 'Invitations', href: `/dashboard/events/${id}/invitations`, icon: Mail, desc: 'Inviter des personnes par email ou Excel' },
           { label: 'Statistiques', href: `/dashboard/events/${id}/analytics`, icon: BarChart3, desc: 'Taux de scan et occupation' },
           { label: 'Gérer l\'équipe', href: `/dashboard/events/${id}/team`, icon: Users, desc: 'Personnel et accréditations' },
           { label: 'Gestion de projet', href: `/dashboard/events/${id}/project`, icon: FolderKanban, desc: 'Rétroplanning et budget' },

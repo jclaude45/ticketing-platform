@@ -29,6 +29,7 @@ import { AdminModule } from './admin/admin.module';
 import { ProjectModule } from './project/project.module';
 import { CommunicationModule } from './communication/communication.module';
 import { PublicModule } from './public/public.module';
+import { InvitationsModule } from './invitations/invitations.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PaymentModule } from './payment/payment.module';
 
@@ -83,6 +84,7 @@ import { SecurityMiddleware } from './common/middleware/security.middleware';
     ProjectModule,
     CommunicationModule,
     PublicModule,
+    InvitationsModule,
     NotificationsModule,
     PaymentModule,
   ],
