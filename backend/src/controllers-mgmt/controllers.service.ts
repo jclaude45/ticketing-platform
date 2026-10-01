@@ -12,7 +12,7 @@ import { RedisService } from '../redis/redis.service';
 import { CreateControllerDto, AssignEventDto, InviteControllerDto, AcceptInvitationDto } from './dto/create-controller.dto';
 import { UpdateControllerDto } from './dto/update-controller.dto';
 import { AuthService } from '../auth/auth.service';
-import { Role } from '@prisma/client';
+import { Role, ScanResult } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import * as nodemailer from 'nodemailer';
@@ -94,8 +94,34 @@ export class ControllersService {
       this.prisma.controller.count({ where }),
     ]);
 
+    // Scan figures of the page's controllers, in two grouped queries (not one per controller)
+    const ids = controllers.map((c) => c.id);
+    const [allScans, validScans] = ids.length
+      ? await Promise.all([
+          this.prisma.scanValidation.groupBy({
+            by: ['controllerId'],
+            where: { controllerId: { in: ids } },
+            _count: { _all: true },
+            _max: { scannedAt: true },
+          }),
+          this.prisma.scanValidation.groupBy({
+            by: ['controllerId'],
+            where: { controllerId: { in: ids }, result: ScanResult.VALID },
+            _count: { _all: true },
+          }),
+        ])
+      : [[], []];
+    const totals = new Map(allScans.map((g) => [g.controllerId, g]));
+    const valid = new Map(validScans.map((g) => [g.controllerId, g._count._all]));
+
     return {
-      data: controllers,
+      data: controllers.map(({ _count, ...c }) => ({
+        ...c,
+        eventsCount: _count.controllerEvents,
+        totalScans: totals.get(c.id)?._count._all ?? 0,
+        validScans: valid.get(c.id) ?? 0,
+        lastScanAt: totals.get(c.id)?._max.scannedAt ?? null,
+      })),
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
   }

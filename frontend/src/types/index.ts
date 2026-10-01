@@ -135,16 +135,19 @@ export interface GenerateTicketsData {
 }
 
 // Controller types
+/** A controller as GET /controllers returns it (scan figures computed by the server). */
 export interface Controller {
   id: string;
-  userId: string;
-  user?: User;
-  eventId?: string;
-  event?: Event;
+  name: string;
+  email: string;
   isActive: boolean;
-  lastSeen?: string;
+  organizerId?: string;
+  lastLoginAt?: string | null;
   createdAt: string;
-  updatedAt: string;
+  eventsCount?: number;
+  totalScans?: number;
+  validScans?: number;
+  lastScanAt?: string | null;
 }
 
 export interface CreateControllerData {

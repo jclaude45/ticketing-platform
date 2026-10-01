@@ -80,7 +80,7 @@ export function ControllerList({ controllers, isLoading = false }: Props) {
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
       <AnimatePresence>
         {controllers.map((ctrl, idx) => {
-          const fullName = `${ctrl.user?.firstName ?? ''} ${ctrl.user?.lastName ?? ''}`.trim() || `Contrôleur ${idx + 1}`;
+          const fullName = ctrl.name?.trim() || `Contrôleur ${idx + 1}`;
           const initials = fullName.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
           const isMenuOpen = openMenuId === ctrl.id;
 
@@ -115,7 +115,7 @@ export function ControllerList({ controllers, isLoading = false }: Props) {
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-gray-900 truncate">{fullName}</p>
-                  <p className="text-xs text-gray-400 truncate">{ctrl.user?.email ?? '—'}</p>
+                  <p className="text-xs text-gray-400 truncate">{ctrl.email || '—'}</p>
                 </div>
               </div>
 
@@ -124,7 +124,7 @@ export function ControllerList({ controllers, isLoading = false }: Props) {
                 <div className="rounded-lg bg-gray-50 px-3 py-2">
                   <p className="text-xs text-gray-500">Événements</p>
                   <p className="text-base font-bold text-gray-800 mt-0.5">
-                    {(ctrl as any).eventsCount ?? '—'}
+                    {ctrl.eventsCount ?? 0}
                   </p>
                 </div>
                 <div className="rounded-lg bg-gray-50 px-3 py-2">
@@ -132,17 +132,24 @@ export function ControllerList({ controllers, isLoading = false }: Props) {
                     <Scan className="h-3 w-3" /> Scans
                   </p>
                   <p className="text-base font-bold text-gray-800 mt-0.5">
-                    {(ctrl as any).totalScans?.toLocaleString('fr-FR') ?? '—'}
+                    {(ctrl.totalScans ?? 0).toLocaleString('fr-FR')}
                   </p>
+                  {(ctrl.totalScans ?? 0) > 0 && (
+                    <p className="text-xs text-emerald-600 mt-0.5">
+                      {(ctrl.validScans ?? 0).toLocaleString('fr-FR')} entrée{(ctrl.validScans ?? 0) > 1 ? 's' : ''} validée{(ctrl.validScans ?? 0) > 1 ? 's' : ''}
+                    </p>
+                  )}
                 </div>
               </div>
 
               {/* Last seen */}
               <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-4">
                 <Clock className="h-3.5 w-3.5" />
-                {ctrl.lastSeen
-                  ? <>Vu {format(new Date(ctrl.lastSeen), "'le' dd MMM 'à' HH:mm", { locale: fr })}</>
-                  : 'Jamais connecté'}
+                {ctrl.lastScanAt
+                  ? <>Dernier scan {format(new Date(ctrl.lastScanAt), "'le' dd MMM 'à' HH:mm", { locale: fr })}</>
+                  : ctrl.lastLoginAt
+                    ? <>Connecté {format(new Date(ctrl.lastLoginAt), "'le' dd MMM 'à' HH:mm", { locale: fr })}</>
+                    : 'Jamais connecté'}
               </div>
 
               {/* Assigned events chips */}
