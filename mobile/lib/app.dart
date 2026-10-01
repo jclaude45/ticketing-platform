@@ -32,11 +32,14 @@ class TicketScannerApp extends ConsumerStatefulWidget {
 
 class _TicketScannerAppState extends ConsumerState<TicketScannerApp> with WidgetsBindingObserver {
   StreamSubscription<void>? _sessionSub;
+  Timer? _syncTimer;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Every minute: send pending entries; the ticket lists when they are due (3 min)
+    _syncTimer = Timer.periodic(const Duration(minutes: 1), (_) => _autoSync());
     // Session could not be renewed: back to the login screen with an explanation
     _sessionSub = SessionEvents.expired.listen((_) {
       ref.read(authNotifierProvider.notifier).sessionExpired();
@@ -47,20 +50,21 @@ class _TicketScannerAppState extends ConsumerState<TicketScannerApp> with Widget
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _syncTimer?.cancel();
     _sessionSub?.cancel();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _autoSync();
+    if (state == AppLifecycleState.resumed) _autoSync(packs: true);
   }
 
   /// Sends the entries validated offline (and refreshes the ticket lists) when the
   /// network is back; only with a session, so the login screen never triggers it.
-  Future<void> _autoSync() async {
+  Future<void> _autoSync({bool? packs}) async {
     if (!await getIt<SecureStorage>().isLoggedIn) return;
-    final report = await ref.read(syncNotifierProvider.notifier).sync();
+    final report = await ref.read(syncNotifierProvider.notifier).sync(packs: packs);
     final message = report == null ? null : describeSync(report);
     if (message == null) return;
     appMessengerKey.currentState?.showSnackBar(SnackBar(
@@ -73,7 +77,7 @@ class _TicketScannerAppState extends ConsumerState<TicketScannerApp> with Widget
   @override
   Widget build(BuildContext context) {
     ref.listen<AsyncValue<bool>>(connectivityStreamProvider, (previous, next) {
-      if (next.valueOrNull == true && previous?.valueOrNull != true) _autoSync();
+      if (next.valueOrNull == true && previous?.valueOrNull != true) _autoSync(packs: true);
     });
     return MaterialApp(
       navigatorKey: appNavigatorKey,

@@ -7,10 +7,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../../core/network/network_info.dart';
 import '../../../../core/utils/date_utils.dart';
-import '../../../../core/di/injection_container.dart';
 import '../../../sync/presentation/providers/sync_provider.dart';
 import '../../domain/entities/event_entity.dart';
-import '../../domain/repositories/events_repository.dart';
 import '../providers/events_provider.dart';
 
 class EventDetailScreen extends ConsumerStatefulWidget {
@@ -38,6 +36,11 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen>
       CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
     );
     _animationController.forward();
+    // Ticket list downloaded / refreshed and pending entries sent, without any button
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await ref.read(syncNotifierProvider.notifier).sync(packs: true);
+      if (mounted) ref.invalidate(eventDetailProvider(widget.eventId));
+    });
   }
 
   @override
@@ -389,27 +392,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen>
     );
   }
 
-  bool _downloading = false;
-
-  Future<void> _downloadPack(String eventId) async {
-    setState(() => _downloading = true);
-    try {
-      final pack = await getIt<EventsRepository>().downloadEventTickets(eventId);
-      ref.invalidate(offlinePackProvider(eventId));
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${pack.ticketCount} billets prêts pour le scan hors ligne.')),
-        );
-      }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
-    } finally {
-      if (mounted) setState(() => _downloading = false);
-    }
-  }
-
-  /// Network state + the ticket list stored on the phone (to keep scanning without network)
-  /// + the entries validated offline that are waiting to be sent.
+  /// Network state + the ticket list kept on the phone (downloaded and refreshed
+  /// automatically) + the entries validated offline waiting to be sent (sent automatically).
   Widget _buildOfflineSection(EventEntity event, bool isOnline) {
     final color = isOnline ? AppColors.statusOnline : AppColors.statusOffline;
     final pack = ref.watch(offlinePackProvider(event.id)).valueOrNull;
@@ -418,11 +402,28 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen>
 
     final String status;
     if (isOnline) {
-      status = 'En ligne : chaque billet est vérifié en temps réel.';
+      status = 'En ligne : chaque billet est vérifié en temps réel. Si le réseau coupe, le scan continue hors ligne.';
     } else if (pack != null) {
       status = 'Hors ligne : les billets sont vérifiés avec la liste du téléphone.';
     } else {
-      status = 'Pas de connexion et aucune liste téléchargée : les billets ne peuvent pas être vérifiés.';
+      status = 'Pas de connexion et liste des billets pas encore téléchargée : les billets ne peuvent pas être vérifiés.';
+    }
+
+    final String packText;
+    final IconData packIcon;
+    final Color packColor;
+    if (pack != null) {
+      packText = 'Prêt hors ligne : ${pack.ticketCount} billets · mis à jour le ${AppDateUtils.formatDateTime(pack.generatedAt)}';
+      packIcon = Icons.offline_pin_rounded;
+      packColor = AppColors.validGreen;
+    } else if (isOnline) {
+      packText = 'Préparation du mode hors ligne…';
+      packIcon = Icons.downloading_rounded;
+      packColor = AppColors.textMuted;
+    } else {
+      packText = 'La liste sera téléchargée automatiquement dès le retour du réseau.';
+      packIcon = Icons.cloud_off_rounded;
+      packColor = AppColors.statusOffline;
     }
 
     return Container(
@@ -445,45 +446,29 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen>
           ),
           const Divider(color: AppColors.borderDefault, height: 24),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                pack != null ? Icons.offline_pin_rounded : Icons.download_for_offline_outlined,
-                size: 18,
-                color: pack != null ? AppColors.validGreen : AppColors.textMuted,
-              ),
+              Icon(packIcon, size: 18, color: packColor),
               const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  pack != null
-                      ? 'Prêt hors ligne : ${pack.ticketCount} billets · liste du ${AppDateUtils.formatDateTime(pack.generatedAt)}'
-                      : 'Téléchargez la liste des billets pour continuer à scanner si le réseau coupe.',
-                  style: small,
-                ),
-              ),
-              const SizedBox(width: 8),
-              TextButton(
-                onPressed: isOnline && !_downloading ? () => _downloadPack(event.id) : null,
-                child: _downloading
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                    : Text(pack != null ? 'Mettre à jour' : 'Télécharger'),
-              ),
+              Expanded(child: Text(packText, style: small)),
+              if (sync.isSyncing && isOnline)
+                const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
             ],
           ),
           if (sync.pending > 0) ...[
             const Divider(color: AppColors.borderDefault, height: 24),
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Icon(Icons.cloud_upload_outlined, size: 18, color: AppColors.fraudOrange),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text('${sync.pending} entrée(s) validée(s) hors ligne en attente d\'envoi.', style: small),
-                ),
-                const SizedBox(width: 8),
-                TextButton(
-                  onPressed: isOnline && !sync.isSyncing ? _syncNow : null,
-                  child: sync.isSyncing
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('Synchroniser'),
+                  child: Text(
+                    isOnline
+                        ? '${sync.pending} entrée(s) validée(s) hors ligne en cours d\'envoi.'
+                        : '${sync.pending} entrée(s) validée(s) hors ligne, envoyée(s) automatiquement au retour du réseau.',
+                    style: small,
+                  ),
                 ),
               ],
             ),
@@ -491,18 +476,6 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen>
         ],
       ),
     );
-  }
-
-  Future<void> _syncNow() async {
-    final report = await ref.read(syncNotifierProvider.notifier).sync();
-    if (!mounted || report == null) return;
-    ref.invalidate(eventDetailProvider(widget.eventId));
-    final pending = ref.read(syncNotifierProvider).pending;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(describeSync(report) ?? (pending > 0 ? 'Envoi impossible pour le moment.' : 'Tout est à jour.')),
-      backgroundColor: report.conflicts > 0 ? AppColors.fraudOrange : null,
-      duration: Duration(seconds: report.conflicts > 0 ? 8 : 3),
-    ));
   }
 
   Widget _buildScanButton(EventEntity event) {

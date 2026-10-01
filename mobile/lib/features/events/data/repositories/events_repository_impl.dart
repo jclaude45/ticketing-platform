@@ -66,11 +66,18 @@ class EventsRepositoryImpl implements EventsRepository {
   Future<OfflinePackInfo?> getOfflinePackInfo(String eventId) => localSource.getOfflinePack(eventId);
 
   @override
-  Future<void> refreshOfflinePacks() async {
-    for (final eventId in await localSource.getOfflinePackEventIds()) {
+  Future<void> prepareOfflinePacks() async {
+    final events = await remoteSource.getAssignedEvents();
+    await localSource.saveEvents(events);
+    final cutoff = DateTime.now().subtract(const Duration(hours: 12));
+    for (final event in events.where((e) => e.endDate.isAfter(cutoff))) {
       try {
-        await downloadEventTickets(eventId);
-      } catch (_) {}
+        await downloadEventTickets(event.id);
+      } on NetworkException {
+        rethrow;
+      } catch (_) {
+        // e.g. no longer assigned: the other events still get their list
+      }
     }
   }
 

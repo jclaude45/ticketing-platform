@@ -10,28 +10,43 @@ class SyncState {
   final bool isSyncing;
   final int pending;
   final DateTime? lastSyncAt;
+
+  /// Last time the ticket lists were brought up to date
+  final DateTime? packsAt;
   final ScanSyncReport? lastReport;
   final String? error;
 
-  const SyncState({this.isSyncing = false, this.pending = 0, this.lastSyncAt, this.lastReport, this.error});
+  const SyncState({this.isSyncing = false, this.pending = 0, this.lastSyncAt, this.packsAt, this.lastReport, this.error});
 
-  SyncState copyWith({bool? isSyncing, int? pending, DateTime? lastSyncAt, ScanSyncReport? lastReport, String? error}) {
+  SyncState copyWith({
+    bool? isSyncing,
+    int? pending,
+    DateTime? lastSyncAt,
+    DateTime? packsAt,
+    ScanSyncReport? lastReport,
+    String? error,
+  }) {
     return SyncState(
       isSyncing: isSyncing ?? this.isSyncing,
       pending: pending ?? this.pending,
       lastSyncAt: lastSyncAt ?? this.lastSyncAt,
+      packsAt: packsAt ?? this.packsAt,
       lastReport: lastReport ?? this.lastReport,
       error: error,
     );
   }
 }
 
-/// Upload of the scans validated without network, shared by the whole app (connectivity
-/// back, scanner opened, "Synchroniser" button).
+/// Automatic offline mode, shared by the whole app: sends the entries validated without
+/// network and keeps the ticket lists of the assigned events up to date. Triggered by
+/// the app (start, network back, resume, timer) and by the event / scanner screens.
 class SyncNotifier extends StateNotifier<SyncState> {
   final SyncUsecase _syncUsecase;
   final ScannerRepository _scanner;
   final Ref _ref;
+
+  /// Ticket lists are refreshed at most this often by the timer
+  static const packsInterval = Duration(minutes: 3);
 
   SyncNotifier(this._ref, {required SyncUsecase syncUsecase, required ScannerRepository scanner})
       : _syncUsecase = syncUsecase,
@@ -47,14 +62,23 @@ class SyncNotifier extends StateNotifier<SyncState> {
     } catch (_) {}
   }
 
-  /// Returns the report of this run, null when one was already running.
-  Future<ScanSyncReport?> sync() async {
+  bool get packsDue => state.packsAt == null || DateTime.now().difference(state.packsAt!) >= packsInterval;
+
+  /// Returns the report of this run, null when one was already running. [packs]: also
+  /// refresh the ticket lists (default: only when they are due).
+  Future<ScanSyncReport?> sync({bool? packs}) async {
     if (state.isSyncing) return null;
     state = state.copyWith(isSyncing: true);
     try {
-      final result = await _syncUsecase();
-      state = state.copyWith(isSyncing: false, pending: result.pending, lastSyncAt: DateTime.now(), lastReport: result.scans);
-      _ref.invalidate(offlinePackProvider);
+      final result = await _syncUsecase(packs: packs ?? packsDue);
+      state = state.copyWith(
+        isSyncing: false,
+        pending: result.pending,
+        lastSyncAt: DateTime.now(),
+        packsAt: result.packsRefreshed ? DateTime.now() : null,
+        lastReport: result.scans,
+      );
+      if (result.packsRefreshed) _ref.invalidate(offlinePackProvider);
       return result.scans;
     } catch (e) {
       state = state.copyWith(isSyncing: false, error: e.toString());

@@ -152,6 +152,16 @@ void main() {
       expect(r.isOfflineResult, isTrue);
     });
 
+    test('entry made online, then network cut: the same ticket is refused offline', () async {
+      network.connected = true;
+      remote.online = true;
+      expect((await repo.validateTicket(eventId: eventId, qrCode: qr('t1', 'SN-1'))).isOfflineResult, isFalse);
+      network.connected = false;
+      remote.online = false;
+      expect((await repo.validateTicket(eventId: eventId, qrCode: qr('t1', 'SN-1'))).status, ValidationStatus.used);
+      expect(await repo.getPendingScanCount(), 0);
+    });
+
     test('without a downloaded list, no network is reported as such', () async {
       final r = await repo.validateTicket(eventId: 'evt-sans-liste', qrCode: qr('t1', 'SN-1'));
       expect(r.networkFailure, isTrue);

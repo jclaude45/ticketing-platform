@@ -19,6 +19,9 @@ abstract class ScannerLocalSource {
     String? controllerName,
   });
 
+  /// Marks a ticket used in the downloaded list after an entry recorded online.
+  Future<void> markTicketUsed(String? ticketId);
+
   Future<List<Map<String, dynamic>>> getPendingScans();
 
   Future<void> markScanSynced(String id);
@@ -132,6 +135,14 @@ class ScannerLocalSourceImpl implements ScannerLocalSource {
       isOfflineResult: true,
       scannedAt: scannedAt,
     );
+  }
+
+  @override
+  Future<void> markTicketUsed(String? ticketId) async {
+    if (ticketId == null) return;
+    try {
+      await database.markTicketUsedById(ticketId, usedAt: DateTime.now().toUtc().toIso8601String(), usedBy: 'online');
+    } catch (_) {}
   }
 
   @override

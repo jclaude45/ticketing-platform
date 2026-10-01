@@ -117,6 +117,7 @@ Future<void> configureDependencies() async {
     () => SyncRepositoryImpl(
       scannerRepository: getIt<ScannerRepository>(),
       eventsRepository: getIt<EventsRepository>(),
+      networkInfo: getIt<NetworkInfo>(),
     ),
   );
   getIt.registerLazySingleton<SyncUsecase>(

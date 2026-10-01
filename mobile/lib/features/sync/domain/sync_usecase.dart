@@ -6,7 +6,7 @@ class SyncUsecase {
 
   const SyncUsecase({required this.repository});
 
-  Future<SyncResult> call() => repository.syncAll();
+  Future<SyncResult> call({bool packs = true}) => repository.syncAll(packs: packs);
 }
 
 class SyncResult {
@@ -15,5 +15,8 @@ class SyncResult {
   /// Scans still on the phone after this attempt
   final int pending;
 
-  const SyncResult({required this.scans, required this.pending});
+  /// The ticket lists were brought up to date
+  final bool packsRefreshed;
+
+  const SyncResult({required this.scans, required this.pending, this.packsRefreshed = false});
 }

@@ -64,24 +64,18 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
       ScanFeedback.instance.init().then((_) {
         if (mounted) setState(() => _soundOn = ScanFeedback.instance.soundEnabled);
       });
-      // Entries validated offline earlier go up as soon as the scanner opens with network
-      _sync(silent: true);
+      // Up-to-date ticket list and pending entries sent as soon as the scanner opens
+      _sync();
     });
   }
 
-  Future<void> _sync({bool silent = false}) async {
-    final notifier = ref.read(syncNotifierProvider.notifier);
-    await notifier.refreshPending();
-    if (silent && ref.read(syncNotifierProvider).pending == 0) return;
-    final report = await notifier.sync();
-    if (!mounted || report == null) return;
-    final pending = ref.read(syncNotifierProvider).pending;
-    final message = describeSync(report) ??
-        (pending > 0 ? 'Envoi impossible pour le moment : $pending entrée(s) en attente.' : 'Tout est à jour.');
-    if (silent && report.sent == 0) return;
+  Future<void> _sync() async {
+    final report = await ref.read(syncNotifierProvider.notifier).sync(packs: true);
+    final message = report == null ? null : describeSync(report);
+    if (!mounted || message == null) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(message),
-      backgroundColor: report.conflicts > 0 ? AppColors.fraudOrange : null,
+      backgroundColor: report!.conflicts > 0 ? AppColors.fraudOrange : null,
       duration: Duration(seconds: report.conflicts > 0 ? 8 : 3),
     ));
   }
@@ -520,12 +514,6 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
                 label: _soundOn ? 'Son' : 'Muet',
                 onTap: _toggleSound,
                 isActive: _soundOn,
-              ),
-              _ControlButton(
-                icon: Icons.sync_rounded,
-                label: ref.watch(syncNotifierProvider).isSyncing ? 'Envoi…' : 'Synchro',
-                onTap: () => _sync(),
-                isActive: ref.watch(syncNotifierProvider).isSyncing,
               ),
             ],
           ),

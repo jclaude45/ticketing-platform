@@ -9,7 +9,9 @@ abstract class EventsRepository {
   Future<OfflinePackInfo> downloadEventTickets(String eventId);
   Future<OfflinePackInfo?> getOfflinePackInfo(String eventId);
 
-  /// Brings every downloaded list up to date; failures are ignored (next time).
-  Future<void> refreshOfflinePacks();
+  /// Downloads / brings up to date the ticket lists of every assigned event that is not
+  /// over, so scanning keeps working if the network drops. Stops at the first network
+  /// error (rethrown); other per-event errors are skipped.
+  Future<void> prepareOfflinePacks();
   Future<int> getLocalTicketCount(String eventId);
 }

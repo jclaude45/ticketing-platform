@@ -10,6 +10,7 @@ import '../../domain/repositories/scanner_repository.dart';
 import '../sources/scanner_local_source.dart';
 import '../sources/scanner_remote_source.dart';
 import '../models/validation_result_model.dart';
+import '../ticket_qr.dart';
 
 class ScannerRepositoryImpl implements ScannerRepository {
   final ScannerRemoteSource remoteSource;
@@ -41,6 +42,11 @@ class ScannerRepositoryImpl implements ScannerRepository {
 
     try {
       final result = await remoteSource.validateTicket(eventId: eventId, qrCode: qrCode, gate: gate);
+      // Entry recorded online: the phone's list knows it at once, so a rescan of the same
+      // ticket after a network cut is refused instead of becoming a conflict
+      if (hasPack && (result.isValid || result.isUsed)) {
+        await localSource.markTicketUsed(parseTicketQr(qrCode)?.id ?? result.ticketId);
+      }
       await _saveScanLog(result: result, eventId: eventId, qrCode: qrCode, gate: gate, controllerId: user?.id);
       return result;
     } on NetworkException catch (e) {
