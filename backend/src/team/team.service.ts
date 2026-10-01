@@ -16,7 +16,7 @@ import * as sharp from 'sharp';
 import * as fs from 'fs';
 import { Readable } from 'stream';
 import * as path from 'path';
-import ExcelJS from 'exceljs';
+import * as ExcelJS from 'exceljs';
 
 const LOGO_SVG_PATH = path.join(__dirname, '../../assets/powered-logo.svg');
 const LOGO_ASPECT = 1109 / 300;
@@ -194,8 +194,15 @@ export class TeamService {
     };
 
     const workbook = new ExcelJS.Workbook();
+    if (/\.xls$/i.test(file.originalname)) {
+      throw new BadRequestException('Format .xls non pris en charge : enregistrez le fichier en .xlsx ou .csv');
+    }
     try {
-      await workbook.xlsx.read(Readable.from(file.buffer));
+      if (/\.csv$/i.test(file.originalname) || /csv/.test(file.mimetype)) {
+        await workbook.csv.read(Readable.from(file.buffer.toString('utf8').replace(/^\uFEFF/, '')));
+      } else {
+        await workbook.xlsx.read(Readable.from(file.buffer));
+      }
     } catch {
       throw new BadRequestException('Fichier Excel invalide ou corrompu');
     }
@@ -207,7 +214,7 @@ export class TeamService {
     const headerRow = worksheet.getRow(1);
     const headers: Record<number, string> = {};
     headerRow.eachCell({ includeEmpty: true }, (cell, col) => {
-      headers[col] = String(cell.value ?? '');
+      headers[col] = cell.text ?? '';
     });
 
     // Build rows as plain objects keyed by header name
@@ -216,7 +223,7 @@ export class TeamService {
       if (rowNumber === 1) return;
       const obj: Record<string, string> = {};
       row.eachCell({ includeEmpty: true }, (cell, col) => {
-        if (headers[col]) obj[headers[col]] = String(cell.value ?? '');
+        if (headers[col]) obj[headers[col]] = cell.text ?? '';
       });
       rows.push(obj);
     });
@@ -225,7 +232,8 @@ export class TeamService {
     if (rows.length > 500) throw new BadRequestException('Maximum 500 membres par import');
 
     // Normalize header keys
-    const normalize = (s: string) => String(s).toLowerCase().trim().replace(/\s+/g, ' ');
+    // Strip the "*" required-field markers used in the downloadable template
+    const normalize = (s: string) => String(s).toLowerCase().replace(/\*/g, '').trim().replace(/\s+/g, ' ');
 
     function findCol(row: Record<string, any>, aliases: string[]): string {
       const key = Object.keys(row).find(k => aliases.includes(normalize(k)));
