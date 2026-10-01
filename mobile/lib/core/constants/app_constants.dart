@@ -7,9 +7,11 @@ class AppConstants {
   //   flutter run --dart-define=API_URL=http://192.168.1.20:3001/api/v1
   static const String _prodBaseUrl = 'https://app.zaya.live/api/v1';
   static const String baseUrl = String.fromEnvironment('API_URL', defaultValue: _prodBaseUrl);
-  static const int connectTimeout = 30000; // 30 seconds
+  static const int connectTimeout = 10000; // 10 seconds: a dead network must not freeze the door
   static const int receiveTimeout = 30000; // 30 seconds
   static const int sendTimeout = 30000; // 30 seconds
+  // A scan waits at most this long for the server before switching to the offline list
+  static const Duration scanTimeout = Duration(seconds: 8);
 
   // Auth
   static const String tokenKey = 'access_token';
@@ -35,13 +37,14 @@ class AppConstants {
 
   // Database
   static const String dbName = 'ticket_scanner.db';
-  static const int dbVersion = 1;
+  static const int dbVersion = 2; // v2: offline packs + pending_scans.ticket_id
 
   // Tables
   static const String eventsTable = 'events';
   static const String ticketsTable = 'tickets';
   static const String pendingScansTable = 'pending_scans';
   static const String scanLogsTable = 'scan_logs';
+  static const String offlinePacksTable = 'offline_packs';
 
   // App Info
   static const String appName = 'ZAYA Contrôle';

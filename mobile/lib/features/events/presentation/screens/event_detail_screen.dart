@@ -7,7 +7,10 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../../core/network/network_info.dart';
 import '../../../../core/utils/date_utils.dart';
+import '../../../../core/di/injection_container.dart';
+import '../../../sync/presentation/providers/sync_provider.dart';
 import '../../domain/entities/event_entity.dart';
+import '../../domain/repositories/events_repository.dart';
 import '../providers/events_provider.dart';
 
 class EventDetailScreen extends ConsumerStatefulWidget {
@@ -386,8 +389,42 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen>
     );
   }
 
+  bool _downloading = false;
+
+  Future<void> _downloadPack(String eventId) async {
+    setState(() => _downloading = true);
+    try {
+      final pack = await getIt<EventsRepository>().downloadEventTickets(eventId);
+      ref.invalidate(offlinePackProvider(eventId));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${pack.ticketCount} billets prêts pour le scan hors ligne.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+    } finally {
+      if (mounted) setState(() => _downloading = false);
+    }
+  }
+
+  /// Network state + the ticket list stored on the phone (to keep scanning without network)
+  /// + the entries validated offline that are waiting to be sent.
   Widget _buildOfflineSection(EventEntity event, bool isOnline) {
     final color = isOnline ? AppColors.statusOnline : AppColors.statusOffline;
+    final pack = ref.watch(offlinePackProvider(event.id)).valueOrNull;
+    final sync = ref.watch(syncNotifierProvider);
+    final small = GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary, height: 1.5);
+
+    final String status;
+    if (isOnline) {
+      status = 'En ligne : chaque billet est vérifié en temps réel.';
+    } else if (pack != null) {
+      status = 'Hors ligne : les billets sont vérifiés avec la liste du téléphone.';
+    } else {
+      status = 'Pas de connexion et aucune liste téléchargée : les billets ne peuvent pas être vérifiés.';
+    }
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -395,22 +432,77 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen>
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: isOnline ? AppColors.borderDefault : color.withOpacity(0.3)),
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(isOnline ? Icons.wifi_rounded : Icons.wifi_off_rounded, size: 18, color: color),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              isOnline
-                  ? 'En ligne : chaque billet est vérifié en temps réel.'
-                  : 'Pas de connexion : les billets ne peuvent pas être vérifiés pour le moment.',
-              style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary, height: 1.5),
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(isOnline ? Icons.wifi_rounded : Icons.wifi_off_rounded, size: 18, color: color),
+              const SizedBox(width: 10),
+              Expanded(child: Text(status, style: small)),
+            ],
           ),
+          const Divider(color: AppColors.borderDefault, height: 24),
+          Row(
+            children: [
+              Icon(
+                pack != null ? Icons.offline_pin_rounded : Icons.download_for_offline_outlined,
+                size: 18,
+                color: pack != null ? AppColors.validGreen : AppColors.textMuted,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  pack != null
+                      ? 'Prêt hors ligne : ${pack.ticketCount} billets · liste du ${AppDateUtils.formatDateTime(pack.generatedAt)}'
+                      : 'Téléchargez la liste des billets pour continuer à scanner si le réseau coupe.',
+                  style: small,
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: isOnline && !_downloading ? () => _downloadPack(event.id) : null,
+                child: _downloading
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    : Text(pack != null ? 'Mettre à jour' : 'Télécharger'),
+              ),
+            ],
+          ),
+          if (sync.pending > 0) ...[
+            const Divider(color: AppColors.borderDefault, height: 24),
+            Row(
+              children: [
+                const Icon(Icons.cloud_upload_outlined, size: 18, color: AppColors.fraudOrange),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text('${sync.pending} entrée(s) validée(s) hors ligne en attente d\'envoi.', style: small),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: isOnline && !sync.isSyncing ? _syncNow : null,
+                  child: sync.isSyncing
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Text('Synchroniser'),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  Future<void> _syncNow() async {
+    final report = await ref.read(syncNotifierProvider.notifier).sync();
+    if (!mounted || report == null) return;
+    ref.invalidate(eventDetailProvider(widget.eventId));
+    final pending = ref.read(syncNotifierProvider).pending;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(describeSync(report) ?? (pending > 0 ? 'Envoi impossible pour le moment.' : 'Tout est à jour.')),
+      backgroundColor: report.conflicts > 0 ? AppColors.fraudOrange : null,
+      duration: Duration(seconds: report.conflicts > 0 ? 8 : 3),
+    ));
   }
 
   Widget _buildScanButton(EventEntity event) {

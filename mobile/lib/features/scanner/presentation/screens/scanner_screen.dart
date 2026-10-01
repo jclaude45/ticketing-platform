@@ -9,6 +9,7 @@ import '../../../../core/network/network_info.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../../../accreditation/presentation/providers/accreditation_provider.dart';
 import '../../../accreditation/presentation/screens/accreditation_result_screen.dart';
+import '../../../sync/presentation/providers/sync_provider.dart';
 import '../../domain/entities/validation_result.dart';
 import '../providers/scanner_provider.dart';
 import '../widgets/qr_scanner_widget.dart';
@@ -52,7 +53,26 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
       ref.read(scannerNotifierProvider.notifier).setEventId(widget.eventId);
       ref.read(accreditationNotifierProvider.notifier).setEventId(widget.eventId);
       _checkCameraPermission();
+      // Entries validated offline earlier go up as soon as the scanner opens with network
+      _sync(silent: true);
     });
+  }
+
+  Future<void> _sync({bool silent = false}) async {
+    final notifier = ref.read(syncNotifierProvider.notifier);
+    await notifier.refreshPending();
+    if (silent && ref.read(syncNotifierProvider).pending == 0) return;
+    final report = await notifier.sync();
+    if (!mounted || report == null) return;
+    final pending = ref.read(syncNotifierProvider).pending;
+    final message = describeSync(report) ??
+        (pending > 0 ? 'Envoi impossible pour le moment : $pending entrée(s) en attente.' : 'Tout est à jour.');
+    if (silent && report.sent == 0) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(message),
+      backgroundColor: report.conflicts > 0 ? AppColors.fraudOrange : null,
+      duration: Duration(seconds: report.conflicts > 0 ? 8 : 3),
+    ));
   }
 
   Future<void> _checkCameraPermission() async {
@@ -106,6 +126,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
     }
 
     _triggerFlash(result.isValid ? AppColors.validGreen : AppColors.usedRed);
+    if (result.isOfflineResult) ref.read(syncNotifierProvider.notifier).refreshPending();
 
     if (!mounted) return;
     await _showResult(() => Navigator.pushNamed(context, '/validation-result', arguments: result));
@@ -197,11 +218,9 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
               child: ScanOverlay(
                 isScanning: !isProcessing,
                 isProcessing: isProcessing,
-                frameColor: isOnline
-                    ? (_scanMode == ScanMode.badges
-                        ? const Color(0xFF6366F1)
-                        : AppColors.scannerFrame)
-                    : AppColors.statusOffline,
+                frameColor: _scanMode == ScanMode.badges
+                    ? const Color(0xFF6366F1)
+                    : (isOnline ? AppColors.scannerFrame : AppColors.statusOffline),
               ),
             ),
 
@@ -222,7 +241,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
             top: 0,
             left: 0,
             right: 0,
-            child: _buildTopBar(isOnline, scannerState.pendingScanCount),
+            child: _buildTopBar(isOnline, ref.watch(syncNotifierProvider).pending),
           ),
 
           // Center hint
@@ -417,9 +436,9 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
               ),
               _ControlButton(
                 icon: Icons.sync_rounded,
-                label: 'Sync.',
-                onTap: () => ref.read(scannerNotifierProvider.notifier).syncOfflineScans(),
-                isActive: false,
+                label: ref.watch(syncNotifierProvider).isSyncing ? 'Envoi…' : 'Synchro',
+                onTap: () => _sync(),
+                isActive: ref.watch(syncNotifierProvider).isSyncing,
               ),
             ],
           ),

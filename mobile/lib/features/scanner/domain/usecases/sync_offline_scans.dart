@@ -1,3 +1,4 @@
+import '../entities/scan_sync_report.dart';
 import '../repositories/scanner_repository.dart';
 
 class SyncOfflineScans {
@@ -5,9 +6,7 @@ class SyncOfflineScans {
 
   const SyncOfflineScans({required this.repository});
 
-  Future<void> call() async {
-    await repository.syncOfflineScans();
-  }
+  Future<ScanSyncReport> call() => repository.syncOfflineScans();
 
   Future<int> getPendingCount() async {
     return repository.getPendingScanCount();

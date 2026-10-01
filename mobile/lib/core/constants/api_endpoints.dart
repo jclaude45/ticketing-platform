@@ -12,6 +12,8 @@ class ApiEndpoints {
   static const String assignedEvents = '/controller-space/events';
   static String eventDetail(String eventId) => '/controller-space/events/$eventId';
   static String myScans(String eventId) => '/controller-space/events/$eventId/scans';
+  // Offline pack: the event's tickets (only the changed ones with ?since=)
+  static String offlineTickets(String eventId) => '/controller-space/events/$eventId/tickets';
 
   // Tickets / Validation
   static String validateTicket(String eventId) =>
@@ -21,7 +23,7 @@ class ApiEndpoints {
   static String scanAccreditation(String eventId) =>
       '/events/$eventId/team/accreditation/scan';
 
-  // Offline scans upload (offline mode is reworked in a later batch)
+  // Upload of the scans validated without network
   static String syncScans(String eventId) => '/validation/events/$eventId/sync';
 
   // Health

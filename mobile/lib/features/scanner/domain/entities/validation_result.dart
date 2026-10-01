@@ -27,6 +27,9 @@ class ValidationResult {
   final DateTime scannedAt;
   final String? securityNote;
 
+  /// The ticket could not be checked at all (no network and no offline list)
+  final bool networkFailure;
+
   const ValidationResult({
     required this.status,
     required this.ticketCode,
@@ -47,6 +50,7 @@ class ValidationResult {
     this.isOfflineResult = false,
     required this.scannedAt,
     this.securityNote,
+    this.networkFailure = false,
   });
 
   bool get isValid => status == ValidationStatus.valid;

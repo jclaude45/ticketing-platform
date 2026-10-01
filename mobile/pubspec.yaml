@@ -59,6 +59,7 @@ dev_dependencies:
   injectable_generator: ^2.4.1
   riverpod_generator: ^2.3.9
   flutter_lints: ^3.0.1
+  sqflite_common_ffi: ^2.4.3
 
 flutter:
   uses-material-design: true

@@ -1,4 +1,4 @@
-import { Injectable, ForbiddenException } from '@nestjs/common';
+import { Injectable, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { ScanResult, TicketStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -62,6 +62,39 @@ export class ControllerSpaceService {
       ...assignment.event,
       assignedAt: assignment.assignedAt,
       stats: { checkedIn, myScans, myValidScans },
+    };
+  }
+
+  /**
+   * Offline pack: the event's tickets so the scanner app can validate without network.
+   * Only what the door needs — no email, no price. With `since`, just the tickets changed
+   * after that time (status updates, new sales), to refresh a pack already downloaded.
+   */
+  async offlineTickets(controllerId: string, eventId: string, since?: string) {
+    await this.getAssignment(controllerId, eventId);
+    const sinceDate = since ? new Date(since) : null;
+    if (since && isNaN(sinceDate.getTime())) throw new BadRequestException('Paramètre "since" invalide');
+
+    const generatedAt = new Date();
+    const tickets = await this.prisma.ticket.findMany({
+      where: { eventId, ...(sinceDate && { updatedAt: { gt: sinceDate } }) },
+      select: {
+        id: true, serialNumber: true, holderName: true, status: true, checkedInAt: true,
+        template: { select: { name: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    return {
+      generatedAt,
+      full: !sinceDate,
+      tickets: tickets.map((t) => ({
+        id: t.id,
+        serialNumber: t.serialNumber,
+        holderName: t.holderName,
+        templateName: t.template.name,
+        status: t.status,
+        checkedInAt: t.checkedInAt,
+      })),
     };
   }
 

@@ -50,6 +50,8 @@ export class ValidationService {
     dto: ScanTicketDto,
     ipAddress?: string,
     callerRole?: Role,
+    /** When the scan really happened (offline sync): the "event ended" check uses it */
+    scannedAt?: Date,
   ) {
     // ORGANIZER and ADMIN can scan any event they own without being in ControllerEvent table
     const isPrivileged = callerRole === Role.ORGANIZER || callerRole === Role.ADMIN || callerRole === Role.SUPER_ADMIN;
@@ -200,8 +202,8 @@ export class ValidationService {
       };
     }
 
-    // Check for event expiry
-    const now = new Date();
+    // Check for event expiry (at the time of the scan, not of an offline sync)
+    const now = scannedAt ?? new Date();
     if (ticket.event.endDate && now > ticket.event.endDate) {
       const scanRecord = await this.recordScan(controllerId, ticket.id, ScanResult.EXPIRED, dto, ipAddress);
       return {
@@ -213,7 +215,7 @@ export class ValidationService {
 
     // Atomic claim: only one scanner (online or offline-sync) can mark this ticket USED.
     // updateMany with status filter prevents a second concurrent scan from double-using.
-    const checkedInAt = new Date();
+    const checkedInAt = scannedAt ?? new Date(); // real entry time for offline scans
     const claimed = await this.prisma.ticket.updateMany({
       where: { id: ticket.id, status: { in: [TicketStatus.VALID, TicketStatus.PENDING] } },
       data: { status: TicketStatus.USED, checkedInAt },
@@ -258,44 +260,49 @@ export class ValidationService {
     const results = [];
 
     // H3: deduplicate — same QR content submitted multiple times in one batch is a replay attempt
+    // `index` is the scan's position in the request, echoed in results so the app can match them
     const seen = new Set<string>();
-    const uniqueScans = dto.scans.filter((scan) => {
-      if (seen.has(scan.qrContent)) return false;
-      seen.add(scan.qrContent);
-      return true;
-    });
+    const uniqueScans = dto.scans
+      .map((scan, index) => ({ scan, index }))
+      .filter(({ scan }) => {
+        if (seen.has(scan.qrContent)) return false;
+        seen.add(scan.qrContent);
+        return true;
+      });
 
     const MAX_OFFLINE_AGE_MS = 24 * 60 * 60 * 1000; // client timestamps clamped to 24h ago max
     const now = Date.now();
 
-    for (const scan of uniqueScans) {
+    for (const { scan, index } of uniqueScans) {
       try {
+        // H3: clamp offline timestamp — reject timestamps in the future or >24h in the past
+        let offlineTs: Date | null = null;
+        if (scan.offlineScannedAt) {
+          const parsed = new Date(scan.offlineScannedAt).getTime();
+          if (!isNaN(parsed) && parsed <= now && parsed >= now - MAX_OFFLINE_AGE_MS) {
+            offlineTs = new Date(parsed);
+          }
+        }
+
         const result = await this.scanTicket(
           userId,
           eventId,
           { qrContent: scan.qrContent, deviceId: scan.deviceId, location: scan.location },
           undefined,
           callerRole,
+          offlineTs ?? undefined,
         );
 
         if (result.scanId) {
-          // H3: clamp offline timestamp — reject timestamps in the future or >24h in the past
-          let offlineTs: Date | null = null;
-          if (scan.offlineScannedAt) {
-            const parsed = new Date(scan.offlineScannedAt).getTime();
-            if (!isNaN(parsed) && parsed <= now && parsed >= now - MAX_OFFLINE_AGE_MS) {
-              offlineTs = new Date(parsed);
-            }
-          }
           await this.prisma.scanValidation.update({
             where: { id: result.scanId },
             data: { isSynced: true, offlineScannedAt: offlineTs },
           });
         }
 
-        results.push({ ...result, offlineScannedAt: scan.offlineScannedAt });
+        results.push({ ...result, index, offlineScannedAt: scan.offlineScannedAt });
       } catch (err) {
-        results.push({ error: err.message, qrContent: scan.qrContent.substring(0, 50) });
+        results.push({ error: err.message, index, qrContent: scan.qrContent.substring(0, 50) });
       }
     }
 

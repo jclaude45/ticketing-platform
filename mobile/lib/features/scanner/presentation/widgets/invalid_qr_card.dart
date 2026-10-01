@@ -73,8 +73,11 @@ class _InvalidQrCardState extends State<InvalidQrCard>
   /// says which, so a network problem is never mistaken for a fake ticket.
   ({String title, String subtitle, String detailTitle}) get _texts {
     final r = widget.result;
-    if (r.isOfflineResult) {
+    if (r.networkFailure) {
       return (title: 'PAS DE CONNEXION', subtitle: 'Le billet n\'a pas pu être vérifié', detailTitle: 'Vérification impossible');
+    }
+    if (r.isOfflineResult && r.status == ValidationStatus.notFound && r.ticketId == null && (r.errorMessage ?? '').startsWith('Billet absent')) {
+      return (title: 'BILLET INCONNU', subtitle: 'Absent de la liste hors ligne', detailTitle: 'Vérification hors ligne');
     }
     if (r.status == ValidationStatus.error) {
       return (title: 'SCAN REFUSÉ', subtitle: 'Ce billet ne peut pas entrer ici', detailTitle: 'Motif');

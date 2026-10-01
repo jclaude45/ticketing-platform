@@ -36,6 +36,17 @@ export class ControllerSpaceController {
     return this.space.getEvent(controllerId, eventId);
   }
 
+  @Get('events/:eventId/tickets')
+  @ApiOperation({ summary: 'Offline pack: tickets of an assigned event (changes only with ?since=)' })
+  @ApiQuery({ name: 'since', required: false, description: 'ISO date of the previous pack (generatedAt)' })
+  tickets(
+    @CurrentUser('id') controllerId: string,
+    @Param('eventId') eventId: string,
+    @Query('since') since?: string,
+  ) {
+    return this.space.offlineTickets(controllerId, eventId, since);
+  }
+
   @Get('events/:eventId/scans')
   @ApiOperation({ summary: "The current controller's own scans for an event" })
   @ApiQuery({ name: 'page', required: false, type: Number })

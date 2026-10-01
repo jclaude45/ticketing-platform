@@ -7,6 +7,7 @@ import '../../../../core/constants/colors.dart';
 import '../../../../core/network/network_info.dart';
 import '../../../../shared/widgets/connectivity_banner.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../sync/presentation/providers/sync_provider.dart';
 import '../providers/events_provider.dart';
 import '../widgets/event_card.dart';
 
@@ -277,7 +278,7 @@ class _EventsListScreenState extends ConsumerState<EventsListScreen> {
                     .read(eventsNotifierProvider.notifier)
                     .loadEvents(forceRefresh: true),
                 icon: const Icon(Icons.refresh_rounded),
-                label: const Text('Refresh'),
+                label: const Text('Actualiser'),
               ),
             ],
           ],
@@ -287,6 +288,12 @@ class _EventsListScreenState extends ConsumerState<EventsListScreen> {
   }
 
   Future<void> _confirmLogout() async {
+    // Offline entries are deleted with the session: try to send them first
+    final sync = ref.read(syncNotifierProvider.notifier);
+    await sync.refreshPending();
+    if (ref.read(syncNotifierProvider).pending > 0) await sync.sync();
+    if (!mounted) return;
+    final pending = ref.read(syncNotifierProvider).pending;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -297,8 +304,11 @@ class _EventsListScreenState extends ConsumerState<EventsListScreen> {
                 fontWeight: FontWeight.w700,
                 color: AppColors.textPrimary)),
         content: Text(
-          'Voulez-vous vraiment vous déconnecter ?',
-          style: GoogleFonts.inter(color: AppColors.textSecondary),
+          pending > 0
+              ? '$pending entrée(s) validée(s) hors ligne n\'ont pas encore été envoyées au serveur. '
+                  'Si vous vous déconnectez maintenant, elles seront perdues. Reconnectez-vous au réseau et attendez l\'envoi.'
+              : 'Voulez-vous vraiment vous déconnecter ?',
+          style: GoogleFonts.inter(color: pending > 0 ? AppColors.fraudOrange : AppColors.textSecondary),
         ),
         actions: [
           TextButton(
@@ -308,7 +318,7 @@ class _EventsListScreenState extends ConsumerState<EventsListScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Se déconnecter',
+            child: Text(pending > 0 ? 'Se déconnecter quand même' : 'Se déconnecter',
                 style: GoogleFonts.inter(color: AppColors.usedRed)),
           ),
         ],

@@ -1,8 +1,10 @@
 import 'package:uuid/uuid.dart';
 
 import '../../../../core/error/exceptions.dart';
+import '../../../../core/network/network_info.dart';
 import '../../../../core/storage/secure_storage.dart';
 import '../../../../core/utils/date_utils.dart';
+import '../../domain/entities/scan_sync_report.dart';
 import '../../domain/entities/validation_result.dart';
 import '../../domain/repositories/scanner_repository.dart';
 import '../sources/scanner_local_source.dart';
@@ -13,12 +15,14 @@ class ScannerRepositoryImpl implements ScannerRepository {
   final ScannerRemoteSource remoteSource;
   final ScannerLocalSource localSource;
   final SecureStorage secureStorage;
+  final NetworkInfo networkInfo;
   final _uuid = const Uuid();
 
   ScannerRepositoryImpl({
     required this.remoteSource,
     required this.localSource,
     required this.secureStorage,
+    required this.networkInfo,
   });
 
   @override
@@ -28,25 +32,28 @@ class ScannerRepositoryImpl implements ScannerRepository {
     String? gate,
   }) async {
     final user = await secureStorage.getUser();
-    final controllerId = user?.id;
-    final controllerName = user?.name;
+    final hasPack = await localSource.hasOfflinePack(eventId);
 
-    // Online only for now: tickets are not downloaded to the phone yet, so an "offline
-    // validation" could only say "not found". Each failure is shown for what it is.
+    // Known offline: no point waiting for a timeout at the door
+    if (hasPack && !await networkInfo.isConnected) {
+      return _validateOffline(eventId: eventId, qrCode: qrCode, gate: gate, controllerId: user?.id, controllerName: user?.name);
+    }
+
     try {
-      final result = await remoteSource.validateTicket(
-        eventId: eventId,
-        qrCode: qrCode,
-        gate: gate,
-      );
-      await _saveScanLog(result: result, eventId: eventId, qrCode: qrCode, gate: gate, controllerId: controllerId);
+      final result = await remoteSource.validateTicket(eventId: eventId, qrCode: qrCode, gate: gate);
+      await _saveScanLog(result: result, eventId: eventId, qrCode: qrCode, gate: gate, controllerId: user?.id);
       return result;
     } on NetworkException catch (e) {
+      if (hasPack) {
+        return _validateOffline(eventId: eventId, qrCode: qrCode, gate: gate, controllerId: user?.id, controllerName: user?.name);
+      }
       return ValidationResult(
         status: ValidationStatus.error,
         ticketCode: qrCode,
-        errorMessage: '${e.message} Le billet n\'a pas pu être vérifié : réessayez dès que le réseau revient.',
+        errorMessage: '${e.message} Le billet n\'a pas pu être vérifié. Téléchargez la liste des billets '
+            '(écran de l\'événement) pour pouvoir scanner sans réseau.',
         isOfflineResult: true,
+        networkFailure: true,
         scannedAt: DateTime.now(),
       );
     } on AuthException catch (e) {
@@ -57,8 +64,6 @@ class ScannerRepositoryImpl implements ScannerRepository {
     }
   }
 
-  // Kept for the offline mode of a later batch (needs the tickets downloaded first)
-  // ignore: unused_element
   Future<ValidationResult> _validateOffline({
     required String eventId,
     required String qrCode,
@@ -67,58 +72,17 @@ class ScannerRepositoryImpl implements ScannerRepository {
     String? controllerName,
   }) async {
     try {
-      final localResult = await localSource.validateTicketOffline(
+      final result = await localSource.validateTicketOffline(
         eventId: eventId,
         qrCode: qrCode,
         gate: gate,
         controllerId: controllerId,
         controllerName: controllerName,
       );
-
-      if (localResult != null) {
-        // Save as pending scan for later sync
-        await localSource.saveOfflineScan(
-          eventId: eventId,
-          qrCode: qrCode,
-          result: localResult.status.name,
-          gate: gate,
-          controllerId: controllerId,
-          controllerName: controllerName,
-        );
-
-        // Save log
-        await _saveScanLog(
-          result: localResult,
-          eventId: eventId,
-          qrCode: qrCode,
-          gate: gate,
-          controllerId: controllerId,
-        );
-
-        return localResult;
-      } else {
-        // Not found in local cache
-        final result = ValidationResult.notFound(
-          ticketCode: qrCode,
-          eventId: eventId,
-        );
-
-        await localSource.saveOfflineScan(
-          eventId: eventId,
-          qrCode: qrCode,
-          result: 'not_found',
-          gate: gate,
-          controllerId: controllerId,
-          controllerName: controllerName,
-        );
-
-        return result;
-      }
-    } catch (e) {
-      return ValidationResult.error(
-        ticketCode: qrCode,
-        message: 'Vérification hors connexion impossible.',
-      );
+      await _saveScanLog(result: result, eventId: eventId, qrCode: qrCode, gate: gate, controllerId: controllerId);
+      return result;
+    } catch (_) {
+      return ValidationResult.error(ticketCode: qrCode, message: 'Vérification hors connexion impossible.');
     }
   }
 
@@ -147,53 +111,72 @@ class ScannerRepositoryImpl implements ScannerRepository {
   }
 
   @override
-  Future<void> saveOfflineScan({
-    required String eventId,
-    required String qrCode,
-    required String result,
-    String? gate,
-  }) async {
-    final user = await secureStorage.getUser();
-    await localSource.saveOfflineScan(
-      eventId: eventId,
-      qrCode: qrCode,
-      result: result,
-      gate: gate,
-      controllerId: user?.id,
-      controllerName: user?.name,
-    );
-  }
+  Future<int> getPendingScanCount({String? eventId}) => localSource.getPendingScanCount(eventId: eventId);
 
   @override
-  Future<int> getPendingScanCount() async {
-    return localSource.getPendingScanCount();
-  }
-
-  @override
-  Future<void> syncOfflineScans() async {
+  Future<ScanSyncReport> syncOfflineScans() async {
     final pendingScans = await localSource.getPendingScans();
-    if (pendingScans.isEmpty) return;
+    if (pendingScans.isEmpty) return ScanSyncReport.empty;
+    final deviceId = await secureStorage.getOrCreateDeviceId();
 
     // The server takes the offline scans of one event per call
     final byEvent = <String, List<Map<String, dynamic>>>{};
     for (final scan in pendingScans) {
       byEvent.putIfAbsent(scan['event_id'] as String, () => []).add(scan);
     }
+
+    var report = ScanSyncReport.empty;
     for (final entry in byEvent.entries) {
-      final batch = entry.value.take(500).toList();
+      final batch = entry.value;
+      final List<Map<String, dynamic>> results;
       try {
-        await remoteSource.syncScans(entry.key, [
-          for (final scan in batch)
-            {'qrContent': scan['qr_code'], 'offlineScannedAt': scan['scanned_at']},
-        ]);
-        for (final scan in batch) {
-          await localSource.markScanSynced(scan['id'] as String);
-        }
+        results = await remoteSource.syncScans(
+          entry.key,
+          [for (final scan in batch) {'qrContent': scan['qr_code'], 'offlineScannedAt': scan['scanned_at']}],
+          deviceId: deviceId,
+        );
+      } on NetworkException {
+        // Network lost: keep everything for the next attempt, without counting it as a failure
+        return report + ScanSyncReport(remaining: await localSource.getPendingScanCount());
       } catch (e) {
         for (final scan in batch) {
           await localSource.incrementScanRetry(scan['id'] as String, e.toString());
         }
+        report += ScanSyncReport(remaining: batch.length);
+        continue;
+      }
+      report += await _applyResults(batch, results);
+    }
+    return report;
+  }
+
+  Future<ScanSyncReport> _applyResults(List<Map<String, dynamic>> batch, List<Map<String, dynamic>> results) async {
+    var accepted = 0, conflicts = 0, rejected = 0, remaining = 0;
+    final byIndex = {for (final r in results) if (r['index'] is int) r['index'] as int: r};
+    for (var i = 0; i < batch.length; i++) {
+      final scan = batch[i];
+      final id = scan['id'] as String;
+      final r = byIndex[i];
+      if (r == null || r['error'] != null) {
+        await localSource.incrementScanRetry(id, (r?['error'] ?? 'Pas de réponse du serveur').toString());
+        remaining++;
+        continue;
+      }
+      await localSource.markScanSynced(id);
+      switch (r['result']) {
+        case 'VALID':
+          accepted++;
+        case 'ALREADY_USED':
+          // Same entry already recorded (an online attempt that timed out but reached the
+          // server) is not a conflict; another entry with the same ticket is.
+          final serverAt = DateTime.tryParse('${r['checkedInAt']}');
+          final localAt = DateTime.tryParse('${scan['scanned_at']}');
+          final sameEntry = serverAt != null && localAt != null && serverAt.difference(localAt).inSeconds.abs() <= 60;
+          sameEntry ? accepted++ : conflicts++;
+        default:
+          rejected++;
       }
     }
+    return ScanSyncReport(accepted: accepted, conflicts: conflicts, rejected: rejected, remaining: remaining);
   }
 }

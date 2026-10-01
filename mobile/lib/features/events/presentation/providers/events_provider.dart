@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/di/injection_container.dart';
 import '../../domain/repositories/events_repository.dart';
 import '../../domain/entities/event_entity.dart';
+import '../../domain/entities/offline_pack.dart';
 import '../../domain/usecases/get_assigned_events.dart';
 import '../../domain/usecases/sync_events.dart';
 
@@ -85,16 +86,6 @@ class EventsNotifier extends StateNotifier<EventsState> {
     }
   }
 
-  Future<void> downloadTickets(String eventId) async {
-    try {
-      await _syncEvents.downloadTickets(eventId);
-    } catch (e) {
-      state = state.copyWith(
-        error: e.toString(),
-      );
-    }
-  }
-
   EventEntity? getEvent(String id) {
     try {
       return state.events.firstWhere((e) => e.id == id);
@@ -124,4 +115,9 @@ final eventByIdProvider = Provider.family<EventEntity?, String>((ref, id) {
 /// Refreshed when coming back from the scanner.
 final eventDetailProvider = FutureProvider.autoDispose.family<EventEntity, String>((ref, id) {
   return getIt<EventsRepository>().getEventDetail(id);
+});
+
+/// Ticket list downloaded on the phone for offline checks (null: none yet).
+final offlinePackProvider = FutureProvider.autoDispose.family<OfflinePackInfo?, String>((ref, id) {
+  return getIt<EventsRepository>().getOfflinePackInfo(id);
 });

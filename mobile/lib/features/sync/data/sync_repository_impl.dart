@@ -1,3 +1,4 @@
+import '../../scanner/domain/entities/scan_sync_report.dart';
 import '../domain/sync_usecase.dart';
 import '../../scanner/domain/repositories/scanner_repository.dart';
 import '../../events/domain/repositories/events_repository.dart';
@@ -11,36 +12,22 @@ class SyncRepositoryImpl {
     required this.eventsRepository,
   });
 
+  /// Uploads the offline scans (in batches, until nothing moves), then brings the
+  /// downloaded ticket lists up to date so they include the other doors' entries.
   Future<SyncResult> syncAll() async {
-    int scansUploaded = 0;
-    int eventsUpdated = 0;
-    String? error;
-
-    // Sync offline scans first
-    try {
-      final pendingBefore = await scannerRepository.getPendingScanCount();
-      await scannerRepository.syncOfflineScans();
-      final pendingAfter = await scannerRepository.getPendingScanCount();
-      scansUploaded = pendingBefore - pendingAfter;
-    } catch (e) {
-      error = 'Scan sync failed: ${e.toString()}';
+    var report = ScanSyncReport.empty;
+    for (var round = 0; round < 20; round++) {
+      final r = await scannerRepository.syncOfflineScans();
+      report = ScanSyncReport(
+        accepted: report.accepted + r.accepted,
+        conflicts: report.conflicts + r.conflicts,
+        rejected: report.rejected + r.rejected,
+      );
+      if (r.sent == 0) break;
     }
-
-    // Sync events
-    try {
-      await eventsRepository.syncEvents();
-      eventsUpdated = 1; // At least events were updated
-    } catch (e) {
-      error = error != null
-          ? '$error\nEvent sync failed: ${e.toString()}'
-          : 'Event sync failed: ${e.toString()}';
-    }
-
-    return SyncResult(
-      success: error == null,
-      scansUploaded: scansUploaded,
-      eventsUpdated: eventsUpdated,
-      error: error,
-    );
+    final pending = await scannerRepository.getPendingScanCount();
+    // Network still there: refresh the lists (failures ignored, next sync retries)
+    if (pending == 0 || report.sent > 0) await eventsRepository.refreshOfflinePacks();
+    return SyncResult(scans: report, pending: pending);
   }
 }

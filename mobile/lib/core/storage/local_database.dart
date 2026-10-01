@@ -4,7 +4,11 @@ import 'package:sqflite/sqflite.dart';
 import '../constants/app_constants.dart';
 
 class LocalDatabase {
-  static Database? _database;
+  /// [path]: another file (tests); default is the app's database.
+  LocalDatabase({String? path}) : _path = path;
+
+  final String? _path;
+  Database? _database;
 
   Future<Database> get database async {
     _database ??= await _initDatabase();
@@ -12,8 +16,7 @@ class LocalDatabase {
   }
 
   Future<Database> _initDatabase() async {
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, AppConstants.dbName);
+    final path = _path ?? join(await getDatabasesPath(), AppConstants.dbName);
 
     return openDatabase(
       path,
@@ -92,6 +95,7 @@ class LocalDatabase {
         scanned_at TEXT NOT NULL,
         controller_id TEXT NOT NULL,
         controller_name TEXT,
+        ticket_id TEXT,
         gate TEXT,
         result TEXT,
         synced INTEGER DEFAULT 0,
@@ -121,34 +125,42 @@ class LocalDatabase {
     await db.execute('''
       CREATE INDEX idx_scan_logs_event ON ${AppConstants.scanLogsTable}(event_id)
     ''');
+
+    await _createV2(db);
+  }
+
+  /// v2: when each event's ticket list was downloaded, and which ticket a pending scan is for.
+  Future<void> _createV2(Database db, {bool alterPendingScans = false}) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS ${AppConstants.offlinePacksTable} (
+        event_id TEXT PRIMARY KEY,
+        generated_at TEXT NOT NULL,
+        downloaded_at TEXT NOT NULL
+      )
+    ''');
+    if (alterPendingScans) {
+      await db.execute('ALTER TABLE ${AppConstants.pendingScansTable} ADD COLUMN ticket_id TEXT');
+    }
   }
 
   Future<void> _upgradeDatabase(Database db, int oldVersion, int newVersion) async {
-    // Handle future migrations here
+    if (oldVersion < 2) await _createV2(db, alterPendingScans: true);
   }
 
   // =========== EVENTS ===========
 
-  Future<void> insertEvent(Map<String, dynamic> event) async {
-    final db = await database;
-    await db.insert(
-      AppConstants.eventsTable,
-      event,
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
-  }
+  // Upsert in place: a REPLACE would delete the row first, which foreign keys forbid once
+  // the event has downloaded tickets
+  Future<void> insertEvent(Map<String, dynamic> event) => insertEvents([event]);
 
   Future<void> insertEvents(List<Map<String, dynamic>> events) async {
     final db = await database;
-    final batch = db.batch();
-    for (final event in events) {
-      batch.insert(
-        AppConstants.eventsTable,
-        event,
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
-    }
-    await batch.commit(noResult: true);
+    await db.transaction((txn) async {
+      for (final event in events) {
+        final updated = await txn.update(AppConstants.eventsTable, event, where: 'id = ?', whereArgs: [event['id']]);
+        if (updated == 0) await txn.insert(AppConstants.eventsTable, event);
+      }
+    });
   }
 
   Future<List<Map<String, dynamic>>> getEvents() async {
@@ -226,6 +238,93 @@ class LocalDatabase {
       },
       where: 'qr_code = ?',
       whereArgs: [qrCode],
+    );
+  }
+
+  /// Stores the event's ticket list (offline pack). A full pack replaces the list; a
+  /// partial one (`since`) only updates changed tickets. A ticket validated offline whose
+  /// scan is not uploaded yet stays "used" even if the server still says valid.
+  Future<void> saveOfflinePack(
+    String eventId,
+    List<Map<String, dynamic>> tickets, {
+    required bool full,
+    required String generatedAt,
+  }) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      final pendingRows = await txn.rawQuery(
+        'SELECT DISTINCT ticket_id FROM ${AppConstants.pendingScansTable} WHERE synced = 0 AND ticket_id IS NOT NULL AND event_id = ?',
+        [eventId],
+      );
+      final pendingIds = pendingRows.map((r) => r['ticket_id'] as String).toSet();
+      if (full) {
+        final keep = pendingIds.isEmpty ? '' : ' AND id NOT IN (${List.filled(pendingIds.length, '?').join(',')})';
+        await txn.delete(AppConstants.ticketsTable, where: 'event_id = ?$keep', whereArgs: [eventId, ...pendingIds]);
+      }
+      final batch = txn.batch();
+      for (final t in tickets) {
+        final id = t['id'] as String;
+        final serverStatus = (t['status'] as String? ?? 'VALID').toLowerCase();
+        if (pendingIds.contains(id) && serverStatus == 'valid') continue; // keep the local "used"
+        batch.insert(
+          AppConstants.ticketsTable,
+          {
+            'id': id,
+            'event_id': eventId,
+            'serial_number': t['serialNumber'],
+            'qr_code': id,
+            'holder_name': t['holderName'],
+            'ticket_type': t['templateName'],
+            'status': serverStatus,
+            'used_at': t['checkedInAt'],
+            'synced_at': generatedAt,
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      await batch.commit(noResult: true);
+      await txn.insert(
+        AppConstants.offlinePacksTable,
+        {'event_id': eventId, 'generated_at': generatedAt, 'downloaded_at': DateTime.now().toUtc().toIso8601String()},
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    });
+  }
+
+  Future<Map<String, dynamic>?> getOfflinePack(String eventId) async {
+    final db = await database;
+    final rows = await db.query(AppConstants.offlinePacksTable, where: 'event_id = ?', whereArgs: [eventId], limit: 1);
+    return rows.isEmpty ? null : rows.first;
+  }
+
+  Future<List<String>> getOfflinePackEventIds() async {
+    final db = await database;
+    final rows = await db.query(AppConstants.offlinePacksTable, columns: ['event_id']);
+    return rows.map((r) => r['event_id'] as String).toList();
+  }
+
+  Future<int> getPendingScanCountForEvent(String eventId) async {
+    final db = await database;
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) as count FROM ${AppConstants.pendingScansTable} WHERE synced = 0 AND event_id = ?',
+      [eventId],
+    );
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  Future<Map<String, dynamic>?> getTicketById(String id) async {
+    final db = await database;
+    final rows = await db.query(AppConstants.ticketsTable, where: 'id = ?', whereArgs: [id], limit: 1);
+    return rows.isEmpty ? null : rows.first;
+  }
+
+  Future<void> markTicketUsedById(String id, {required String usedAt, required String usedBy}) async {
+    final db = await database;
+    await db.update(
+      AppConstants.ticketsTable,
+      {'status': 'used', 'used_at': usedAt, 'used_by': usedBy},
+      where: 'id = ?',
+      whereArgs: [id],
     );
   }
 
@@ -338,6 +437,7 @@ class LocalDatabase {
 
   Future<void> clearAll() async {
     final db = await database;
+    await db.delete(AppConstants.offlinePacksTable);
     await db.delete(AppConstants.scanLogsTable);
     await db.delete(AppConstants.pendingScansTable);
     await db.delete(AppConstants.ticketsTable);

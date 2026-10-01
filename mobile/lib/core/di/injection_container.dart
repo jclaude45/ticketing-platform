@@ -1,6 +1,9 @@
 import 'package:get_it/get_it.dart';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
+
 import '../network/dio_client.dart';
+import '../network/network_info.dart';
 import '../storage/local_database.dart';
 import '../storage/secure_storage.dart';
 import '../../features/auth/data/repositories/auth_repository_impl.dart';
@@ -34,8 +37,8 @@ Future<void> configureDependencies() async {
     () => DioClient(secureStorage: getIt<SecureStorage>()),
   );
 
-  // Network
-  // (NetworkInfo is registered as a Riverpod provider)
+  // Network (also exposed to widgets as a Riverpod provider)
+  getIt.registerLazySingleton<NetworkInfo>(() => NetworkInfoImpl(connectivity: Connectivity()));
 
   // Auth
   getIt.registerLazySingleton<AuthRemoteSource>(
@@ -90,6 +93,7 @@ Future<void> configureDependencies() async {
       remoteSource: getIt<ScannerRemoteSource>(),
       localSource: getIt<ScannerLocalSource>(),
       secureStorage: getIt<SecureStorage>(),
+      networkInfo: getIt<NetworkInfo>(),
     ),
   );
   getIt.registerLazySingleton<ScanTicket>(

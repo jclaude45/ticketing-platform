@@ -1,3 +1,4 @@
+import '../../scanner/domain/entities/scan_sync_report.dart';
 import '../data/sync_repository_impl.dart';
 
 class SyncUsecase {
@@ -5,27 +6,14 @@ class SyncUsecase {
 
   const SyncUsecase({required this.repository});
 
-  Future<SyncResult> call() async {
-    return repository.syncAll();
-  }
+  Future<SyncResult> call() => repository.syncAll();
 }
 
 class SyncResult {
-  final bool success;
-  final int scansUploaded;
-  final int eventsUpdated;
-  final String? error;
+  final ScanSyncReport scans;
 
-  const SyncResult({
-    required this.success,
-    required this.scansUploaded,
-    required this.eventsUpdated,
-    this.error,
-  });
+  /// Scans still on the phone after this attempt
+  final int pending;
 
-  const SyncResult.empty()
-      : success = true,
-        scansUploaded = 0,
-        eventsUpdated = 0,
-        error = null;
+  const SyncResult({required this.scans, required this.pending});
 }

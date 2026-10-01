@@ -1,3 +1,4 @@
+import '../entities/scan_sync_report.dart';
 import '../entities/validation_result.dart';
 
 abstract class ScannerRepository {
@@ -7,14 +8,9 @@ abstract class ScannerRepository {
     String? gate,
   });
 
-  Future<void> saveOfflineScan({
-    required String eventId,
-    required String qrCode,
-    required String result,
-    String? gate,
-  });
+  /// Scans validated without network and not uploaded yet ([eventId]: for one event).
+  Future<int> getPendingScanCount({String? eventId});
 
-  Future<int> getPendingScanCount();
-
-  Future<void> syncOfflineScans();
+  /// Uploads them; stops (keeping them) as soon as the network is lost.
+  Future<ScanSyncReport> syncOfflineScans();
 }

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:uuid/uuid.dart';
 
 import '../constants/app_constants.dart';
 import '../../features/auth/domain/entities/user_entity.dart';
@@ -59,6 +60,16 @@ class SecureStorage {
 
   Future<void> deleteUser() async {
     await _storage.delete(key: AppConstants.userKey);
+  }
+
+  // Identifies this phone in offline scan uploads (required by the server)
+  Future<String> getOrCreateDeviceId() async {
+    const key = 'device_id';
+    final existing = await _storage.read(key: key);
+    if (existing != null && existing.isNotEmpty) return existing;
+    final id = 'mobile-${const Uuid().v4()}';
+    await _storage.write(key: key, value: id);
+    return id;
   }
 
   // Check if logged in

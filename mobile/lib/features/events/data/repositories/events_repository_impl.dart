@@ -1,4 +1,5 @@
 import '../../domain/entities/event_entity.dart';
+import '../../domain/entities/offline_pack.dart';
 import '../../domain/repositories/events_repository.dart';
 import '../sources/events_local_source.dart';
 import '../sources/events_remote_source.dart';
@@ -47,9 +48,30 @@ class EventsRepositoryImpl implements EventsRepository {
   }
 
   @override
-  Future<void> downloadEventTickets(String eventId) async {
-    // Offline validation needs a server route to export an event's tickets (next batch)
-    throw const ServerException(message: 'Le mode hors connexion sera disponible dans une prochaine version.');
+  Future<OfflinePackInfo> downloadEventTickets(String eventId) async {
+    // Only the changes since the previous list, when there is one
+    final since = await localSource.getOfflinePackGeneratedAt(eventId);
+    final pack = await remoteSource.getOfflineTickets(eventId, since: since);
+    final tickets = (pack['tickets'] as List<dynamic>? ?? const []).cast<Map<String, dynamic>>();
+    await localSource.saveOfflinePack(
+      eventId,
+      tickets,
+      full: pack['full'] == true,
+      generatedAt: pack['generatedAt'] as String,
+    );
+    return (await localSource.getOfflinePack(eventId))!;
+  }
+
+  @override
+  Future<OfflinePackInfo?> getOfflinePackInfo(String eventId) => localSource.getOfflinePack(eventId);
+
+  @override
+  Future<void> refreshOfflinePacks() async {
+    for (final eventId in await localSource.getOfflinePackEventIds()) {
+      try {
+        await downloadEventTickets(eventId);
+      } catch (_) {}
+    }
   }
 
   @override

@@ -130,13 +130,6 @@ class ScannerNotifier extends StateNotifier<ScannerStateData> {
       error: null,
     );
   }
-
-  Future<void> syncOfflineScans() async {
-    try {
-      await _syncOfflineScans();
-      await _loadPendingCount();
-    } catch (_) {}
-  }
 }
 
 final scannerNotifierProvider =

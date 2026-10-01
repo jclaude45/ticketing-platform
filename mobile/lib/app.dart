@@ -13,9 +13,15 @@ import 'features/scanner/presentation/screens/validation_result_screen.dart';
 import 'features/scanner/domain/entities/validation_result.dart';
 import 'shared/theme/app_theme.dart';
 import 'core/session/session_events.dart';
+import 'core/di/injection_container.dart';
+import 'core/network/network_info.dart';
+import 'core/storage/secure_storage.dart';
+import 'core/constants/colors.dart';
+import 'features/sync/presentation/providers/sync_provider.dart';
 
 /// Lets non-widget code (session expiry) navigate.
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
+final GlobalKey<ScaffoldMessengerState> appMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
 class TicketScannerApp extends ConsumerStatefulWidget {
   const TicketScannerApp({super.key});
@@ -24,12 +30,13 @@ class TicketScannerApp extends ConsumerStatefulWidget {
   ConsumerState<TicketScannerApp> createState() => _TicketScannerAppState();
 }
 
-class _TicketScannerAppState extends ConsumerState<TicketScannerApp> {
+class _TicketScannerAppState extends ConsumerState<TicketScannerApp> with WidgetsBindingObserver {
   StreamSubscription<void>? _sessionSub;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Session could not be renewed: back to the login screen with an explanation
     _sessionSub = SessionEvents.expired.listen((_) {
       ref.read(authNotifierProvider.notifier).sessionExpired();
@@ -39,14 +46,38 @@ class _TicketScannerAppState extends ConsumerState<TicketScannerApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _sessionSub?.cancel();
     super.dispose();
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _autoSync();
+  }
+
+  /// Sends the entries validated offline (and refreshes the ticket lists) when the
+  /// network is back; only with a session, so the login screen never triggers it.
+  Future<void> _autoSync() async {
+    if (!await getIt<SecureStorage>().isLoggedIn) return;
+    final report = await ref.read(syncNotifierProvider.notifier).sync();
+    final message = report == null ? null : describeSync(report);
+    if (message == null) return;
+    appMessengerKey.currentState?.showSnackBar(SnackBar(
+      content: Text(message),
+      backgroundColor: report!.conflicts > 0 ? AppColors.fraudOrange : null,
+      duration: Duration(seconds: report.conflicts > 0 ? 8 : 4),
+    ));
+  }
+
+  @override
   Widget build(BuildContext context) {
+    ref.listen<AsyncValue<bool>>(connectivityStreamProvider, (previous, next) {
+      if (next.valueOrNull == true && previous?.valueOrNull != true) _autoSync();
+    });
     return MaterialApp(
       navigatorKey: appNavigatorKey,
+      scaffoldMessengerKey: appMessengerKey,
       title: 'ZAYA Contrôle',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,

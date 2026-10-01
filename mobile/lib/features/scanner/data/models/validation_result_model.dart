@@ -36,9 +36,8 @@ class ValidationResultModel extends ValidationResult {
     final ticket = json['ticket'] as Map<String, dynamic>?;
 
     DateTime? usedAt;
-    if (ticket?['checkedInAt'] != null) {
-      usedAt = DateTime.tryParse(ticket!['checkedInAt'] as String);
-    }
+    final checkedInAt = ticket?['checkedInAt'] ?? json['checkedInAt'];
+    if (checkedInAt is String) usedAt = DateTime.tryParse(checkedInAt)?.toLocal();
 
     return ValidationResultModel(
       status: status,

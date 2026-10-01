@@ -8,8 +8,4 @@ class SyncEvents {
   Future<void> call() async {
     await repository.syncEvents();
   }
-
-  Future<void> downloadTickets(String eventId) async {
-    await repository.downloadEventTickets(eventId);
-  }
 }
