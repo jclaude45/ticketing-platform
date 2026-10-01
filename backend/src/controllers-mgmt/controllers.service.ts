@@ -145,8 +145,9 @@ export class ControllersService {
       throw new ForbiddenException('Access denied');
     }
 
-    const { password, ...safeController } = controller as any;
-    return safeController;
+    // Never the secrets: password, session and invitation tokens
+    const { password, refreshToken, invitationToken, ...safeController } = controller;
+    return { ...safeController, invitationPending: !!invitationToken };
   }
 
   async update(
