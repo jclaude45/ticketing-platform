@@ -163,7 +163,7 @@ class EventCard extends StatelessWidget {
                                 color: Colors.white, size: 16),
                             const SizedBox(width: 6),
                             Text(
-                              'Scan',
+                              'Scanner',
                               style: GoogleFonts.inter(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
@@ -299,6 +299,13 @@ class EventCard extends StatelessWidget {
   }
 
   Widget _buildProgress() {
+    // Controllers don't get the capacity: show the entries counted so far
+    if (event.capacity <= 0) {
+      return Text(
+        '${event.checkedIn} entrée${event.checkedIn > 1 ? 's' : ''}',
+        style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary),
+      );
+    }
     final percentage = event.checkInPercentage;
     final color = percentage > 0.9
         ? AppColors.usedRed
@@ -310,20 +317,9 @@ class EventCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              '${event.checkedIn} checked in',
-              style: GoogleFonts.inter(
-                  fontSize: 12, color: AppColors.textSecondary),
-            ),
-            Text(
-              '${event.capacity} capacity',
-              style:
-                  GoogleFonts.inter(fontSize: 12, color: AppColors.textMuted),
-            ),
-          ],
+        Text(
+          '${event.checkedIn} entrées sur ${event.capacity}',
+          style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary),
         ),
         const SizedBox(height: 6),
         ClipRRect(
@@ -335,15 +331,10 @@ class EventCard extends StatelessWidget {
             minHeight: 6,
           ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          '${(percentage * 100).toStringAsFixed(1)}% filled • ${event.remaining} remaining',
-          style:
-              GoogleFonts.inter(fontSize: 11, color: AppColors.textMuted),
-        ),
       ],
     );
   }
+
 
   Widget _buildOfflineChip() {
     return Container(
@@ -360,7 +351,7 @@ class EventCard extends StatelessWidget {
               size: 11, color: AppColors.statusOffline),
           const SizedBox(width: 4),
           Text(
-            'Offline',
+            'Hors ligne',
             style: GoogleFonts.inter(
               fontSize: 10,
               color: AppColors.statusOffline,

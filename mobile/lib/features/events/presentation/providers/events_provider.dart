@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/di/injection_container.dart';
+import '../../domain/repositories/events_repository.dart';
 import '../../domain/entities/event_entity.dart';
 import '../../domain/usecases/get_assigned_events.dart';
 import '../../domain/usecases/sync_events.dart';
@@ -89,7 +90,7 @@ class EventsNotifier extends StateNotifier<EventsState> {
       await _syncEvents.downloadTickets(eventId);
     } catch (e) {
       state = state.copyWith(
-        error: 'Failed to download tickets: ${e.toString()}',
+        error: e.toString(),
       );
     }
   }
@@ -117,4 +118,10 @@ final selectedEventProvider = StateProvider<String?>((ref) => null);
 
 final eventByIdProvider = Provider.family<EventEntity?, String>((ref, id) {
   return ref.watch(eventsNotifierProvider.notifier).getEvent(id);
+});
+
+/// Fresh event detail with the entry counters (`/controller-space/events/:id`).
+/// Refreshed when coming back from the scanner.
+final eventDetailProvider = FutureProvider.autoDispose.family<EventEntity, String>((ref, id) {
+  return getIt<EventsRepository>().getEventDetail(id);
 });

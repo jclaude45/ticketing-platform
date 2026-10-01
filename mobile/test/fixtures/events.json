@@ -1,0 +1,19 @@
+{
+  "success": true,
+  "statusCode": 200,
+  "data": [
+    {
+      "id": "77987eb2-83a0-4da4-8b26-65a6866c13c2",
+      "name": "Concert Mobile",
+      "status": "PUBLISHED",
+      "startDate": "2026-10-01T14:16:54.475Z",
+      "endDate": "2026-10-02T15:16:54.475Z",
+      "venue": "Salle Show",
+      "address": "12 av. du Commerce",
+      "city": "Kinshasa",
+      "bannerUrl": null,
+      "assignedAt": "2026-10-01T15:16:54.755Z"
+    }
+  ],
+  "timestamp": "2026-10-01T00:00:00.000Z"
+}

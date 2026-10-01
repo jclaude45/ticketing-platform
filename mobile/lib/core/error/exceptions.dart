@@ -1,3 +1,5 @@
+import 'package:dio/dio.dart';
+
 class ServerException implements Exception {
   final String message;
   final int? statusCode;
@@ -8,7 +10,7 @@ class ServerException implements Exception {
   });
 
   @override
-  String toString() => 'ServerException: $message (code: $statusCode)';
+  String toString() => message;
 }
 
 class NetworkException implements Exception {
@@ -17,7 +19,7 @@ class NetworkException implements Exception {
   const NetworkException({required this.message});
 
   @override
-  String toString() => 'NetworkException: $message';
+  String toString() => message;
 }
 
 class AuthException implements Exception {
@@ -26,7 +28,7 @@ class AuthException implements Exception {
   const AuthException({required this.message});
 
   @override
-  String toString() => 'AuthException: $message';
+  String toString() => message;
 }
 
 class CacheException implements Exception {
@@ -35,7 +37,7 @@ class CacheException implements Exception {
   const CacheException({required this.message});
 
   @override
-  String toString() => 'CacheException: $message';
+  String toString() => message;
 }
 
 class ValidationException implements Exception {
@@ -44,7 +46,7 @@ class ValidationException implements Exception {
   const ValidationException({required this.message});
 
   @override
-  String toString() => 'ValidationException: $message';
+  String toString() => message;
 }
 
 class BiometricException implements Exception {
@@ -53,5 +55,21 @@ class BiometricException implements Exception {
   const BiometricException({required this.message});
 
   @override
-  String toString() => 'BiometricException: $message';
+  String toString() => message;
+}
+
+/// The app exception carried by a Dio error (set by ErrorInterceptor), or a generic one.
+/// Dio wraps anything thrown inside an interceptor, so data sources unwrap it here.
+Exception toAppException(Object error) {
+  if (error is ServerException || error is NetworkException || error is AuthException) {
+    return error as Exception;
+  }
+  if (error is DioException) {
+    final inner = error.error;
+    if (inner is ServerException || inner is NetworkException || inner is AuthException) {
+      return inner as Exception;
+    }
+    return const NetworkException(message: 'Problème de connexion. Vérifiez votre réseau.');
+  }
+  return const ServerException(message: 'Une erreur inattendue est survenue.');
 }

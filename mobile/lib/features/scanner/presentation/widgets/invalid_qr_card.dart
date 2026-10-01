@@ -69,6 +69,19 @@ class _InvalidQrCardState extends State<InvalidQrCard>
   }
 
   @override
+  /// Unknown QR, refused scan (not assigned, event over…) or no connection: the title
+  /// says which, so a network problem is never mistaken for a fake ticket.
+  ({String title, String subtitle, String detailTitle}) get _texts {
+    final r = widget.result;
+    if (r.isOfflineResult) {
+      return (title: 'PAS DE CONNEXION', subtitle: 'Le billet n\'a pas pu être vérifié', detailTitle: 'Vérification impossible');
+    }
+    if (r.status == ValidationStatus.error) {
+      return (title: 'SCAN REFUSÉ', subtitle: 'Ce billet ne peut pas entrer ici', detailTitle: 'Motif');
+    }
+    return (title: 'QR CODE INVALIDE', subtitle: 'Ce QR code ne correspond à aucun billet', detailTitle: 'QR code non reconnu');
+  }
+
   Widget build(BuildContext context) {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -118,7 +131,7 @@ class _InvalidQrCardState extends State<InvalidQrCard>
             child: Column(
               children: [
                 Text(
-                  'QR CODE INVALIDE',
+                  _texts.title,
                   style: GoogleFonts.rajdhani(
                     fontSize: 30,
                     fontWeight: FontWeight.w800,
@@ -128,7 +141,7 @@ class _InvalidQrCardState extends State<InvalidQrCard>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Ce QR code ne correspond à aucun ticket',
+                  _texts.subtitle,
                   style: GoogleFonts.inter(
                     fontSize: 13,
                     color: _invalidBlueLight.withOpacity(0.7),
@@ -178,7 +191,7 @@ class _InvalidQrCardState extends State<InvalidQrCard>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'QR code non reconnu',
+                              _texts.detailTitle,
                               style: GoogleFonts.inter(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w700,

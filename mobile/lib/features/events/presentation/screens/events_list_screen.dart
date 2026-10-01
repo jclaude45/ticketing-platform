@@ -36,7 +36,7 @@ class _EventsListScreenState extends ConsumerState<EventsListScreen> {
       loading: () => true,
       error: (_, __) => false,
     );
-    final userName = user?.name ?? 'Controller';
+    final userName = user?.name ?? 'Contrôleur';
 
     return Scaffold(
       backgroundColor: AppColors.backgroundDark,
@@ -129,7 +129,7 @@ class _EventsListScreenState extends ConsumerState<EventsListScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Hello, $userName',
+                  'Bonjour, $userName',
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -152,7 +152,7 @@ class _EventsListScreenState extends ConsumerState<EventsListScreen> {
                     ),
                     const SizedBox(width: 5),
                     Text(
-                      isOnline ? 'Online' : 'Offline Mode',
+                      isOnline ? 'En ligne' : 'Hors ligne',
                       style: GoogleFonts.inter(
                         fontSize: 11,
                         color: isOnline
@@ -176,7 +176,7 @@ class _EventsListScreenState extends ConsumerState<EventsListScreen> {
             icon: const Icon(Icons.logout_rounded,
                 color: AppColors.textSecondary),
             onPressed: _confirmLogout,
-            tooltip: 'Logout',
+            tooltip: 'Déconnexion',
           ),
         ],
       ),
@@ -203,7 +203,7 @@ class _EventsListScreenState extends ConsumerState<EventsListScreen> {
             ),
           ),
           const SizedBox(width: 10),
-          Text('Syncing events…',
+          Text('Chargement des événements…',
               style:
                   GoogleFonts.inter(fontSize: 13, color: AppColors.primary)),
         ],
@@ -251,7 +251,7 @@ class _EventsListScreenState extends ConsumerState<EventsListScreen> {
             ),
             const SizedBox(height: 20),
             Text(
-              isOnline ? 'No events assigned' : 'No offline data',
+              isOnline ? 'Aucun événement assigné' : 'Pas de connexion',
               style: GoogleFonts.inter(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
@@ -261,8 +261,8 @@ class _EventsListScreenState extends ConsumerState<EventsListScreen> {
             const SizedBox(height: 8),
             Text(
               isOnline
-                  ? 'You have no events assigned yet.\nContact your administrator.'
-                  : 'Connect to the internet to\ndownload your event data.',
+                  ? 'Aucun événement ne vous est encore assigné.\nContactez l\'organisateur.'
+                  : 'Connectez-vous à internet\npour charger vos événements.',
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(
                 fontSize: 14,
@@ -292,23 +292,23 @@ class _EventsListScreenState extends ConsumerState<EventsListScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.backgroundCard,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Logout',
+        title: Text('Déconnexion',
             style: GoogleFonts.inter(
                 fontWeight: FontWeight.w700,
                 color: AppColors.textPrimary)),
         content: Text(
-          'Are you sure you want to logout?\nAny unsynced scans will be lost.',
+          'Voulez-vous vraiment vous déconnecter ?',
           style: GoogleFonts.inter(color: AppColors.textSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel',
+            child: Text('Annuler',
                 style: GoogleFonts.inter(color: AppColors.textMuted)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Logout',
+            child: Text('Se déconnecter',
                 style: GoogleFonts.inter(color: AppColors.usedRed)),
           ),
         ],
@@ -336,7 +336,7 @@ class _StatsRow extends StatelessWidget {
         children: [
           _StatChip(label: 'Total', value: '$totalEvents', color: AppColors.primary),
           const SizedBox(width: 10),
-          _StatChip(label: 'Live Now', value: '$liveEvents', color: AppColors.validGreen),
+          _StatChip(label: 'En cours', value: '$liveEvents', color: AppColors.validGreen),
         ],
       ),
     );

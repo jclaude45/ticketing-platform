@@ -29,12 +29,8 @@ class AccreditationRemoteSourceImpl implements AccreditationRemoteSource {
         response.data as Map<String, dynamic>,
         qrCode: qrCode,
       );
-    } on ServerException {
-      rethrow;
-    } on NetworkException {
-      rethrow;
     } catch (e) {
-      throw ServerException(message: 'Accreditation scan failed: $e');
+      throw toAppException(e);
     }
   }
 }

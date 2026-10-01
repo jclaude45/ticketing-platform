@@ -1,0 +1,8 @@
+{
+  "success": false,
+  "statusCode": 403,
+  "message": "You are not authorized to scan tickets for this event",
+  "path": "/api/v1/validation/events/00000000-0000-0000-0000-000000000000/scan",
+  "method": "POST",
+  "timestamp": "2026-10-01T00:00:00.000Z"
+}

@@ -57,17 +57,17 @@ class _LoginFormState extends ConsumerState<LoginForm> {
           // Email field
           AppTextField(
             controller: _emailController,
-            label: 'Email Address',
+            label: 'Adresse email',
             hint: 'controller@company.com',
             keyboardType: TextInputType.emailAddress,
             prefixIcon: Icons.email_outlined,
             enabled: !isLoading,
             validator: (value) {
               if (value == null || value.isEmpty) {
-                return 'Email is required';
+                return 'L\'email est obligatoire';
               }
               if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
-                return 'Enter a valid email';
+                return 'Email invalide';
               }
               return null;
             },
@@ -78,7 +78,7 @@ class _LoginFormState extends ConsumerState<LoginForm> {
           // Password field
           AppTextField(
             controller: _passwordController,
-            label: 'Password',
+            label: 'Mot de passe',
             hint: '••••••••',
             obscureText: _obscurePassword,
             prefixIcon: Icons.lock_outline_rounded,
@@ -97,10 +97,10 @@ class _LoginFormState extends ConsumerState<LoginForm> {
             ),
             validator: (value) {
               if (value == null || value.isEmpty) {
-                return 'Password is required';
+                return 'Le mot de passe est obligatoire';
               }
               if (value.length < 6) {
-                return 'Password must be at least 6 characters';
+                return 'Au moins 6 caractères';
               }
               return null;
             },
@@ -134,7 +134,7 @@ class _LoginFormState extends ConsumerState<LoginForm> {
               ),
               const SizedBox(width: 8),
               Text(
-                'Remember me',
+                'Rester connecté',
                 style: GoogleFonts.inter(
                   fontSize: 13,
                   color: AppColors.textSecondary,
@@ -190,7 +190,7 @@ class _LoginFormState extends ConsumerState<LoginForm> {
 
           // Login button
           AppButton(
-            label: 'Sign In',
+            label: 'Se connecter',
             onPressed: isLoading ? null : _onLogin,
             isLoading: isLoading,
             icon: Icons.login_rounded,
@@ -209,7 +209,7 @@ class _LoginFormState extends ConsumerState<LoginForm> {
               ),
               const SizedBox(width: 6),
               Text(
-                'Secured with end-to-end encryption',
+                'Connexion sécurisée',
                 style: GoogleFonts.inter(
                   fontSize: 12,
                   color: AppColors.textMuted,

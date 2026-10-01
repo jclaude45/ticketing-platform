@@ -68,8 +68,9 @@ class AccreditationNotifier extends StateNotifier<AccreditationState> {
       );
       state = state.copyWith(isProcessing: false, lastResult: result);
       return result;
-    } on ServerException catch (e) {
-      final result = AccreditationResult.error(qrCode: qrCode, message: e.message);
+    } catch (e) {
+      // Server refusal, expired session…: always a readable result, never an unhandled error
+      final result = AccreditationResult.error(qrCode: qrCode, message: e.toString());
       state = state.copyWith(isProcessing: false, lastResult: result);
       return result;
     }

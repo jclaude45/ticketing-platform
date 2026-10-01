@@ -2,12 +2,11 @@ class AppConstants {
   AppConstants._();
 
   // API Configuration
-  // Dev: Android emulator → 10.0.2.2, iOS simulator → 127.0.0.1
-  // For physical device on local network, use your machine's LAN IP.
-  static const String _devBaseUrl = 'http://10.0.2.2:3001/api/v1';
-  static const String _prodBaseUrl = 'https://zaya.live/api/v1';
-  static const bool _isProduction = bool.fromEnvironment('dart.vm.product');
-  static String get baseUrl => _isProduction ? _prodBaseUrl : _devBaseUrl;
+  // The API lives on app.zaya.live (zaya.live is the public website, its /api/v1 is a 404).
+  // Override at build time, e.g. a phone on the local network:
+  //   flutter run --dart-define=API_URL=http://192.168.1.20:3001/api/v1
+  static const String _prodBaseUrl = 'https://app.zaya.live/api/v1';
+  static const String baseUrl = String.fromEnvironment('API_URL', defaultValue: _prodBaseUrl);
   static const int connectTimeout = 30000; // 30 seconds
   static const int receiveTimeout = 30000; // 30 seconds
   static const int sendTimeout = 30000; // 30 seconds
@@ -45,6 +44,6 @@ class AppConstants {
   static const String scanLogsTable = 'scan_logs';
 
   // App Info
-  static const String appName = 'Ticket Scanner';
+  static const String appName = 'ZAYA Contrôle';
   static const String appVersion = '1.0.0';
 }

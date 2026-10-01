@@ -23,7 +23,6 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen>
     with TickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
-  int _localTicketCount = 0;
 
   @override
   void initState() {
@@ -36,23 +35,6 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen>
       CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
     );
     _animationController.forward();
-    _loadLocalCount();
-  }
-
-  Future<void> _loadLocalCount() async {
-    final count = await ref
-        .read(eventsNotifierProvider.notifier)
-        .getEvent(widget.eventId)
-        .hashCode
-        .abs()
-        .toRadixString(16)
-        .hashCode
-        .abs()
-        .toString()
-        .length;
-    if (mounted) {
-      setState(() => _localTicketCount = count);
-    }
   }
 
   @override
@@ -63,7 +45,9 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen>
 
   @override
   Widget build(BuildContext context) {
-    final event = ref.watch(eventByIdProvider(widget.eventId));
+    // Fresh detail (with counters) from the server; the list entry meanwhile / when offline
+    final detail = ref.watch(eventDetailProvider(widget.eventId));
+    final event = detail.valueOrNull ?? ref.watch(eventByIdProvider(widget.eventId));
     final connectivity = ref.watch(connectivityStreamProvider);
     final isOnline = connectivity.when(
       data: (v) => v,
@@ -78,10 +62,27 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen>
           backgroundColor: Colors.transparent,
           leading: const BackButton(color: AppColors.textPrimary),
         ),
-        body: const Center(
-          child: CircularProgressIndicator(
-            color: AppColors.primary,
-          ),
+        body: Center(
+          child: detail.hasError
+              ? Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        detail.error.toString(),
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.inter(fontSize: 14, color: AppColors.textSecondary),
+                      ),
+                      const SizedBox(height: 12),
+                      TextButton(
+                        onPressed: () => ref.invalidate(eventDetailProvider(widget.eventId)),
+                        child: const Text('Réessayer'),
+                      ),
+                    ],
+                  ),
+                )
+              : const CircularProgressIndicator(color: AppColors.primary),
         ),
       );
     }
@@ -292,7 +293,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen>
                 ),
                 const SizedBox(width: 5),
                 Text(
-                  'Your Gate: ${event.gate}',
+                  'Votre porte : ${event.gate}',
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     color: AppColors.primary,
@@ -307,11 +308,12 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen>
   }
 
   Widget _buildStatsRow(EventEntity event) {
+    final mine = event.extraData ?? const {};
     return Row(
       children: [
         Expanded(
           child: _StatCard(
-            label: 'Checked In',
+            label: 'Entrées',
             value: event.checkedIn.toString(),
             icon: Icons.how_to_reg_rounded,
             color: AppColors.validGreen,
@@ -320,18 +322,18 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen>
         const SizedBox(width: 12),
         Expanded(
           child: _StatCard(
-            label: 'Capacity',
-            value: event.capacity.toString(),
-            icon: Icons.people_outline_rounded,
+            label: 'Mes validations',
+            value: '${mine['myValidScans'] ?? '–'}',
+            icon: Icons.verified_rounded,
             color: AppColors.primary,
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
           child: _StatCard(
-            label: 'Remaining',
-            value: event.remaining.toString(),
-            icon: Icons.event_seat_outlined,
+            label: 'Mes scans',
+            value: '${mine['myScans'] ?? '–'}',
+            icon: Icons.qr_code_scanner_rounded,
             color: AppColors.accent,
           ),
         ),
@@ -351,21 +353,21 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen>
         children: [
           _InfoRow(
             icon: Icons.location_on_outlined,
-            label: 'Venue',
+            label: 'Lieu',
             value: event.venue,
           ),
           if (event.address != null) ...[
             const Divider(color: AppColors.borderDefault, height: 24),
             _InfoRow(
               icon: Icons.map_outlined,
-              label: 'Address',
+              label: 'Adresse',
               value: event.address!,
             ),
           ],
           const Divider(color: AppColors.borderDefault, height: 24),
           _InfoRow(
             icon: Icons.calendar_today_outlined,
-            label: 'Date & Time',
+            label: 'Date et heure',
             value: AppDateUtils.formatEventDuration(
               event.startDate,
               event.endDate,
@@ -385,67 +387,25 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen>
   }
 
   Widget _buildOfflineSection(EventEntity event, bool isOnline) {
+    final color = isOnline ? AppColors.statusOnline : AppColors.statusOffline;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.backgroundCard,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isOnline
-              ? AppColors.borderDefault
-              : AppColors.statusOffline.withOpacity(0.3),
-        ),
+        border: Border.all(color: isOnline ? AppColors.borderDefault : color.withOpacity(0.3)),
       ),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(
-                isOnline ? Icons.wifi_rounded : Icons.wifi_off_rounded,
-                size: 16,
-                color: isOnline
-                    ? AppColors.statusOnline
-                    : AppColors.statusOffline,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Offline Mode',
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const Spacer(),
-              if (!isOnline)
-                TextButton(
-                  onPressed: () => ref
-                      .read(eventsNotifierProvider.notifier)
-                      .downloadTickets(event.id),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
-                  ),
-                  child: Text(
-                    'Download Tickets',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            isOnline
-                ? 'Online — scans will be validated in real-time.'
-                : 'Offline mode active. Tickets are validated locally. Scans will sync when connection is restored.',
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              color: AppColors.textMuted,
-              height: 1.5,
+          Icon(isOnline ? Icons.wifi_rounded : Icons.wifi_off_rounded, size: 18, color: color),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              isOnline
+                  ? 'En ligne : chaque billet est vérifié en temps réel.'
+                  : 'Pas de connexion : les billets ne peuvent pas être vérifiés pour le moment.',
+              style: GoogleFonts.inter(fontSize: 12, color: AppColors.textSecondary, height: 1.5),
             ),
           ),
         ],
@@ -456,11 +416,9 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen>
   Widget _buildScanButton(EventEntity event) {
     return GestureDetector(
       onTap: () {
-        Navigator.pushNamed(
-          context,
-          '/scanner',
-          arguments: event.id,
-        );
+        Navigator.pushNamed(context, '/scanner', arguments: event.id)
+            // Back from scanning: refresh the counters
+            .then((_) => ref.invalidate(eventDetailProvider(widget.eventId)));
       },
       child: Container(
         height: 64,
@@ -490,7 +448,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen>
             ),
             const SizedBox(width: 12),
             Text(
-              'Start Scanning',
+              'Commencer à scanner',
               style: GoogleFonts.inter(
                 fontSize: 17,
                 fontWeight: FontWeight.w700,

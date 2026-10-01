@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import 'package:logger/logger.dart';
 
 import '../constants/app_constants.dart';
 import '../storage/secure_storage.dart';
@@ -8,7 +7,6 @@ import 'interceptors/error_interceptor.dart';
 
 class DioClient {
   late final Dio _dio;
-  final Logger _logger = Logger();
 
   DioClient({required SecureStorage secureStorage}) {
     _dio = Dio(
@@ -27,17 +25,10 @@ class DioClient {
       ),
     );
 
+    // No request/response bodies in logs: they contain passwords and session tokens
     _dio.interceptors.addAll([
       AuthInterceptor(secureStorage: secureStorage, dio: _dio),
       ErrorInterceptor(),
-      LogInterceptor(
-        requestBody: true,
-        responseBody: true,
-        logPrint: (obj) => _logger.d(obj.toString()),
-        error: true,
-        requestHeader: false,
-        responseHeader: false,
-      ),
     ]);
   }
 

@@ -4,7 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../../../core/di/injection_container.dart';
-import '../../domain/usecases/login_usecase.dart';
+import '../../../../core/storage/secure_storage.dart';
+import '../providers/auth_provider.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -80,14 +81,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   Future<void> _checkAuthAndNavigate() async {
     try {
-      final repository = getIt<LoginUsecase>().repository;
-      final isLoggedIn = await repository.isLoggedIn();
+      // Restores the stored controller (and its name) — anything else goes to login
+      final notifier = ref.read(authNotifierProvider.notifier);
+      await notifier.checkAuthStatus();
       if (!mounted) return;
-      if (isLoggedIn) {
-        Navigator.pushReplacementNamed(context, '/events');
-      } else {
-        Navigator.pushReplacementNamed(context, '/login');
-      }
+      final authenticated = ref.read(authNotifierProvider).status == AuthStatus.authenticated;
+      // Stale or non-controller session (older builds logged organizers in): drop it
+      if (!authenticated) await getIt<SecureStorage>().clearAll();
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, authenticated ? '/events' : '/login');
     } catch (_) {
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/login');
@@ -198,7 +200,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                'Access Control System',
+                                'Contrôle des accès',
                                 style: GoogleFonts.inter(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w400,
@@ -238,7 +240,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'Initializing secure session...',
+                          'Ouverture de la session…',
                           style: GoogleFonts.inter(
                             fontSize: 12,
                             color: AppColors.textMuted,

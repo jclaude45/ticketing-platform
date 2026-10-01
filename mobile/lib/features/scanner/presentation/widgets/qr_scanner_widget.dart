@@ -82,7 +82,7 @@ class QrScannerWidgetState extends State<QrScannerWidget> {
 
     switch (error.errorCode) {
       case MobileScannerErrorCode.permissionDenied:
-        message = 'Camera permission denied.\nGo to Settings to enable it.';
+        message = 'Accès à la caméra refusé.\nActivez-le dans les Réglages du téléphone.';
         icon = Icons.camera_alt_outlined;
         break;
       case MobileScannerErrorCode.unsupported:

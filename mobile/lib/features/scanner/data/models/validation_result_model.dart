@@ -50,7 +50,7 @@ class ValidationResultModel extends ValidationResult {
       ticketType: ticket?['templateName'] as String? ?? ticket?['type'] as String?,
       gate: json['gate'] as String?,
       usedAt: usedAt,
-      errorMessage: _translateMessage(json['message'] as String? ?? json['error'] as String?),
+      errorMessage: translate(json['message'] as String? ?? json['error'] as String?),
       isOfflineResult: isOfflineResult,
       scannedAt: DateTime.now(),
     );
@@ -66,26 +66,30 @@ class ValidationResultModel extends ValidationResult {
         return ValidationStatus.fraudulent;
       case 'INVALID':
         return ValidationStatus.notFound;
-      case 'EXPIRED':
+      case 'EXPIRED': // event over: shown as a refused scan with its message
         return ValidationStatus.error;
       default:
         return ValidationStatus.error;
     }
   }
 
-  static String? _translateMessage(String? message) {
+  /// French message for the controller (the server answers in English).
+  static String? translate(String? message) {
     if (message == null) return null;
     const map = {
-      'Ticket not found for this event': 'QR code non valide',
-      'Ticket not found in the system': 'QR code non valide',
-      'Invalid QR code format': 'Format de QR code invalide',
-      'Ticket has already been used': 'Ce ticket a déjà été utilisé',
-      'Ticket has been cancelled': 'Ce ticket a été annulé',
-      'Fraudulent ticket detected - invalid cryptographic signature': 'Ticket frauduleux détecté',
-      'Event has ended': 'L\'événement est terminé',
-      'You are not authorized to scan tickets for this event': 'Non autorisé à scanner cet événement',
-      'Server error. Please try again later.': 'Erreur serveur. Veuillez réessayer.',
+      'Ticket not found for this event': 'Ce billet n\'existe pas pour cet événement.',
+      'Ticket not found in the system': 'Ce billet n\'existe pas pour cet événement.',
+      'Invalid QR code format': 'Ce QR code n\'est pas un billet ZAYA.',
+      'Ticket has already been used': 'Ce billet a déjà été utilisé.',
+      'Ticket has been cancelled': 'Ce billet a été annulé.',
+      'Ticket is marked as fraudulent': 'Ce billet est signalé comme frauduleux.',
+      'Fraudulent ticket detected - invalid cryptographic signature': 'Billet falsifié : signature invalide.',
+      'Event has ended': 'L\'événement est terminé.',
+      'You are not authorized to scan tickets for this event': 'Vous n\'êtes pas assigné(e) à cet événement.',
+      'Accès réservé à l\'organisateur': 'Action non autorisée pour un contrôleur.',
     };
-    return map[message] ?? message;
+    if (map.containsKey(message)) return map[message];
+    if (message.startsWith('Ticket status is')) return 'Ce billet n\'est pas valide (${message.substring(17).trim()}).';
+    return message;
   }
 }

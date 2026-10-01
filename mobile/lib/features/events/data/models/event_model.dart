@@ -28,18 +28,20 @@ class EventModel extends EventEntity {
     final endDateRaw = json['endDate'] as String? ?? json['end_date'] as String?;
     final createdAtRaw = json['createdAt'] as String? ?? json['created_at'] as String?;
 
-    // checkedIn can come from a scan count or _count relation
-    final count = json['_count'] as Map<String, dynamic>?;
-    final checkedIn = json['checkedIn'] as int? ??
-        json['checked_in'] as int? ??
-        count?['scanValidations'] as int? ?? 0;
+    // /controller-space/events/:id returns { stats: { checkedIn, myScans, myValidScans } }
+    final stats = json['stats'] as Map<String, dynamic>?;
+    final checkedIn = stats?['checkedIn'] as int? ?? json['checkedIn'] as int? ?? json['checked_in'] as int? ?? 0;
+    final address = [json['address'], json['city']]
+        .whereType<String>()
+        .where((part) => part.trim().isNotEmpty)
+        .join(', ');
 
     return EventModel(
       id: json['id'] as String,
       name: json['name'] as String,
       description: json['description'] as String? ?? '',
       venue: json['venue'] as String? ?? '',
-      address: json['address'] as String?,
+      address: address.isEmpty ? null : address,
       startDate: DateTime.parse(startDateRaw ?? DateTime.now().toIso8601String()),
       endDate: DateTime.parse(endDateRaw ?? DateTime.now().toIso8601String()),
       bannerUrl: json['bannerUrl'] as String? ?? json['banner_url'] as String?,
@@ -50,7 +52,10 @@ class EventModel extends EventEntity {
       gate: json['gate'] as String?,
       syncedAt: null,
       createdAt: createdAtRaw != null ? DateTime.parse(createdAtRaw) : DateTime.now(),
-      extraData: null,
+      // The controller's own counters, shown on the event screen
+      extraData: stats == null
+          ? null
+          : {'myScans': stats['myScans'] as int? ?? 0, 'myValidScans': stats['myValidScans'] as int? ?? 0},
     );
   }
 

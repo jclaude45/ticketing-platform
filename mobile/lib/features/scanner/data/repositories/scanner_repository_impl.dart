@@ -7,6 +7,7 @@ import '../../domain/entities/validation_result.dart';
 import '../../domain/repositories/scanner_repository.dart';
 import '../sources/scanner_local_source.dart';
 import '../sources/scanner_remote_source.dart';
+import '../models/validation_result_model.dart';
 
 class ScannerRepositoryImpl implements ScannerRepository {
   final ScannerRemoteSource remoteSource;
@@ -30,48 +31,34 @@ class ScannerRepositoryImpl implements ScannerRepository {
     final controllerId = user?.id;
     final controllerName = user?.name;
 
-    // Try online validation first
+    // Online only for now: tickets are not downloaded to the phone yet, so an "offline
+    // validation" could only say "not found". Each failure is shown for what it is.
     try {
       final result = await remoteSource.validateTicket(
         eventId: eventId,
         qrCode: qrCode,
         gate: gate,
-        controllerId: controllerId,
       );
-
-      // Save scan log
-      await _saveScanLog(
-        result: result,
-        eventId: eventId,
-        qrCode: qrCode,
-        gate: gate,
-        controllerId: controllerId,
-      );
-
+      await _saveScanLog(result: result, eventId: eventId, qrCode: qrCode, gate: gate, controllerId: controllerId);
       return result;
-    } on NetworkException {
-      // Offline — try local validation
-      return await _validateOffline(
-        eventId: eventId,
-        qrCode: qrCode,
-        gate: gate,
-        controllerId: controllerId,
-        controllerName: controllerName,
+    } on NetworkException catch (e) {
+      return ValidationResult(
+        status: ValidationStatus.error,
+        ticketCode: qrCode,
+        errorMessage: '${e.message} Le billet n\'a pas pu être vérifié : réessayez dès que le réseau revient.',
+        isOfflineResult: true,
+        scannedAt: DateTime.now(),
       );
-    } on AuthException {
-      rethrow;
-    } catch (e) {
-      // Any other error — try offline
-      return await _validateOffline(
-        eventId: eventId,
-        qrCode: qrCode,
-        gate: gate,
-        controllerId: controllerId,
-        controllerName: controllerName,
-      );
+    } on AuthException catch (e) {
+      // 403 = not assigned to this event; 401 (session expired) is handled by the interceptor
+      return ValidationResult.error(ticketCode: qrCode, message: ValidationResultModel.translate(e.message) ?? e.message);
+    } on ServerException catch (e) {
+      return ValidationResult.error(ticketCode: qrCode, message: ValidationResultModel.translate(e.message) ?? e.message);
     }
   }
 
+  // Kept for the offline mode of a later batch (needs the tickets downloaded first)
+  // ignore: unused_element
   Future<ValidationResult> _validateOffline({
     required String eventId,
     required String qrCode,
@@ -130,7 +117,7 @@ class ScannerRepositoryImpl implements ScannerRepository {
     } catch (e) {
       return ValidationResult.error(
         ticketCode: qrCode,
-        message: 'Offline validation failed: ${e.toString()}',
+        message: 'Vérification hors connexion impossible.',
       );
     }
   }
@@ -187,24 +174,24 @@ class ScannerRepositoryImpl implements ScannerRepository {
     final pendingScans = await localSource.getPendingScans();
     if (pendingScans.isEmpty) return;
 
-    // Process in batches
-    const batchSize = 50;
-    for (var i = 0; i < pendingScans.length; i += batchSize) {
-      final batch = pendingScans.skip(i).take(batchSize).toList();
-
+    // The server takes the offline scans of one event per call
+    final byEvent = <String, List<Map<String, dynamic>>>{};
+    for (final scan in pendingScans) {
+      byEvent.putIfAbsent(scan['event_id'] as String, () => []).add(scan);
+    }
+    for (final entry in byEvent.entries) {
+      final batch = entry.value.take(500).toList();
       try {
-        await remoteSource.syncScans(batch);
-        // Mark all as synced
+        await remoteSource.syncScans(entry.key, [
+          for (final scan in batch)
+            {'qrContent': scan['qr_code'], 'offlineScannedAt': scan['scanned_at']},
+        ]);
         for (final scan in batch) {
           await localSource.markScanSynced(scan['id'] as String);
         }
       } catch (e) {
-        // Mark for retry
         for (final scan in batch) {
-          await localSource.incrementScanRetry(
-            scan['id'] as String,
-            e.toString(),
-          );
+          await localSource.incrementScanRetry(scan['id'] as String, e.toString());
         }
       }
     }

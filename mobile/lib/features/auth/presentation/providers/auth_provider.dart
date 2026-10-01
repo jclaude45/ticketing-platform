@@ -53,7 +53,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final isLoggedIn = await _loginUsecase.repository.isLoggedIn();
       if (isLoggedIn) {
         final user = await _loginUsecase.repository.getCurrentUser();
-        if (user != null) {
+        // Only controller sessions are valid here (older builds logged organizers in)
+        if (user != null && user.role == 'controller') {
           state = AuthState(status: AuthStatus.authenticated, user: user);
           return;
         }
@@ -73,9 +74,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = AuthState(status: AuthStatus.authenticated, user: user);
       return true;
     } catch (e) {
-      final message = e.toString()
-          .replaceAll('Exception: ', '')
-          .replaceAll('ArgumentError: ', '');
+      final message = e.toString().replaceAll('Exception: ', '').replaceAll('ArgumentError: ', '');
       state = AuthState(
         status: AuthStatus.error,
         errorMessage: message,
@@ -90,6 +89,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _logoutUsecase();
     } catch (_) {}
     state = const AuthState(status: AuthStatus.unauthenticated);
+  }
+
+  /// The interceptor could not renew the session (tokens already cleared).
+  void sessionExpired() {
+    state = const AuthState(
+      status: AuthStatus.error,
+      errorMessage: 'Votre session a expiré. Reconnectez-vous.',
+    );
   }
 
   void clearError() {

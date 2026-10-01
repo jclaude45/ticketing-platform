@@ -15,25 +15,15 @@ class EventsRepositoryImpl implements EventsRepository {
 
   @override
   Future<List<EventEntity>> getAssignedEvents({bool forceRefresh = false}) async {
-    if (!forceRefresh) {
-      // Try local first
-      try {
-        final localEvents = await localSource.getEvents();
-        if (localEvents.isNotEmpty) {
-          return localEvents;
-        }
-      } catch (_) {}
-    }
-
-    // Fetch from remote
+    // Server first (assignments change), the cached list only when offline
     try {
       final remoteEvents = await remoteSource.getAssignedEvents();
       await localSource.saveEvents(remoteEvents);
       return remoteEvents;
     } on NetworkException {
-      // Fall back to local on network error
       final localEvents = await localSource.getEvents();
-      return localEvents;
+      if (localEvents.isNotEmpty) return localEvents;
+      rethrow;
     }
   }
 
@@ -58,9 +48,8 @@ class EventsRepositoryImpl implements EventsRepository {
 
   @override
   Future<void> downloadEventTickets(String eventId) async {
-    // Stub for downloading ticket list for offline validation
-    // The actual implementation saves tickets to the local DB
-    await remoteSource.downloadEventTickets(eventId);
+    // Offline validation needs a server route to export an event's tickets (next batch)
+    throw const ServerException(message: 'Le mode hors connexion sera disponible dans une prochaine version.');
   }
 
   @override

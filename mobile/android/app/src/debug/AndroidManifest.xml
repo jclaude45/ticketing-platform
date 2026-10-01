@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Debug builds only: allow http to a local dev server (dart-define API_URL=http://mac-ip:3001/api/v1).
+         Release builds stay HTTPS-only. -->
+    <application android:usesCleartextTraffic="true" />
+</manifest>

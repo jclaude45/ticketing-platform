@@ -2,17 +2,17 @@ import '../../../../core/constants/api_endpoints.dart';
 import '../../../../core/error/exceptions.dart';
 import '../../../../core/network/dio_client.dart';
 import '../models/validation_result_model.dart';
-import '../../domain/entities/validation_result.dart';
 
 abstract class ScannerRemoteSource {
   Future<ValidationResultModel> validateTicket({
     required String eventId,
     required String qrCode,
     String? gate,
-    String? controllerId,
+    String? deviceId,
   });
 
-  Future<void> syncScans(List<Map<String, dynamic>> scans);
+  /// Uploads scans made offline for one event (`{scans: [{qrContent, offlineScannedAt}]}`).
+  Future<void> syncScans(String eventId, List<Map<String, dynamic>> scans);
 }
 
 class ScannerRemoteSourceImpl implements ScannerRemoteSource {
@@ -25,7 +25,7 @@ class ScannerRemoteSourceImpl implements ScannerRemoteSource {
     required String eventId,
     required String qrCode,
     String? gate,
-    String? controllerId,
+    String? deviceId,
   }) async {
     try {
       final response = await dioClient.post(
@@ -33,41 +33,24 @@ class ScannerRemoteSourceImpl implements ScannerRemoteSource {
         data: {
           'qrContent': qrCode,
           if (gate != null) 'location': gate,
-          if (controllerId != null) 'deviceId': controllerId,
+          if (deviceId != null) 'deviceId': deviceId,
         },
       );
-
-      if (response.data == null) {
-        throw const ServerException(message: 'Empty response from server');
-      }
-
-      // Unwrap TransformInterceptor: { success, data: { result, message, ticket } }
-      final wrapper = response.data as Map<String, dynamic>;
-      final inner = (wrapper['data'] ?? wrapper) as Map<String, dynamic>;
-
+      final body = response.data as Map<String, dynamic>? ?? {};
+      final inner = (body['data'] ?? body) as Map<String, dynamic>;
       return ValidationResultModel.fromJson(inner, ticketCode: qrCode);
-    } on ServerException {
-      rethrow;
-    } on NetworkException {
-      rethrow;
     } catch (e) {
-      throw ServerException(
-          message: 'Validation error: ${e.toString()}');
+      throw toAppException(e);
     }
   }
 
   @override
-  Future<void> syncScans(List<Map<String, dynamic>> scans) async {
+  Future<void> syncScans(String eventId, List<Map<String, dynamic>> scans) async {
     if (scans.isEmpty) return;
-
     try {
-      await dioClient.post(
-        ApiEndpoints.syncScans,
-        data: {'scans': scans},
-      );
+      await dioClient.post(ApiEndpoints.syncScans(eventId), data: {'scans': scans});
     } catch (e) {
-      throw ServerException(
-          message: 'Sync failed: ${e.toString()}');
+      throw toAppException(e);
     }
   }
 }

@@ -1,0 +1,16 @@
+{
+  "success": true,
+  "statusCode": 200,
+  "data": {
+    "accessToken": "jeton-de-test",
+    "refreshToken": "jeton-de-test",
+    "user": {
+      "id": "56bf61c2-84ef-4943-a637-ea31a3817d89",
+      "email": "ctrl-mobile@zaya.local",
+      "firstName": "Amina Contrôle",
+      "lastName": "",
+      "role": "CONTROLLER"
+    }
+  },
+  "timestamp": "2026-10-01T00:00:00.000Z"
+}

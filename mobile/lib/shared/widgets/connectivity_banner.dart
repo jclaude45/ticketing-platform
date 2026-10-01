@@ -101,8 +101,8 @@ class _ConnectivityBannerState extends ConsumerState<ConnectivityBanner>
                   const SizedBox(width: 8),
                   Text(
                     isOnline
-                        ? 'Back online – syncing...'
-                        : 'You are offline – working in offline mode',
+                        ? 'Connexion rétablie'
+                        : 'Pas de connexion : les billets ne peuvent pas être vérifiés',
                     style: GoogleFonts.inter(
                       fontSize: 12,
                       color: Colors.white,

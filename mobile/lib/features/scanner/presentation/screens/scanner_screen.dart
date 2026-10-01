@@ -71,11 +71,25 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
     super.dispose();
   }
 
+  /// True while a result screen is open: the camera stops so the same ticket in front of
+  /// it can't be counted again (and result screens can't stack up).
+  bool _showingResult = false;
+
   Future<void> _onQrDetected(String code) async {
+    if (_showingResult) return;
     if (_scanMode == ScanMode.badges) {
       await _handleAccreditationScan(code);
     } else {
       await _handleTicketScan(code);
+    }
+  }
+
+  Future<void> _showResult(Future<void> Function() open) async {
+    setState(() => _showingResult = true);
+    try {
+      await open();
+    } finally {
+      if (mounted) setState(() => _showingResult = false);
     }
   }
 
@@ -84,19 +98,17 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
     final result = await notifier.onQrDetected(code);
     if (result == null) return;
 
+    // Short tap = entry granted; long vibration = look at the screen
     if (result.isValid) {
       HapticFeedback.lightImpact();
-    } else if (result.isUsed) {
-      HapticFeedback.mediumImpact();
-    } else if (result.isFraudulent) {
-      HapticFeedback.heavyImpact();
-      HapticFeedback.heavyImpact();
+    } else {
+      HapticFeedback.vibrate();
     }
 
     _triggerFlash(result.isValid ? AppColors.validGreen : AppColors.usedRed);
 
     if (!mounted) return;
-    await Navigator.pushNamed(context, '/validation-result', arguments: result);
+    await _showResult(() => Navigator.pushNamed(context, '/validation-result', arguments: result));
     if (mounted) notifier.resetToScanning();
   }
 
@@ -108,13 +120,13 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
     if (result.isValid) {
       HapticFeedback.lightImpact();
     } else {
-      HapticFeedback.heavyImpact();
+      HapticFeedback.vibrate();
     }
 
     _triggerFlash(result.isValid ? AppColors.validGreen : AppColors.usedRed);
 
     if (!mounted) return;
-    await Navigator.push(
+    await _showResult(() => Navigator.push(
       context,
       PageRouteBuilder(
         pageBuilder: (_, animation, __) =>
@@ -130,7 +142,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
           ),
         ),
       ),
-    );
+    ));
   }
 
   void _triggerFlash(Color color) {
@@ -173,7 +185,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
               child: QrScannerWidget(
                 key: _scannerKey,
                 onDetected: _onQrDetected,
-                isActive: !isProcessing,
+                isActive: !isProcessing && !_showingResult,
               ),
             )
           else

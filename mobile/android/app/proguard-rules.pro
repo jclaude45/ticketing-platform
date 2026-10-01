@@ -38,3 +38,9 @@
     public static **[] values();
     public static ** valueOf(java.lang.String);
 }
+
+# Flutter's Play Store deferred-components support references Play Core classes the app
+# does not ship (no deferred components): let R8 ignore them
+-dontwarn com.google.android.play.core.splitcompat.**
+-dontwarn com.google.android.play.core.splitinstall.**
+-dontwarn com.google.android.play.core.tasks.**

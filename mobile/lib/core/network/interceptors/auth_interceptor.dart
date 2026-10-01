@@ -1,105 +1,85 @@
 import 'package:dio/dio.dart';
-import 'package:logger/logger.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../constants/api_endpoints.dart';
+import '../../constants/app_constants.dart';
+import '../../session/session_events.dart';
 import '../../storage/secure_storage.dart';
 
+/// Adds the access token and transparently renews it once on a 401.
+///
+/// Concurrent 401s share a single refresh; each request is then retried once with the new
+/// token. When the refresh fails the session is cleared and [SessionEvents] tells the app
+/// to go back to the login screen — no request is ever left hanging.
 class AuthInterceptor extends Interceptor {
   final SecureStorage _secureStorage;
   final Dio _dio;
-  final Logger _logger = Logger();
-  bool _isRefreshing = false;
-  final List<RequestOptions> _pendingRequests = [];
+  // Separate client for the refresh call: it must not go through these interceptors
+  final Dio _refreshDio;
+  Future<bool>? _refreshing;
 
-  AuthInterceptor({
-    required SecureStorage secureStorage,
-    required Dio dio,
-  })  : _secureStorage = secureStorage,
-        _dio = dio;
+  AuthInterceptor({required SecureStorage secureStorage, required Dio dio, Dio? refreshDio})
+      : _secureStorage = secureStorage,
+        _dio = dio,
+        _refreshDio = refreshDio ??
+            Dio(BaseOptions(
+              baseUrl: AppConstants.baseUrl,
+              connectTimeout: const Duration(milliseconds: AppConstants.connectTimeout),
+              receiveTimeout: const Duration(milliseconds: AppConstants.receiveTimeout),
+              headers: {'Content-Type': 'application/json', 'X-Platform': 'mobile'},
+            ));
+
+  bool _isAuthCall(RequestOptions o) =>
+      o.path.contains(ApiEndpoints.login) || o.path.contains(ApiEndpoints.refreshToken);
 
   @override
-  Future<void> onRequest(
-    RequestOptions options,
-    RequestInterceptorHandler handler,
-  ) async {
-    // Skip auth for login and refresh endpoints
-    if (options.path.contains(ApiEndpoints.login) ||
-        options.path.contains(ApiEndpoints.refreshToken)) {
-      return handler.next(options);
+  Future<void> onRequest(RequestOptions options, RequestInterceptorHandler handler) async {
+    if (!_isAuthCall(options)) {
+      final token = await _secureStorage.getAccessToken();
+      if (token != null) options.headers['Authorization'] = 'Bearer $token';
     }
-
-    final token = await _secureStorage.getAccessToken();
-    if (token != null) {
-      options.headers['Authorization'] = 'Bearer $token';
-    }
-    return handler.next(options);
+    handler.next(options);
   }
 
   @override
-  Future<void> onError(
-    DioException err,
-    ErrorInterceptorHandler handler,
-  ) async {
-    if (err.response?.statusCode == 401) {
-      if (_isRefreshing) {
-        // Queue the request
-        _pendingRequests.add(err.requestOptions);
-        return;
-      }
-
-      _isRefreshing = true;
-      try {
-        final refreshed = await _refreshToken();
-        if (refreshed) {
-          // Retry pending requests
-          for (final pending in _pendingRequests) {
-            final token = await _secureStorage.getAccessToken();
-            pending.headers['Authorization'] = 'Bearer $token';
-            await _dio.fetch(pending);
-          }
-          _pendingRequests.clear();
-
-          // Retry original request
-          final token = await _secureStorage.getAccessToken();
-          err.requestOptions.headers['Authorization'] = 'Bearer $token';
-          final response = await _dio.fetch(err.requestOptions);
-          return handler.resolve(response);
-        }
-      } catch (e) {
-        _logger.e('Token refresh failed', error: e);
-        await _secureStorage.clearAll();
-      } finally {
-        _isRefreshing = false;
-      }
+  Future<void> onError(DioException err, ErrorInterceptorHandler handler) async {
+    final options = err.requestOptions;
+    if (err.response?.statusCode != 401 || _isAuthCall(options) || options.extra['retried'] == true) {
+      return handler.next(err);
     }
-    return handler.next(err);
-  }
 
-  Future<bool> _refreshToken() async {
-    final refreshToken = await _secureStorage.getRefreshToken();
-    if (refreshToken == null) return false;
+    final refreshed = await (_refreshing ??= _refresh().whenComplete(() => _refreshing = null));
+    if (!refreshed) {
+      await _secureStorage.clearAll();
+      SessionEvents.notifyExpired();
+      return handler.next(err);
+    }
 
     try {
-      final response = await _dio.post(
-        ApiEndpoints.refreshToken,
-        // Backend strategy reads from body.refreshToken (mobile path)
-        data: {'refreshToken': refreshToken},
-        options: Options(headers: {'Authorization': null}),
-      );
+      final token = await _secureStorage.getAccessToken();
+      options.headers['Authorization'] = 'Bearer $token';
+      options.extra['retried'] = true;
+      handler.resolve(await _dio.fetch(options));
+    } on DioException catch (e) {
+      handler.next(e);
+    }
+  }
 
-      if (response.statusCode == 200) {
-        // Handle TransformInterceptor wrapper
-        final body = response.data as Map<String, dynamic>;
-        final payload = body['data'] as Map<String, dynamic>? ?? body;
-        await _secureStorage.saveAccessToken(payload['accessToken'] as String);
-        if (payload['refreshToken'] != null) {
-          await _secureStorage.saveRefreshToken(
-              payload['refreshToken'] as String);
-        }
-        return true;
-      }
-      return false;
+  Future<bool> _refresh() async {
+    final refreshToken = await _secureStorage.getRefreshToken();
+    if (refreshToken == null || refreshToken.isEmpty) return false;
+    try {
+      final response = await _refreshDio.post(ApiEndpoints.refreshToken, data: {'refreshToken': refreshToken});
+      final body = response.data as Map<String, dynamic>;
+      final payload = body['data'] as Map<String, dynamic>? ?? body;
+      final access = payload['accessToken'] as String?;
+      if (access == null) return false;
+      await _secureStorage.saveAccessToken(access);
+      final newRefresh = payload['refreshToken'] as String?;
+      if (newRefresh != null) await _secureStorage.saveRefreshToken(newRefresh);
+      return true;
     } catch (e) {
+      if (kDebugMode) debugPrint('Session refresh failed: $e');
       return false;
     }
   }

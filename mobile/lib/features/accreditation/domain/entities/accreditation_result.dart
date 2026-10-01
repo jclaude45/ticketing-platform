@@ -33,7 +33,7 @@ class AccreditationResult {
       return AccreditationResult(
         status: AccreditationStatus.invalid,
         qrCode: qrCode,
-        reason: payload['reason'] as String? ?? 'Invalid accreditation',
+        reason: _translateReason(payload['reason'] as String?),
         scannedAt: DateTime.now(),
       );
     }
@@ -59,5 +59,17 @@ class AccreditationResult {
       reason: message,
       scannedAt: DateTime.now(),
     );
+  }
+
+  /// French reasons for the controller (the server answers in English).
+  static String _translateReason(String? reason) {
+    const map = {
+      'Accreditation expired': 'Ce badge a expiré.',
+      'Accreditation has been revoked': 'Ce badge a été révoqué.',
+      'Accreditation not found for this event': 'Ce badge n\'appartient pas à cet événement.',
+      'Invalid QR code': 'Ce QR code n\'est pas un badge valide.',
+    };
+    if (reason == null) return 'Badge non valide.';
+    return map[reason] ?? reason;
   }
 }

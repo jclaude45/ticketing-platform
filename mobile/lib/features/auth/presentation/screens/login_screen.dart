@@ -207,7 +207,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
               ),
             ),
             Text(
-              'Access Control',
+              'Contrôle des accès',
               style: GoogleFonts.inter(
                 fontSize: 12,
                 color: AppColors.textMuted,
@@ -225,7 +225,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Welcome back,',
+          'Bienvenue,',
           style: GoogleFonts.inter(
             fontSize: 16,
             color: AppColors.textSecondary,
@@ -234,7 +234,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         ),
         const SizedBox(height: 4),
         Text(
-          'Sign in to continue',
+          'Connectez-vous pour continuer',
           style: GoogleFonts.inter(
             fontSize: 32,
             fontWeight: FontWeight.w700,
@@ -265,7 +265,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
               ),
               const SizedBox(width: 7),
               Text(
-                'Controller Portal',
+                'Espace contrôleur',
                 style: GoogleFonts.inter(
                   fontSize: 12,
                   color: AppColors.primary,
@@ -323,7 +323,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         ),
         const SizedBox(height: 16),
         Text(
-          'For authorized controllers only.\nUnauthorized access is prohibited.',
+          'Réservé aux contrôleurs autorisés.\nUtilisez l\'email de votre invitation.',
           textAlign: TextAlign.center,
           style: GoogleFonts.inter(
             fontSize: 11,

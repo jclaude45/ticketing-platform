@@ -14,10 +14,15 @@ class AuthResponseModel {
   factory AuthResponseModel.fromJson(Map<String, dynamic> json) {
     // Handle TransformInterceptor wrapper: { success, statusCode, data, timestamp }
     final payload = json['data'] as Map<String, dynamic>? ?? json;
+    final accessToken = payload['accessToken'] as String?;
+    final user = payload['user'] as Map<String, dynamic>?;
+    if (accessToken == null || user == null) {
+      throw const FormatException('Réponse de connexion inattendue du serveur.');
+    }
     return AuthResponseModel(
-      accessToken: payload['accessToken'] as String,
+      accessToken: accessToken,
       refreshToken: payload['refreshToken'] as String? ?? '',
-      user: UserModel.fromJson(payload['user'] as Map<String, dynamic>),
+      user: UserModel.fromJson(user),
     );
   }
 }

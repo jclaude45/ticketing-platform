@@ -72,7 +72,7 @@ class ErrorDialog extends StatelessWidget {
               onRetry?.call();
             },
             child: Text(
-              'Retry',
+              'Réessayer',
               style: GoogleFonts.inter(
                 color: AppColors.primary,
                 fontWeight: FontWeight.w600,

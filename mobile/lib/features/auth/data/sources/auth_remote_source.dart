@@ -31,17 +31,18 @@ class AuthRemoteSourceImpl implements AuthRemoteSource {
         },
       );
 
-      if (response.data == null) {
-        throw const ServerException(message: 'Empty response from server');
+      final auth = AuthResponseModel.fromJson(response.data as Map<String, dynamic>? ?? {});
+      if (auth.user.role != 'controller') {
+        throw const AuthException(message: 'Ce compte n\'est pas un compte contrôleur.');
       }
-
-      return AuthResponseModel.fromJson(
-        response.data as Map<String, dynamic>,
-      );
-    } on ServerException {
-      rethrow;
+      return auth;
+    } on AuthException catch (e) {
+      // Wrong password / account not activated: the server's message is already in French
+      throw AuthException(message: e.message);
+    } on FormatException catch (e) {
+      throw ServerException(message: e.message);
     } catch (e) {
-      throw ServerException(message: e.toString());
+      throw toAppException(e);
     }
   }
 
