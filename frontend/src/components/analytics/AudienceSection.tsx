@@ -110,12 +110,12 @@ export function AudienceSection({ eventId }: { eventId?: string }) {
             ))}
           </div>
 
-          {data.views === 0 ? (
-            <div className={cn(card, 'py-10 text-center text-sm text-gray-500')}>
-              Aucune visite sur cette période. Partagez le lien de la page de vente pour commencer à mesurer votre audience.
+          {data.views === 0 && (
+            <div className="rounded-lg border border-dashed border-gray-300 px-4 py-3 text-sm text-gray-500 dark:border-gray-700">
+              Aucune visite sur cette période. Partagez le lien de la page de vente : chaque visiteur apparaîtra sur la carte.
             </div>
-          ) : (
-            <>
+          )}
+          <>
               <div className={card}>
                 <p className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">Visites par jour</p>
                 <ResponsiveContainer width="100%" height={200}>
@@ -141,14 +141,12 @@ export function AudienceSection({ eventId }: { eventId?: string }) {
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                 <div className={cn(card, 'lg:col-span-2')}>
                   <p className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">Où sont vos visiteurs</p>
-                  {data.places.length ? (
-                    <AudienceMap places={data.places} />
-                  ) : (
-                    <div className="flex h-80 items-center justify-center text-sm text-gray-500">Aucune position connue pour le moment.</div>
-                  )}
+                  {/* Always shown: an empty world map until the first visitors are located */}
+                  <AudienceMap places={data.places} />
                   <p className="mt-2 flex items-start gap-1.5 text-xs text-gray-400">
                     <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-                    Position approximative (ville ou pays) déduite de la connexion internet — {Math.round(data.locatedShare * 100)}% des visites localisées.
+                    Position approximative (ville) déduite de la connexion internet
+                    {data.views > 0 && ` — ${Math.round(data.locatedShare * 100)}% des visites localisées`}.
                   </p>
                 </div>
 
@@ -156,6 +154,7 @@ export function AudienceSection({ eventId }: { eventId?: string }) {
                   <div className={card}>
                     <p className="mb-2 text-sm font-semibold text-gray-900 dark:text-white">Pays</p>
                     <ul className="space-y-1.5">
+                      {data.countries.length === 0 && <li className="text-xs text-gray-400">Aucune donnée pour le moment.</li>}
                       {data.countries.slice(0, 6).map((c) => (
                         <li key={c.country ?? 'unknown'} className="flex items-center justify-between text-sm">
                           <span className="truncate text-gray-700 dark:text-gray-300">{flag(c.country)} {countryName(c.country)}</span>
@@ -183,6 +182,7 @@ export function AudienceSection({ eventId }: { eventId?: string }) {
                 <div className={card}>
                   <p className="mb-2 text-sm font-semibold text-gray-900 dark:text-white">Provenance</p>
                   <ul className="space-y-1.5">
+                    {data.referrers.length === 0 && <li className="text-xs text-gray-400">Aucune donnée pour le moment.</li>}
                     {data.referrers.map((r) => (
                       <li key={r.name} className="flex items-center justify-between text-sm">
                         <span className="truncate text-gray-700 dark:text-gray-300">{sourceLabel(r.name)}</span>
@@ -194,6 +194,7 @@ export function AudienceSection({ eventId }: { eventId?: string }) {
                 <div className={card}>
                   <p className="mb-2 text-sm font-semibold text-gray-900 dark:text-white">Appareils</p>
                   <ul className="space-y-1.5">
+                    {data.devices.length === 0 && <li className="text-xs text-gray-400">Aucune donnée pour le moment.</li>}
                     {data.devices.map((d) => {
                       const Icon = DEVICE_ICONS[d.device] ?? Monitor;
                       return (
@@ -226,8 +227,7 @@ export function AudienceSection({ eventId }: { eventId?: string }) {
                   </ul>
                 </div>
               )}
-            </>
-          )}
+          </>
         </>
       )}
     </section>

@@ -9,6 +9,7 @@ const ALLOWED: RegExp[] = [
   /^\/public\/events\/cities$/,
   /^\/public\/events\/[\w-]+$/,
   /^\/public\/events\/[\w-]+\/register$/,
+  /^\/public\/events\/[\w-]+\/view$/,
   /^\/public\/events\/[\w-]+\/initiate-payment$/,
   /^\/public\/payments\/[\w-]+\/status$/,
   /^\/public\/payments\/[\w-]+\/tickets\/[\w-]+\/pdf$/,
@@ -27,6 +28,12 @@ async function proxy(req: NextRequest) {
 
   const backendUrl = `${BACKEND}${backendPath}${url.search}`;
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  // Pass the visitor's address and browser through (set by nginx, not by the client):
+  // audience statistics geolocate and filter bots with them
+  const realIp = req.headers.get('x-real-ip');
+  if (realIp) headers['X-Real-IP'] = realIp;
+  const userAgent = req.headers.get('user-agent');
+  if (userAgent) headers['User-Agent'] = userAgent;
   const init: RequestInit = { method: req.method, headers };
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -35,6 +42,8 @@ async function proxy(req: NextRequest) {
 
   try {
     const res = await fetch(backendUrl, init);
+    // A Response with a 204/304 status must not have a body
+    if (res.status === 204 || res.status === 304) return new NextResponse(null, { status: res.status });
     const contentType = res.headers.get('Content-Type') ?? 'application/json';
     const body = await res.arrayBuffer();
     const resHeaders: Record<string, string> = { 'Content-Type': contentType };
