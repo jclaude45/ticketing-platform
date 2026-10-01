@@ -49,6 +49,13 @@ class QrScannerWidgetState extends State<QrScannerWidget> {
 
   bool get isTorchOn => _isTorchOn;
 
+  /// Back <-> front camera (e.g. a phone fixed on a stand facing the guests). Front
+  /// cameras have no flash, so the torch goes off.
+  Future<void> switchCamera() async {
+    await controller.switchCamera();
+    if (_isTorchOn) setState(() => _isTorchOn = false);
+  }
+
   @override
   void dispose() {
     controller.dispose();

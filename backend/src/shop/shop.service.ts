@@ -27,7 +27,7 @@ const NEXT_STATUSES: Record<string, OrderStatus[]> = {
   CANCELLED: [],
 };
 
-const STATUS_LABELS: Record<string, string> = {
+export const STATUS_LABELS: Record<string, string> = {
   PENDING_PAYMENT: 'En attente de paiement', PAID: 'Payée', READY: 'Prête', SHIPPED: 'Expédiée',
   DELIVERED: 'Livrée', PICKED_UP: 'Remise', CANCELLED: 'Annulée',
 };

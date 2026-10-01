@@ -5,17 +5,22 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../../core/constants/colors.dart';
+import '../../../../core/di/injection_container.dart';
+import '../../../../core/feedback/scan_feedback.dart';
 import '../../../../core/network/network_info.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../../../accreditation/presentation/providers/accreditation_provider.dart';
 import '../../../accreditation/presentation/screens/accreditation_result_screen.dart';
+import '../../../events/presentation/providers/events_provider.dart';
+import '../../../merch/data/merch_pickup.dart';
+import '../../../merch/presentation/merch_pickup_screen.dart';
 import '../../../sync/presentation/providers/sync_provider.dart';
 import '../../domain/entities/validation_result.dart';
 import '../providers/scanner_provider.dart';
 import '../widgets/qr_scanner_widget.dart';
 import '../widgets/scan_overlay.dart';
 
-enum ScanMode { tickets, badges }
+enum ScanMode { tickets, badges, merch }
 
 class ScannerScreen extends ConsumerStatefulWidget {
   final String eventId;
@@ -31,6 +36,9 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
   final GlobalKey<QrScannerWidgetState> _scannerKey = GlobalKey();
   bool _hasCameraPermission = false;
   bool _isTorchOn = false;
+  bool _frontCamera = false;
+  bool _soundOn = ScanFeedback.instance.soundEnabled;
+  bool _merchBusy = false;
   ScanMode _scanMode = ScanMode.tickets;
 
   // Flash animation
@@ -53,6 +61,9 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
       ref.read(scannerNotifierProvider.notifier).setEventId(widget.eventId);
       ref.read(accreditationNotifierProvider.notifier).setEventId(widget.eventId);
       _checkCameraPermission();
+      ScanFeedback.instance.init().then((_) {
+        if (mounted) setState(() => _soundOn = ScanFeedback.instance.soundEnabled);
+      });
       // Entries validated offline earlier go up as soon as the scanner opens with network
       _sync(silent: true);
     });
@@ -99,6 +110,8 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
     if (_showingResult) return;
     if (_scanMode == ScanMode.badges) {
       await _handleAccreditationScan(code);
+    } else if (_scanMode == ScanMode.merch) {
+      await _handleMerch(qrContent: code);
     } else {
       await _handleTicketScan(code);
     }
@@ -118,12 +131,8 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
     final result = await notifier.onQrDetected(code);
     if (result == null) return;
 
-    // Short tap = entry granted; long vibration = look at the screen
-    if (result.isValid) {
-      HapticFeedback.lightImpact();
-    } else {
-      HapticFeedback.vibrate();
-    }
+    // Beep + short tap = entry granted; buzz + long vibration = look at the screen
+    result.isValid ? ScanFeedback.instance.accepted() : ScanFeedback.instance.refused();
 
     _triggerFlash(result.isValid ? AppColors.validGreen : AppColors.usedRed);
     if (result.isOfflineResult) ref.read(syncNotifierProvider.notifier).refreshPending();
@@ -138,11 +147,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
     final result = await notifier.onQrDetected(code);
     if (result == null) return;
 
-    if (result.isValid) {
-      HapticFeedback.lightImpact();
-    } else {
-      HapticFeedback.vibrate();
-    }
+    result.isValid ? ScanFeedback.instance.accepted() : ScanFeedback.instance.refused();
 
     _triggerFlash(result.isValid ? AppColors.validGreen : AppColors.usedRed);
 
@@ -172,8 +177,70 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
   }
 
   void _toggleTorch() {
+    if (_frontCamera) return; // no flash on the front camera
     _scannerKey.currentState?.toggleTorch();
     setState(() => _isTorchOn = !_isTorchOn);
+  }
+
+  Future<void> _switchCamera() async {
+    await _scannerKey.currentState?.switchCamera();
+    setState(() {
+      _frontCamera = !_frontCamera;
+      _isTorchOn = false;
+    });
+  }
+
+  Future<void> _toggleSound() async {
+    await ScanFeedback.instance.setSoundEnabled(!_soundOn);
+    setState(() => _soundOn = !_soundOn);
+    if (_soundOn) ScanFeedback.instance.accepted();
+  }
+
+  /// Shop order picked up at the stand: from its QR, or its code typed by hand.
+  Future<void> _handleMerch({String? qrContent, String? code}) async {
+    if (_merchBusy) return;
+    setState(() => _merchBusy = true);
+    try {
+      final order = await getIt<MerchRepository>().lookup(widget.eventId, qrContent: qrContent, code: code);
+      if (!mounted) return;
+      _triggerFlash(order.canHandOver ? AppColors.validGreen : AppColors.usedRed);
+      await _showResult(() => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => MerchPickupScreen(eventId: widget.eventId, order: order)),
+          ));
+    } catch (e) {
+      ScanFeedback.instance.refused();
+      _triggerFlash(AppColors.usedRed);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: AppColors.usedRed));
+      }
+    } finally {
+      if (mounted) setState(() => _merchBusy = false);
+    }
+  }
+
+  Future<void> _typeMerchCode() async {
+    final controller = TextEditingController();
+    final code = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.backgroundCard,
+        title: Text('Code de commande', style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.characters,
+          style: GoogleFonts.inter(fontSize: 20, letterSpacing: 2, color: AppColors.textPrimary),
+          decoration: const InputDecoration(hintText: 'B-7K3P9Q'),
+          onSubmitted: (v) => Navigator.pop(ctx, v),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+          TextButton(onPressed: () => Navigator.pop(ctx, controller.text), child: const Text('Rechercher')),
+        ],
+      ),
+    );
+    if (code != null && code.trim().isNotEmpty) await _handleMerch(code: code.trim());
   }
 
   void _switchMode(ScanMode mode) {
@@ -192,9 +259,11 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
       loading: () => true,
       error: (_, __) => false,
     );
-    final isProcessing = _scanMode == ScanMode.tickets
-        ? scannerState.isProcessing
-        : accState.isProcessing;
+    final isProcessing = switch (_scanMode) {
+      ScanMode.tickets => scannerState.isProcessing,
+      ScanMode.badges => accState.isProcessing,
+      ScanMode.merch => _merchBusy,
+    };
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -218,9 +287,11 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
               child: ScanOverlay(
                 isScanning: !isProcessing,
                 isProcessing: isProcessing,
-                frameColor: _scanMode == ScanMode.badges
-                    ? const Color(0xFF6366F1)
-                    : (isOnline ? AppColors.scannerFrame : AppColors.statusOffline),
+                frameColor: switch (_scanMode) {
+                  ScanMode.badges => const Color(0xFF6366F1),
+                  ScanMode.merch => const Color(0xFFF59E0B),
+                  ScanMode.tickets => isOnline ? AppColors.scannerFrame : AppColors.statusOffline,
+                },
               ),
             ),
 
@@ -250,9 +321,13 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
               child: Padding(
                 padding: const EdgeInsets.only(top: 300),
                 child: Text(
-                  _scanMode == ScanMode.tickets
-                      ? 'Placez le QR code dans le cadre'
-                      : 'Scannez le badge du membre',
+                  switch (_scanMode) {
+                    ScanMode.tickets => 'Placez le QR code dans le cadre',
+                    ScanMode.badges => 'Scannez le badge du membre',
+                    ScanMode.merch => isOnline
+                        ? 'Scannez le QR de retrait de la commande'
+                        : 'Le retrait boutique nécessite une connexion',
+                  },
                   style: GoogleFonts.inter(
                     fontSize: 13,
                     color: Colors.white.withOpacity(0.6),
@@ -312,7 +387,11 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _scanMode == ScanMode.tickets ? 'Scanner les tickets' : 'Scanner les badges',
+                  switch (_scanMode) {
+                    ScanMode.tickets => 'Scanner les tickets',
+                    ScanMode.badges => 'Scanner les badges',
+                    ScanMode.merch => 'Retrait boutique',
+                  },
                   style: GoogleFonts.inter(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
@@ -320,7 +399,9 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
                   ),
                 ),
                 Text(
-                  'Event: ${widget.eventId.substring(0, widget.eventId.length > 8 ? 8 : widget.eventId.length)}...',
+                  ref.watch(eventByIdProvider(widget.eventId))?.name ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(fontSize: 11, color: Colors.white54),
                 ),
               ],
@@ -421,18 +502,24 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
                 onTap: _toggleTorch,
                 isActive: _isTorchOn,
               ),
-              Container(
-                width: 64, height: 64,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white.withOpacity(0.3), width: 2),
-                  color: Colors.white.withOpacity(0.08),
+              _ControlButton(
+                icon: Icons.cameraswitch_rounded,
+                label: _frontCamera ? 'Avant' : 'Arrière',
+                onTap: _switchCamera,
+                isActive: _frontCamera,
+              ),
+              if (_scanMode == ScanMode.merch)
+                _ControlButton(
+                  icon: Icons.keyboard_rounded,
+                  label: 'Code',
+                  onTap: _typeMerchCode,
+                  isActive: false,
                 ),
-                child: Icon(
-                  _scanMode == ScanMode.badges ? Icons.badge_outlined : Icons.qr_code_rounded,
-                  color: Colors.white,
-                  size: 28,
-                ),
+              _ControlButton(
+                icon: _soundOn ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+                label: _soundOn ? 'Son' : 'Muet',
+                onTap: _toggleSound,
+                isActive: _soundOn,
               ),
               _ControlButton(
                 icon: Icons.sync_rounded,
@@ -470,6 +557,13 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
             isSelected: _scanMode == ScanMode.badges,
             selectedColor: const Color(0xFF6366F1),
             onTap: () => _switchMode(ScanMode.badges),
+          ),
+          _ModeTab(
+            label: 'BOUTIQUE',
+            icon: Icons.shopping_bag_outlined,
+            isSelected: _scanMode == ScanMode.merch,
+            selectedColor: const Color(0xFFF59E0B),
+            onTap: () => _switchMode(ScanMode.merch),
           ),
         ],
       ),

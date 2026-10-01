@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -7,6 +7,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ControllerAccess } from '../common/decorators/controller-access.decorator';
 import { ControllerSpaceService } from './controller-space.service';
+import { MerchLookupDto } from './dto/merch-lookup.dto';
 
 /** Endpoints for a logged-in controller (ticket scanner), scoped to their assigned events. */
 @ApiTags('Controller space')
@@ -45,6 +46,24 @@ export class ControllerSpaceController {
     @Query('since') since?: string,
   ) {
     return this.space.offlineTickets(controllerId, eventId, since);
+  }
+
+  @Post('events/:eventId/merch/lookup')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Stand: find a pickup order from its QR or code' })
+  merchLookup(@CurrentUser('id') controllerId: string, @Param('eventId') eventId: string, @Body() dto: MerchLookupDto) {
+    return this.space.lookupMerchOrder(controllerId, eventId, dto);
+  }
+
+  @Post('events/:eventId/merch/:orderId/hand-over')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Stand: hand a paid pickup order over to the buyer' })
+  merchHandOver(
+    @CurrentUser('id') controllerId: string,
+    @Param('eventId') eventId: string,
+    @Param('orderId', ParseUUIDPipe) orderId: string,
+  ) {
+    return this.space.handOverMerchOrder(controllerId, eventId, orderId);
   }
 
   @Get('events/:eventId/scans')

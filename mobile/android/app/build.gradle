@@ -4,6 +4,13 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin"
 }
 
+// Release signing key: android/key.properties (not in git, see key.properties.example)
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('key.properties')
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withReader('UTF-8') { keystoreProperties.load(it) }
+}
+
 android {
     namespace "com.ticketingplatform.scanner"
     compileSdk 36
@@ -27,9 +34,26 @@ android {
         multiDexEnabled true
     }
 
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+            }
+        }
+    }
+
     buildTypes {
         release {
-            signingConfig signingConfigs.debug
+            // Without key.properties the release build is refused rather than signed with
+            // the debug key (a debug-signed APK can't be updated by the real one later)
+            def releaseRequested = gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }
+            if (releaseRequested && !keystorePropertiesFile.exists()) {
+                throw new GradleException("android/key.properties manquant : clé de signature requise pour une version release")
+            }
+            signingConfig signingConfigs.release
         }
         debug {
             applicationIdSuffix ".debug"
@@ -43,5 +67,4 @@ flutter {
 
 dependencies {
     implementation 'androidx.multidex:multidex:2.0.1'
-    implementation 'androidx.biometric:biometric:1.1.0'
 }

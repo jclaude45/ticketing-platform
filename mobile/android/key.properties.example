@@ -1,0 +1,5 @@
+# Copy to key.properties (never commit it) and fill in.
+storePassword=
+keyPassword=
+keyAlias=zaya-controle
+storeFile=/absolute/path/to/zaya-controle-upload.jks

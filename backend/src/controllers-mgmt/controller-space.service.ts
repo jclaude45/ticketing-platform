@@ -1,6 +1,10 @@
-import { Injectable, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, ForbiddenException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { ScanResult, TicketStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { STATUS_LABELS } from '../shop/shop.service';
+import { MerchLookupDto } from './dto/merch-lookup.dto';
+
+const HANDABLE_STATUSES = ['PAID', 'READY'];
 
 /** Only what a controller needs at the door — never revenue, ticket lists or guest contacts. */
 const EVENT_FIELDS = {
@@ -95,6 +99,75 @@ export class ControllerSpaceService {
         status: t.status,
         checkedInAt: t.checkedInAt,
       })),
+    };
+  }
+
+  // ─── Merchandise pickup at the stand ──────────────────────────────────────
+
+  /** Finds a pickup order from its QR (`{"mo": id, "c": code}`) or its typed code. */
+  async lookupMerchOrder(controllerId: string, eventId: string, dto: MerchLookupDto) {
+    await this.getAssignment(controllerId, eventId);
+    let where: { id?: string; code: string } | null = null;
+    if (dto.qrContent) {
+      try {
+        const raw = JSON.parse(dto.qrContent);
+        if (typeof raw?.mo === 'string' && typeof raw?.c === 'string') where = { id: raw.mo, code: raw.c };
+      } catch {
+        // not JSON: maybe the code itself was encoded
+      }
+      where ??= { code: dto.qrContent.trim().toUpperCase() };
+    } else if (dto.code) {
+      // "B-7K3P9Q", "b7k3p9q" or just "7K3P9Q" (the 6 characters can start with a B too)
+      const raw = dto.code.toUpperCase().replace(/[\s-]/g, '');
+      where = { code: `B-${raw.length === 7 && raw.startsWith('B') ? raw.slice(1) : raw}` };
+    }
+    if (!where) throw new BadRequestException('QR code ou code de commande requis');
+
+    const order = await this.prisma.merchOrder.findFirst({ where: { ...where, eventId }, include: { items: true } });
+    if (!order) throw new NotFoundException("Aucune commande de la boutique ne correspond pour cet événement");
+    return this.serializePickup(order);
+  }
+
+  /** Hands a paid pickup order over; atomic so two stands can't give it out twice. */
+  async handOverMerchOrder(controllerId: string, eventId: string, orderId: string) {
+    await this.getAssignment(controllerId, eventId);
+    const claimed = await this.prisma.merchOrder.updateMany({
+      where: { id: orderId, eventId, fulfillment: 'PICKUP', status: { in: HANDABLE_STATUSES } },
+      data: { status: 'PICKED_UP', fulfilledAt: new Date() },
+    });
+    const order = await this.prisma.merchOrder.findFirst({ where: { id: orderId, eventId }, include: { items: true } });
+    if (!order) throw new NotFoundException('Commande introuvable');
+    if (claimed.count === 0) {
+      const reason = this.serializePickup(order).refusal;
+      throw new BadRequestException(reason ?? 'Cette commande ne peut pas être remise');
+    }
+    return this.serializePickup(order);
+  }
+
+  /** What the stand needs: who, what, and whether it can be handed over (no email, no amounts). */
+  private serializePickup(order: {
+    id: string; code: string; buyerName: string; fulfillment: string; status: string;
+    paidAt: Date | null; fulfilledAt: Date | null;
+    items: { productName: string; size: string | null; color: string | null; quantity: number }[];
+  }) {
+    let refusal: string | null = null;
+    if (order.fulfillment !== 'PICKUP') refusal = 'Cette commande est à livrer, pas à retirer au stand.';
+    else if (order.status === 'PICKED_UP') refusal = 'Cette commande a déjà été remise.';
+    else if (order.status === 'PENDING_PAYMENT') refusal = "Cette commande n'est pas payée.";
+    else if (order.status === 'CANCELLED') refusal = 'Cette commande a été annulée.';
+    else if (!HANDABLE_STATUSES.includes(order.status)) refusal = 'Cette commande ne peut pas être remise.';
+    return {
+      id: order.id,
+      code: order.code,
+      buyerName: order.buyerName,
+      fulfillment: order.fulfillment,
+      status: order.status,
+      statusLabel: STATUS_LABELS[order.status] ?? order.status,
+      paidAt: order.paidAt,
+      fulfilledAt: order.fulfilledAt,
+      canHandOver: refusal === null,
+      refusal,
+      items: order.items.map((i) => ({ productName: i.productName, size: i.size, color: i.color, quantity: i.quantity })),
     };
   }
 
