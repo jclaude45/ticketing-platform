@@ -113,6 +113,23 @@ export function switchWorkspace(ownerId: string | null): void {
   window.location.href = '/dashboard';
 }
 
+// Workspace to open after sign-in (invitation email link: ?workspace=<ownerId>)
+const PENDING_WORKSPACE_KEY = 'zaya_pending_workspace';
+
+export function rememberPendingWorkspace(ownerId: string): void {
+  try { localStorage.setItem(PENDING_WORKSPACE_KEY, ownerId); } catch { /* ignore */ }
+}
+
+export function takePendingWorkspace(): string | null {
+  try {
+    const ownerId = localStorage.getItem(PENDING_WORKSPACE_KEY);
+    if (ownerId) localStorage.removeItem(PENDING_WORKSPACE_KEY);
+    return ownerId;
+  } catch {
+    return null;
+  }
+}
+
 /** Show another signed-in account in this tab. */
 export function switchToAccount(accountId: string, path = '/dashboard'): void {
   setTabAccountId(accountId);

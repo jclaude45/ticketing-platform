@@ -119,7 +119,7 @@ export class AccountService {
       data: { ownerId, email, userId: user?.id ?? null, permission: dto.permission, invitedById },
     });
 
-    this.sendInvitationEmail(email, `${owner.firstName} ${owner.lastName}`.trim(), dto.permission, !!user);
+    this.sendInvitationEmail(email, ownerId, `${owner.firstName} ${owner.lastName}`.trim(), dto.permission, !!user);
     return (await this.listCollaborators(ownerId)).find((c) => c.email === email);
   }
 
@@ -141,10 +141,11 @@ export class AccountService {
     return member;
   }
 
-  private sendInvitationEmail(email: string, ownerName: string, permission: WorkspacePermission, hasAccount: boolean) {
+  private sendInvitationEmail(email: string, ownerId: string, ownerName: string, permission: WorkspacePermission, hasAccount: boolean) {
     if (!this.mailer) return;
     const appUrl = this.config.get<string>('FRONTEND_URL') || 'https://app.zaya.live';
-    const link = hasAccount ? `${appUrl}/auth/login` : `${appUrl}/auth/register`;
+    // ?workspace= makes the app open the owner's workspace right after sign-in
+    const link = `${appUrl}/auth/${hasAccount ? 'login' : 'register'}?workspace=${ownerId}`;
     const owner = escapeHtml(ownerName);
     const level = escapeHtml(PERMISSION_LABELS_FR[permission]);
     this.mailer.sendMail({
@@ -156,7 +157,7 @@ export class AccountService {
         <p><strong>${owner}</strong> vous a ajouté(e) comme collaborateur de son compte ZAYA,
            avec le niveau d'accès <strong>${level}</strong>.</p>
         <p>${hasAccount
-          ? 'Connectez-vous avec votre compte habituel, puis choisissez son espace dans le menu de votre compte (en haut à droite).'
+          ? 'Connectez-vous avec votre compte habituel : son espace s\u2019ouvrira directement. Vous pourrez ensuite passer d\u2019un espace à l\u2019autre depuis le menu de votre compte (en haut à droite).'
           : 'Créez votre compte ZAYA avec cette adresse email : l’accès apparaîtra automatiquement dans le menu de votre compte.'}</p>
         <a href="${link}" style="display:inline-block;margin:12px 0;padding:12px 24px;background:#5C37FF;color:#fff;text-decoration:none;border-radius:8px;font-weight:bold">
           ${hasAccount ? 'Se connecter' : 'Créer mon compte'}

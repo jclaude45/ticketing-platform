@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useAuthStore } from '@/store/auth.store';
-import { setTokens, onSessionAnnounced, getTabAccountId, setTabAccountId } from '@/lib/auth';
+import { setTokens, onSessionAnnounced, getTabAccountId, setTabAccountId, rememberPendingWorkspace } from '@/lib/auth';
 import { authApi, apiClient } from '@/lib/api';
 
 // C2: On every page load, attempt a silent token refresh using the httpOnly cookie.
@@ -13,6 +13,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+
+    // Invitation link (?workspace=<ownerId>): open that workspace once signed in
+    const invitedWorkspace = new URLSearchParams(window.location.search).get('workspace');
+    if (invitedWorkspace) rememberPendingWorkspace(invitedWorkspace);
 
     // Don't attempt silent refresh on auth pages — they handle their own state
     if (typeof window !== 'undefined' && window.location.pathname.startsWith('/auth')) {
