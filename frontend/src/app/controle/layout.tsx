@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Loader2, LogOut } from 'lucide-react';
+import { Loader2, LogOut, ChevronDown } from 'lucide-react';
+import { AccountSwitcher } from '@/components/layout/AccountSwitcher';
 import { useAuthStore } from '@/store/auth.store';
 import { useLogout } from '@/hooks/useAuth';
 
@@ -13,6 +14,7 @@ export default function ControleLayout({ children }: { children: React.ReactNode
   const { isAuthenticated, isLoading, user } = useAuthStore();
   const logout = useLogout();
   const isController = user?.role === 'CONTROLLER';
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     if (isLoading) return;
@@ -37,7 +39,21 @@ export default function ControleLayout({ children }: { children: React.ReactNode
             <span className="font-bold text-gray-900">Contrôle</span>
           </Link>
           <div className="flex items-center gap-3 min-w-0">
-            <span className="truncate text-sm text-gray-600">{user?.firstName}</span>
+            <div className="relative min-w-0">
+              <button
+                onClick={() => setMenuOpen((v) => !v)}
+                className="flex items-center gap-1 truncate text-sm text-gray-600 hover:text-gray-900"
+              >
+                <span className="truncate">{user?.firstName}</span>
+                <ChevronDown className="h-4 w-4 flex-shrink-0" />
+              </button>
+              {menuOpen && (
+                <div className="absolute right-0 mt-2 w-64 max-w-[calc(100vw-1rem)] rounded-xl border border-gray-200 bg-white shadow-lg">
+                  <p className="px-4 pt-3 pb-2 text-xs text-gray-500 truncate">{user?.email}</p>
+                  <AccountSwitcher currentId={user?.id} open={menuOpen} />
+                </div>
+              )}
+            </div>
             <button
               onClick={() => logout.mutate()}
               className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm text-gray-600 hover:bg-gray-50"

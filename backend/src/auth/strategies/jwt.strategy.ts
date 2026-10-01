@@ -13,11 +13,14 @@ export interface JwtPayload {
   type: string;
 }
 
-// Dual extractor: httpOnly cookie (web) → Authorization header (mobile/API)
+// Dual extractor: Authorization header first, httpOnly cookie as fallback.
+// The header must win: the cookie is shared by every tab of the browser, so after
+// logging into another account in a second tab it would silently swap the identity
+// of the first tab. JwtAuthGuard also checks the blacklist against the header token.
 const extractAccessToken = (req: Request): string | null => {
-  if (req?.cookies?.access_token) return req.cookies.access_token;
   const auth = req?.headers?.authorization;
   if (auth?.startsWith('Bearer ')) return auth.slice(7);
+  if (req?.cookies?.access_token) return req.cookies.access_token;
   return null;
 };
 

@@ -5,13 +5,14 @@ import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
+import { pickRefreshCookie } from '../session-cookies';
 
 // C3 FIX: extract token from httpOnly cookie (web) or Authorization body (mobile)
 const extractRefreshToken = (req: Request): string | null => {
-  // Cookie takes priority (web clients — httpOnly, not accessible to JS)
-  if (req?.cookies?.refresh_token) {
-    return req.cookies.refresh_token;
-  }
+  // Cookie takes priority (web clients — httpOnly, not accessible to JS).
+  // Web tabs send the account they show (body.accountId) to pick that account's cookie.
+  const { token } = pickRefreshCookie(req);
+  if (token) return token;
   // Fall back to body field (mobile clients using FlutterSecureStorage)
   return req?.body?.refreshToken ?? null;
 };

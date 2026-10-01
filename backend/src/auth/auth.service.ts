@@ -512,6 +512,53 @@ export class AuthService {
     };
   }
 
+  /** `sub` of a JWT without verifying it (only used to match cookies to accounts). */
+  tokenSubject(token?: string | null): string | null {
+    if (!token) return null;
+    const decoded = this.jwtService.decode(token) as { sub?: string } | null;
+    return decoded?.sub ?? null;
+  }
+
+  /**
+   * Accounts with a live session in this browser, from its refresh cookies. A cookie only
+   * counts if its signature is valid and it is still the account's current session.
+   */
+  async listSessionAccounts(refreshTokens: string[]) {
+    const accounts = new Map<string, { id: string; email: string; name: string; role: string; avatar: string | null }>();
+    for (const token of refreshTokens) {
+      let payload: { sub: string; role: string; type: string };
+      try {
+        payload = await this.jwtService.verifyAsync(token, {
+          secret: this.configService.get<string>('jwt.refreshSecret'),
+        });
+      } catch {
+        continue;
+      }
+      if (payload.type !== 'refresh' || accounts.has(payload.sub)) continue;
+
+      if (payload.role === 'CONTROLLER') {
+        const c = await this.prisma.controller.findUnique({
+          where: { id: payload.sub },
+          select: { id: true, email: true, name: true, isActive: true, refreshToken: true },
+        });
+        if (c?.isActive && c.refreshToken && (await bcrypt.compare(token, c.refreshToken))) {
+          accounts.set(c.id, { id: c.id, email: c.email, name: c.name, role: 'CONTROLLER', avatar: null });
+        }
+      } else {
+        const u = await this.prisma.user.findUnique({
+          where: { id: payload.sub },
+          select: { id: true, email: true, firstName: true, lastName: true, role: true, avatar: true, isActive: true, refreshToken: true },
+        });
+        if (u?.isActive && u.refreshToken && (await bcrypt.compare(token, u.refreshToken))) {
+          accounts.set(u.id, {
+            id: u.id, email: u.email, name: `${u.firstName} ${u.lastName}`.trim(), role: u.role, avatar: u.avatar,
+          });
+        }
+      }
+    }
+    return [...accounts.values()];
+  }
+
   async generateTokens(userId: string, email: string, role: string) {
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(

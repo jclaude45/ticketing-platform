@@ -31,8 +31,10 @@ import { ControllerAccess } from '../common/decorators/controller-access.decorat
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Throttle } from '@nestjs/throttler';
 import { ConfigService } from '@nestjs/config';
+import {
+  LEGACY_REFRESH_COOKIE, REFRESH_COOKIE_PATH, refreshCookieName, pickRefreshCookie, allRefreshCookies,
+} from './session-cookies';
 
-const REFRESH_COOKIE = 'refresh_token';
 const ACCESS_COOKIE = 'access_token';
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days
 const ACCESS_MAX_AGE = 15 * 60 * 1000; // 15 minutes
@@ -45,13 +47,13 @@ export class AuthController {
     private readonly configService: ConfigService,
   ) {}
 
-  private setRefreshCookie(res: ExpressResponse, token: string) {
+  private setRefreshCookie(res: ExpressResponse, token: string, accountId: string) {
     const isProduction = this.configService.get('NODE_ENV') === 'production';
-    res.cookie(REFRESH_COOKIE, token, {
+    res.cookie(refreshCookieName(accountId), token, {
       httpOnly: true,
       secure: isProduction,
       sameSite: 'strict',
-      path: '/api/v1/auth/refresh',
+      path: REFRESH_COOKIE_PATH,
       maxAge: COOKIE_MAX_AGE,
     });
   }
@@ -67,8 +69,12 @@ export class AuthController {
     });
   }
 
-  private clearRefreshCookie(res: ExpressResponse) {
-    res.clearCookie(REFRESH_COOKIE, { path: '/api/v1/auth/refresh' });
+  private clearRefreshCookie(res: ExpressResponse, accountId: string) {
+    res.clearCookie(refreshCookieName(accountId), { path: REFRESH_COOKIE_PATH });
+  }
+
+  private clearLegacyRefreshCookie(res: ExpressResponse) {
+    res.clearCookie(LEGACY_REFRESH_COOKIE, { path: REFRESH_COOKIE_PATH });
   }
 
   private clearAccessCookie(res: ExpressResponse) {
@@ -80,7 +86,9 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 30, ttl: 60000 } })
   async clearSession(@Response({ passthrough: true }) res: ExpressResponse) {
-    this.clearRefreshCookie(res);
+    // Only the pre-multi-account cookie: other signed-in accounts must survive a visit
+    // to the login page (that's how "Ajouter un compte" works).
+    this.clearLegacyRefreshCookie(res);
     return { message: 'Session cleared' };
   }
 
@@ -109,7 +117,7 @@ export class AuthController {
     const result = await this.authService.login(dto, req.ip);
     const isMobile = req.headers['x-platform'] === 'mobile';
     if ('refreshToken' in result && result.refreshToken) {
-      this.setRefreshCookie(res, result.refreshToken as string);
+      this.setRefreshCookie(res, result.refreshToken as string, (result as any).user.id);
       if ('accessToken' in result && result.accessToken) {
         this.setAccessCookie(res, result.accessToken as string);
       }
@@ -135,7 +143,7 @@ export class AuthController {
     @Response({ passthrough: true }) res: ExpressResponse,
   ) {
     const result = await this.authService.controllerLogin(dto.email, dto.password);
-    this.setRefreshCookie(res, result.refreshToken);
+    this.setRefreshCookie(res, result.refreshToken, result.user.id);
     this.setAccessCookie(res, result.accessToken);
     if (req.headers['x-platform'] === 'mobile') return result;
     const { refreshToken: _r, ...safeResult } = result;
@@ -167,12 +175,24 @@ export class AuthController {
     // We need prisma here — delegate to authService
     await this.authService.updateRefreshToken(req.user.id, hashedRefreshToken, req.user.role);
 
-    this.setRefreshCookie(res, result.refreshToken);
+    this.setRefreshCookie(res, result.refreshToken, req.user.id);
+    // Session came from the pre-multi-account cookie: move it to the per-account cookie
+    if (pickRefreshCookie(req).legacy) this.clearLegacyRefreshCookie(res);
     this.setAccessCookie(res, result.accessToken);
     const isMobileRefresh = req.headers['x-platform'] === 'mobile';
     return isMobileRefresh
       ? { accessToken: result.accessToken, refreshToken: result.refreshToken }
       : { accessToken: result.accessToken };
+  }
+
+  // Lives under the refresh cookie path so the browser sends every account's cookie
+  @Public()
+  @Post('refresh/accounts')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  @ApiOperation({ summary: 'Accounts currently signed in on this browser' })
+  async browserAccounts(@Request() req: any) {
+    return this.authService.listSessionAccounts(allRefreshCookies(req));
   }
 
   @Post('logout')
@@ -189,7 +209,11 @@ export class AuthController {
     @Response({ passthrough: true }) res: ExpressResponse,
   ) {
     const token = req.headers.authorization?.split(' ')[1] ?? req.cookies?.access_token;
-    this.clearRefreshCookie(res);
+    // Sign out this account only — other accounts signed in on the browser stay signed in
+    this.clearRefreshCookie(res, userId);
+    if (this.authService.tokenSubject(req.cookies?.[LEGACY_REFRESH_COOKIE]) === userId) {
+      this.clearLegacyRefreshCookie(res);
+    }
     this.clearAccessCookie(res);
     return this.authService.logout(userId, token, role);
   }

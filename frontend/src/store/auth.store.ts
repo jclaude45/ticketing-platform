@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { User } from '@/types';
-import { clearTokens, setStoredUser, getStoredUser } from '@/lib/auth';
+import { clearTokens, setStoredUser, getStoredUser, announceSignOut, clearTabAccount } from '@/lib/auth';
 
 // C2 FIX: auth state no longer persisted to localStorage with isAuthenticated flag.
 // On page load: isAuthenticated=false until the AuthProvider does a silent /auth/refresh
@@ -22,7 +22,7 @@ interface AuthState {
   logout: () => void;
 }
 
-export const useAuthStore = create<AuthState>()((set) => ({
+export const useAuthStore = create<AuthState>()((set, get) => ({
   // Seed user from localStorage for immediate display (not trusted for auth decisions)
   user: typeof window !== 'undefined' ? getStoredUser() : null,
   isAuthenticated: false, // always false until AuthProvider confirms via /auth/refresh
@@ -38,7 +38,12 @@ export const useAuthStore = create<AuthState>()((set) => ({
   setLoading: (isLoading) => set({ isLoading }),
   setRequires2FA: (requires2FA) => set({ requires2FA }),
   logout: () => {
+    const signedOutId = get().user?.id;
     clearTokens();
+    if (signedOutId) {
+      clearTabAccount(signedOutId);
+      announceSignOut(signedOutId);
+    }
     set({ user: null, isAuthenticated: false, requires2FA: false });
   },
 }));

@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useAuthStore } from '@/store/auth.store';
-import { setTokens } from '@/lib/auth';
+import { setTokens, onSessionAnnounced, getTabAccountId, setTabAccountId } from '@/lib/auth';
 import { authApi, apiClient } from '@/lib/api';
 
 // C2: On every page load, attempt a silent token refresh using the httpOnly cookie.
@@ -21,14 +21,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    // The tab's account may have been signed out meanwhile: fall back to another
+    // account still signed in on this browser.
+    async function refreshTabAccount() {
+      try {
+        return await apiClient.post<{ data: { accessToken: string } }>(
+          '/auth/refresh',
+          { accountId: getTabAccountId() },
+          { withCredentials: true },
+        );
+      } catch (err) {
+        const res = await authApi.sessionAccounts().catch(() => null);
+        const fallback = ((res?.data as any)?.data ?? [])[0];
+        if (!fallback) throw err;
+        setTabAccountId(fallback.id);
+        return apiClient.post<{ data: { accessToken: string } }>(
+          '/auth/refresh',
+          { accountId: fallback.id },
+          { withCredentials: true },
+        );
+      }
+    }
+
     async function silentRefresh() {
       try {
         // Try to get a new access token via the httpOnly refresh_token cookie
-        const { data } = await apiClient.post<{ data: { accessToken: string } }>(
-          '/auth/refresh',
-          {},
-          { withCredentials: true },
-        );
+        const { data } = await refreshTabAccount();
         if (cancelled) return;
         const accessToken = (data as any)?.data?.accessToken;
         if (accessToken) {
@@ -51,6 +69,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     silentRefresh();
     return () => { cancelled = true; };
   }, [setUser, setAuthenticated, setLoading]);
+
+  // Another tab signed out the account this tab shows: reload (lands on login)
+  useEffect(() => onSessionAnnounced((signedOutId) => {
+    if (window.location.pathname.startsWith('/auth')) return;
+    if (signedOutId && signedOutId === useAuthStore.getState().user?.id) window.location.reload();
+  }), []);
 
   return <>{children}</>;
 }

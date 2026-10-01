@@ -20,6 +20,9 @@ export function getAccessToken(): string | null {
 export function setTokens(tokens: Partial<AuthTokens>): void {
   if (tokens.accessToken) {
     _memoryAccessToken = tokens.accessToken;
+    // Bind this tab to the account the token belongs to (login, refresh, switch)
+    const accountId = tokenSubject(tokens.accessToken);
+    if (accountId) setTabAccountId(accountId);
   }
   // refreshToken is now set as httpOnly cookie by the backend — we never touch it in JS
 }
@@ -42,10 +45,51 @@ export function getStoredUser(): User | null {
   const raw = localStorage.getItem(USER_KEY);
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as User;
+    const user = JSON.parse(raw) as User;
+    // Shared by all tabs: only use it for display if it is this tab's account
+    return user.id === getTabAccountId() ? user : null;
   } catch {
     return null;
   }
+}
+
+// ── Multi-account ────────────────────────────────────────────────────────────
+// Several accounts can be signed in on the same browser (one refresh cookie each).
+// Each tab remembers which account it shows (sessionStorage survives reloads of
+// that tab only); new tabs open on the last account used.
+const TAB_ACCOUNT_KEY = 'zaya_account';
+const LAST_ACCOUNT_KEY = 'zaya_last_account';
+
+export function getTabAccountId(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return sessionStorage.getItem(TAB_ACCOUNT_KEY) ?? localStorage.getItem(LAST_ACCOUNT_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setTabAccountId(accountId: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem(TAB_ACCOUNT_KEY, accountId);
+    localStorage.setItem(LAST_ACCOUNT_KEY, accountId);
+  } catch { /* storage blocked: tab falls back to the last account */ }
+}
+
+/** Forget a signed-out account in this tab (and as default for new tabs). */
+export function clearTabAccount(accountId: string | null | undefined): void {
+  if (typeof window === 'undefined' || !accountId) return;
+  try {
+    if (sessionStorage.getItem(TAB_ACCOUNT_KEY) === accountId) sessionStorage.removeItem(TAB_ACCOUNT_KEY);
+    if (localStorage.getItem(LAST_ACCOUNT_KEY) === accountId) localStorage.removeItem(LAST_ACCOUNT_KEY);
+  } catch { /* ignore */ }
+}
+
+/** Show another signed-in account in this tab. */
+export function switchToAccount(accountId: string, path = '/dashboard'): void {
+  setTabAccountId(accountId);
+  window.location.href = path;
 }
 
 export function isAuthenticated(): boolean {
@@ -67,6 +111,35 @@ export function decodeToken(token: string): Record<string, unknown> | null {
   } catch {
     return null;
   }
+}
+
+/** `sub` claim of a JWT (base64url-safe), i.e. the id of the account the token belongs to. */
+export function tokenSubject(token: string): string | null {
+  try {
+    const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    return (JSON.parse(atob(payload)).sub as string) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// Tabs announce sign-outs so other tabs showing that account reload (and land on login).
+const SESSION_CHANNEL = 'zaya-session';
+
+export function announceSignOut(userId: string): void {
+  if (typeof window === 'undefined' || typeof BroadcastChannel === 'undefined') return;
+  try {
+    const channel = new BroadcastChannel(SESSION_CHANNEL);
+    channel.postMessage({ userId });
+    channel.close();
+  } catch { /* unsupported browser: tabs simply won't sync */ }
+}
+
+export function onSessionAnnounced(callback: (userId: string | null) => void): () => void {
+  if (typeof window === 'undefined' || typeof BroadcastChannel === 'undefined') return () => {};
+  const channel = new BroadcastChannel(SESSION_CHANNEL);
+  channel.onmessage = (e) => callback(e.data?.userId ?? null);
+  return () => channel.close();
 }
 
 export function getUserRole(): string | null {

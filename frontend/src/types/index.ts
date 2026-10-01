@@ -14,6 +14,15 @@ export interface User {
   updatedAt: string;
 }
 
+/** An account signed in on this browser (multi-account switcher) */
+export interface SessionAccount {
+  id: string;
+  email: string;
+  name: string;
+  role: UserRole;
+  avatar: string | null;
+}
+
 export interface AuthTokens {
   accessToken: string;
   refreshToken: string;

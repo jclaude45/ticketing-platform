@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { authApi } from '@/lib/api';
-import { setTokens, clearTokens } from '@/lib/auth';
+import { setTokens, clearTokens, switchToAccount } from '@/lib/auth';
 import { useAuthStore } from '@/store/auth.store';
 import type { LoginCredentials, RegisterData } from '@/types';
 
@@ -103,11 +103,20 @@ export function useLogout() {
 
   return useMutation({
     mutationFn: () => authApi.logout(),
-    onSettled: () => {
+    onSettled: async () => {
       const wasController = user?.role === 'CONTROLLER';
       clearTokens();
       logout();
       queryClient.clear();
+      // Another account still signed in on this browser: continue with it
+      try {
+        const res = await authApi.sessionAccounts();
+        const next = ((res.data as any)?.data ?? [])[0];
+        if (next) {
+          switchToAccount(next.id, next.role === 'CONTROLLER' ? '/controle' : '/dashboard');
+          return;
+        }
+      } catch { /* no other session */ }
       router.push(wasController ? '/auth/controller-login' : '/auth/login');
     },
   });

@@ -1,5 +1,6 @@
 import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios';
-import { getAccessToken, setTokens, clearTokens } from './auth';
+import { getAccessToken, setTokens, clearTokens, tokenSubject, getTabAccountId } from './auth';
+import { useAuthStore } from '@/store/auth.store';
 import type {
   ApiResponse,
   PaginatedResponse,
@@ -22,6 +23,7 @@ import type {
   SubscriptionPlan,
   OrganizerSubscription,
   OrganizerLimits,
+  SessionAccount,
 } from '@/types';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
@@ -94,10 +96,16 @@ apiClient.interceptors.response.use(
         // C2: no body needed — the httpOnly cookie is sent automatically (withCredentials)
         const { data } = await axios.post<ApiResponse<{ accessToken: string }>>(
           `${BASE_URL}/auth/refresh`,
-          {},
+          { accountId: getTabAccountId() },
           { withCredentials: true },
         );
         const newAccessToken = data.data.accessToken;
+        // Safety net: never keep showing one account while acting as another
+        const currentUserId = useAuthStore.getState().user?.id;
+        if (currentUserId && tokenSubject(newAccessToken) !== currentUserId) {
+          window.location.reload();
+          return new Promise(() => {}); // page is reloading
+        }
         setTokens({ accessToken: newAccessToken });
         processQueue(null, newAccessToken);
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
@@ -136,6 +144,10 @@ export const authApi = {
     ),
 
   logout: () => apiClient.post('/auth/logout'),
+
+  /** Accounts signed in on this browser (multi-account switcher) */
+  sessionAccounts: () =>
+    apiClient.post<ApiResponse<SessionAccount[]>>('/auth/refresh/accounts', {}, { withCredentials: true }),
 
   refreshToken: (refreshToken: string) =>
     apiClient.post<ApiResponse<AuthTokens>>('/auth/refresh', { refreshToken }),
