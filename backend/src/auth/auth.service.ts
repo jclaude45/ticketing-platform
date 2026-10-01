@@ -272,7 +272,7 @@ export class AuthService {
     return tokens;
   }
 
-  async logout(userId: string, accessToken: string) {
+  async logout(userId: string, accessToken: string, role?: string) {
     // Get token expiry to set blacklist TTL
     try {
       const decoded = this.jwtService.decode(accessToken) as any;
@@ -287,6 +287,10 @@ export class AuthService {
     }
 
     // Remove refresh token and session
+    if (role === 'CONTROLLER') {
+      await this.prisma.controller.update({ where: { id: userId }, data: { refreshToken: null } });
+      return { message: 'Logged out successfully' };
+    }
     await this.prisma.user.update({
       where: { id: userId },
       data: { refreshToken: null },
@@ -467,6 +471,47 @@ export class AuthService {
     return { message: 'Password reset successfully. Please log in with your new password.' };
   }
 
+  /**
+   * Controller (ticket scanner) login. Controllers get a CONTROLLER session that only
+   * reaches routes marked @ControllerAccess(). Controllers invited with an existing ZAYA
+   * account have no own password and use their account password.
+   */
+  async controllerLogin(email: string, password: string) {
+    const controller = await this.prisma.controller.findFirst({
+      where: { email: { equals: (email ?? '').trim(), mode: 'insensitive' } },
+    });
+    if (!controller) throw new UnauthorizedException('Email ou mot de passe incorrect');
+
+    let hash = controller.password;
+    if (!hash) {
+      const user = await this.prisma.user.findUnique({ where: { email: controller.email } });
+      hash = user?.password ?? null;
+    }
+    if (!controller.isActive || !hash) {
+      throw new UnauthorizedException("Compte non activé : acceptez d'abord l'invitation reçue par email");
+    }
+    if (!(await bcrypt.compare(password ?? '', hash))) {
+      throw new UnauthorizedException('Email ou mot de passe incorrect');
+    }
+
+    const tokens = await this.generateTokens(controller.id, controller.email, 'CONTROLLER');
+    await this.prisma.controller.update({
+      where: { id: controller.id },
+      data: { lastLoginAt: new Date(), refreshToken: await bcrypt.hash(tokens.refreshToken, 10) },
+    });
+
+    return {
+      ...tokens,
+      user: {
+        id: controller.id,
+        email: controller.email,
+        firstName: controller.name,
+        lastName: '',
+        role: 'CONTROLLER',
+      },
+    };
+  }
+
   async generateTokens(userId: string, email: string, role: string) {
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(
@@ -489,7 +534,13 @@ export class AuthService {
   }
 
   // Used by auth controller after refresh token validation
-  async updateRefreshToken(userId: string, hashedRefreshToken: string) {
+  async updateRefreshToken(userId: string, hashedRefreshToken: string, role?: string) {
+    if (role === 'CONTROLLER') {
+      return this.prisma.controller.update({
+        where: { id: userId },
+        data: { refreshToken: hashedRefreshToken },
+      });
+    }
     return this.prisma.user.update({
       where: { id: userId },
       data: { refreshToken: hashedRefreshToken },

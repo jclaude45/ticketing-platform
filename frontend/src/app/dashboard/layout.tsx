@@ -11,14 +11,18 @@ import { cn } from '@/lib/utils';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { isAuthenticated, isLoading } = useAuthStore();
+  const { isAuthenticated, isLoading, user } = useAuthStore();
+  // Controllers have their own restricted space and never see the organizer dashboard
+  const isController = user?.role === 'CONTROLLER';
   const { sidebarOpen, setSidebarOpen } = useUIStore();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       router.push('/auth/login');
+    } else if (!isLoading && isController) {
+      router.replace('/controle');
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [isAuthenticated, isLoading, isController, router]);
 
   if (isLoading) {
     return (
@@ -35,7 +39,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   }
 
-  if (!isAuthenticated) return null;
+  if (!isAuthenticated || isController) return null;
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-950 overflow-hidden">

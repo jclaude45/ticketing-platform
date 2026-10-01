@@ -1,7 +1,8 @@
-import { Injectable, ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import { Injectable, ExecutionContext, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { CONTROLLER_ACCESS_KEY } from '../decorators/controller-access.decorator';
 import { RedisService } from '../../redis/redis.service';
 
 @Injectable()
@@ -40,7 +41,19 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       throw new UnauthorizedException('Token has been revoked');
     }
 
-    return super.canActivate(context) as Promise<boolean>;
+    const authenticated = (await super.canActivate(context)) as boolean;
+
+    // Controllers (ticket scanners) are denied everything except routes explicitly
+    // opened with @ControllerAccess() — they must never see organizer data.
+    if (authenticated && request.user?.role === 'CONTROLLER') {
+      const allowed = this.reflector.getAllAndOverride<boolean>(CONTROLLER_ACCESS_KEY, [
+        context.getHandler(),
+        context.getClass(),
+      ]);
+      if (!allowed) throw new ForbiddenException('Accès réservé à l\'organisateur');
+    }
+
+    return authenticated;
   }
 
   handleRequest(err: any, user: any, info: any) {

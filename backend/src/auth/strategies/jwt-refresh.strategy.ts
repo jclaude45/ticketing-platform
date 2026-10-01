@@ -39,6 +39,20 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
     const rawToken = extractRefreshToken(req);
     if (!rawToken) throw new UnauthorizedException('No refresh token provided');
 
+    if (payload.role === 'CONTROLLER') {
+      const controller = await this.prisma.controller.findUnique({
+        where: { id: payload.sub },
+        select: { id: true, email: true, isActive: true, refreshToken: true },
+      });
+      if (!controller || !controller.isActive || !controller.refreshToken) {
+        throw new UnauthorizedException('Access denied');
+      }
+      if (!(await bcrypt.compare(rawToken, controller.refreshToken))) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+      return { id: controller.id, email: controller.email, role: 'CONTROLLER' };
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
       select: {

@@ -246,14 +246,15 @@ export class ValidationService {
         id: ticket.id,
         serialNumber: ticket.serialNumber,
         holderName: ticket.holderName,
-        holderEmail: ticket.holderEmail,
+        // Controllers only need what identifies the guest at the door
+        ...(isPrivileged && { holderEmail: ticket.holderEmail }),
         templateName: ticket.template.name,
         checkedInAt,
       },
     };
   }
 
-  async syncOfflineScans(controllerId: string, eventId: string, dto: OfflineScanDto) {
+  async syncOfflineScans(userId: string, eventId: string, dto: OfflineScanDto, callerRole?: Role) {
     const results = [];
 
     // H3: deduplicate — same QR content submitted multiple times in one batch is a replay attempt
@@ -270,10 +271,11 @@ export class ValidationService {
     for (const scan of uniqueScans) {
       try {
         const result = await this.scanTicket(
-          controllerId,
+          userId,
           eventId,
           { qrContent: scan.qrContent, deviceId: scan.deviceId, location: scan.location },
           undefined,
+          callerRole,
         );
 
         if (result.scanId) {
@@ -304,7 +306,14 @@ export class ValidationService {
     };
   }
 
-  async getScanHistory(eventId: string, organizerId: string, page: number = 1, limit: number = 50) {
+  async getScanHistory(eventId: string, userId: string, role: Role, page: number = 1, limit: number = 50) {
+    if (role !== Role.ADMIN && role !== Role.SUPER_ADMIN) {
+      const event = await this.prisma.event.findUnique({ where: { id: eventId }, select: { organizerId: true } });
+      if (!event) throw new NotFoundException('Event not found');
+      if (event.organizerId !== userId) throw new ForbiddenException('Access denied');
+    }
+    page = Math.max(1, Number(page) || 1);
+    limit = Math.min(200, Math.max(1, Number(limit) || 50));
     const skip = (page - 1) * limit;
 
     const [scans, total] = await Promise.all([

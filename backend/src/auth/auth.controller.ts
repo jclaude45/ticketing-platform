@@ -27,6 +27,7 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { Verify2faDto } from './dto/verify-2fa.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { Public } from '../common/decorators/public.decorator';
+import { ControllerAccess } from '../common/decorators/controller-access.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Throttle } from '@nestjs/throttler';
 import { ConfigService } from '@nestjs/config';
@@ -123,6 +124,24 @@ export class AuthController {
     return result;
   }
 
+  @Public()
+  @Post('controller-login')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({ summary: 'Login as a controller (ticket scanner)' })
+  async controllerLogin(
+    @Body() dto: LoginDto,
+    @Request() req: any,
+    @Response({ passthrough: true }) res: ExpressResponse,
+  ) {
+    const result = await this.authService.controllerLogin(dto.email, dto.password);
+    this.setRefreshCookie(res, result.refreshToken);
+    this.setAccessCookie(res, result.accessToken);
+    if (req.headers['x-platform'] === 'mobile') return result;
+    const { refreshToken: _r, ...safeResult } = result;
+    return safeResult;
+  }
+
   // C3 FIX: use JwtRefreshStrategy which validates the signature properly
   @Public()
   @Post('refresh')
@@ -146,7 +165,7 @@ export class AuthController {
     const bcrypt = await import('bcryptjs');
     const hashedRefreshToken = await bcrypt.hash(result.refreshToken, 10);
     // We need prisma here — delegate to authService
-    await this.authService.updateRefreshToken(req.user.id, hashedRefreshToken);
+    await this.authService.updateRefreshToken(req.user.id, hashedRefreshToken, req.user.role);
 
     this.setRefreshCookie(res, result.refreshToken);
     this.setAccessCookie(res, result.accessToken);
@@ -159,18 +178,20 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
+  @ControllerAccess()
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Logout and invalidate tokens' })
   @ApiResponse({ status: 200, description: 'Logged out successfully' })
   async logout(
     @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: string,
     @Request() req: any,
     @Response({ passthrough: true }) res: ExpressResponse,
   ) {
     const token = req.headers.authorization?.split(' ')[1] ?? req.cookies?.access_token;
     this.clearRefreshCookie(res);
     this.clearAccessCookie(res);
-    return this.authService.logout(userId, token);
+    return this.authService.logout(userId, token, role);
   }
 
   @Public()
@@ -246,6 +267,7 @@ export class AuthController {
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
+  @ControllerAccess()
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get current authenticated user profile' })
   @ApiResponse({ status: 200, description: 'Current user profile' })

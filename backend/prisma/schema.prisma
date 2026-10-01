@@ -250,6 +250,7 @@ model Controller {
   updatedAt       DateTime  @updatedAt
   invitationToken String?   @unique
   invitedAt       DateTime?
+  refreshToken    String?
 
   organizer        User              @relation(fields: [organizerId], references: [id])
   controllerEvents ControllerEvent[]

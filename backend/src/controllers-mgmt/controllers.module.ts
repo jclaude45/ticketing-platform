@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ControllersController } from './controllers.controller';
 import { ControllersService } from './controllers.service';
+import { ControllerSpaceController } from './controller-space.controller';
+import { ControllerSpaceService } from './controller-space.service';
 import { AuthModule } from '../auth/auth.module';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -18,8 +20,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
       }),
     }),
   ],
-  controllers: [ControllersController],
-  providers: [ControllersService],
+  controllers: [ControllersController, ControllerSpaceController],
+  providers: [ControllersService, ControllerSpaceService],
   exports: [ControllersService],
 })
 export class ControllersModule {}

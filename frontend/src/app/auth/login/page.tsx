@@ -21,6 +21,12 @@ export default function LoginPage() {
             Créer un compte
           </a>
         </p>
+        <p className="text-center text-indigo-200 text-sm mt-2">
+          Vous êtes contrôleur ?{' '}
+          <a href="/auth/controller-login" className="text-indigo-300 hover:text-white font-semibold underline underline-offset-2 transition-colors">
+            Espace contrôleur
+          </a>
+        </p>
       </div>
     </div>
   );

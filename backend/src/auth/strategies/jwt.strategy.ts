@@ -3,6 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
+import { Role } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 
 export interface JwtPayload {
@@ -37,6 +38,25 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     // C4: a refresh token must never work as an access token
     if (payload.type !== 'access') {
       throw new UnauthorizedException('Invalid token type');
+    }
+
+    // Controller sessions: sub is a Controller id, not a User id
+    if (payload.role === Role.CONTROLLER) {
+      const controller = await this.prisma.controller.findUnique({
+        where: { id: payload.sub },
+        select: { id: true, email: true, name: true, isActive: true, organizerId: true },
+      });
+      if (!controller || !controller.isActive) {
+        throw new UnauthorizedException('Controller not found or inactive');
+      }
+      return {
+        id: controller.id,
+        email: controller.email,
+        firstName: controller.name,
+        lastName: '',
+        role: Role.CONTROLLER,
+        organizerId: controller.organizerId,
+      };
     }
 
     const user = await this.prisma.user.findUnique({

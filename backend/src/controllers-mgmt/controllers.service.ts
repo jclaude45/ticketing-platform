@@ -213,54 +213,7 @@ export class ControllersService {
   }
 
   async controllerLogin(email: string, password: string) {
-    const controller = await this.prisma.controller.findUnique({
-      where: { email },
-      include: {
-        controllerEvents: {
-          include: {
-            event: { select: { id: true, name: true, status: true, startDate: true, endDate: true } },
-          },
-        },
-      },
-    });
-
-    if (!controller || !controller.isActive) {
-      throw new ForbiddenException('Invalid credentials or account inactive');
-    }
-
-    let isPasswordValid = false;
-    if (controller.password) {
-      isPasswordValid = await bcrypt.compare(password, controller.password);
-    } else {
-      // No dedicated controller password → fall back to the User account password
-      const user = await this.prisma.user.findUnique({ where: { email: controller.email } });
-      if (!user?.password) {
-        throw new ForbiddenException('Account not yet activated. Please accept your invitation.');
-      }
-      isPasswordValid = await bcrypt.compare(password, user.password);
-    }
-    if (!isPasswordValid) {
-      throw new ForbiddenException('Invalid credentials');
-    }
-
-    // Generate a limited JWT token for controller
-    const tokens = await this.authService.generateTokens(
-      controller.id,
-      controller.email,
-      'CONTROLLER',
-    );
-
-    await this.prisma.controller.update({
-      where: { id: controller.id },
-      data: { lastLoginAt: new Date() },
-    });
-
-    const { password: _, ...safeController } = controller as any;
-
-    return {
-      controller: safeController,
-      ...tokens,
-    };
+    return this.authService.controllerLogin(email, password);
   }
 
   async invite(organizerId: string, dto: InviteControllerDto) {
@@ -351,7 +304,10 @@ export class ControllersService {
         html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px">
           <h2 style="color:#4f46e5">Bonjour ${firstName} !</h2>
           <p>Vous avez été ajouté(e) comme <strong>contrôleur de billets</strong> sur la plateforme ZAYA.</p>
-          <p>Votre accès est déjà actif. Connectez-vous sur l'application mobile avec votre adresse email et votre mot de passe ZAYA habituel.</p>
+          <p>Votre accès est déjà actif. Connectez-vous à l'espace contrôleur avec votre adresse email et votre mot de passe ZAYA habituel :</p>
+          <a href="${(this.configService.get<string>('FRONTEND_URL') || 'https://app.zaya.live')}/auth/controller-login" style="display:inline-block;margin:16px 0;padding:12px 28px;background:#4f46e5;color:white;text-decoration:none;border-radius:8px;font-weight:bold">
+            Accéder à l'espace contrôleur
+          </a>
           <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
           <p style="color:#9ca3af;font-size:12px">Si vous n'attendiez pas ce message, contactez votre organisateur.</p>
         </div>`,

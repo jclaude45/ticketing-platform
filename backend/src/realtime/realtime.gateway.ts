@@ -14,6 +14,7 @@ import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from '../redis/redis.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 // CORS restricted to the known frontend origin — not wildcard.
 // maxHttpBufferSize: 1MB cap to prevent memory exhaustion (CVE socket.io-parser DoS).
@@ -41,6 +42,7 @@ export class RealtimeGateway
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly redisService: RedisService,
+    private readonly prisma: PrismaService,
   ) {}
 
   afterInit(server: Server) {
@@ -65,6 +67,7 @@ export class RealtimeGateway
       const payload = await this.jwtService.verifyAsync(token, {
         secret: this.configService.get<string>('jwt.secret'),
       });
+      if (payload.type !== 'access') throw new Error('Invalid token type');
 
       client.data.user = payload;
       this.connectedClients.set(client.id, { userId: payload.sub, eventIds: [] });
@@ -75,6 +78,19 @@ export class RealtimeGateway
       this.logger.warn(`Client ${client.id} authentication failed: ${error.message}`);
       client.disconnect();
     }
+  }
+
+  private async canFollowEvent(user: { sub: string; role: string }, eventId: string): Promise<boolean> {
+    if (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') return true;
+    if (user.role === 'CONTROLLER') {
+      const assignment = await this.prisma.controllerEvent.findUnique({
+        where: { controllerId_eventId: { controllerId: user.sub, eventId } },
+        select: { id: true },
+      });
+      return !!assignment;
+    }
+    const event = await this.prisma.event.findUnique({ where: { id: eventId }, select: { organizerId: true } });
+    return event?.organizerId === user.sub;
   }
 
   handleDisconnect(client: Socket) {
@@ -101,6 +117,12 @@ export class RealtimeGateway
     const { eventId } = data;
     if (!eventId) {
       throw new WsException('eventId is required');
+    }
+
+    // Live scan feeds carry guest names: only the event's organizer, admins
+    // and controllers assigned to the event may subscribe.
+    if (!(await this.canFollowEvent(client.data.user, eventId))) {
+      throw new WsException('Access denied for this event');
     }
 
     await client.join(`event:${eventId}`);

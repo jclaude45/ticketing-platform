@@ -17,6 +17,7 @@ import { ScanTicketDto, OfflineScanDto } from './dto/scan-ticket.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { ThrottlerByUserGuard } from './throttler-by-user.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { ControllerAccess } from '../common/decorators/controller-access.decorator';
 
 @ApiTags('Validation')
 @ApiBearerAuth('JWT-auth')
@@ -26,6 +27,7 @@ export class ValidationController {
   constructor(private readonly validationService: ValidationService) {}
 
   @Post('events/:eventId/scan')
+  @ControllerAccess()
   @HttpCode(HttpStatus.OK)
   @UseGuards(ThrottlerByUserGuard)
   @Throttle({ default: { limit: 120, ttl: 60000 } })
@@ -40,14 +42,15 @@ export class ValidationController {
   }
 
   @Post('events/:eventId/sync')
+  @ControllerAccess()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Sync offline ticket scans' })
   async syncOfflineScans(
     @Param('eventId') eventId: string,
-    @CurrentUser('id') controllerId: string,
+    @CurrentUser() user: any,
     @Body() dto: OfflineScanDto,
   ) {
-    return this.validationService.syncOfflineScans(controllerId, eventId, dto);
+    return this.validationService.syncOfflineScans(user.id, eventId, dto, user.role);
   }
 
   @Get('events/:eventId/scans')
@@ -56,10 +59,10 @@ export class ValidationController {
   @ApiQuery({ name: 'limit', required: false, type: Number })
   async getScanHistory(
     @Param('eventId') eventId: string,
-    @CurrentUser('id') organizerId: string,
+    @CurrentUser() user: any,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
-    return this.validationService.getScanHistory(eventId, organizerId, page, limit);
+    return this.validationService.getScanHistory(eventId, user.id, user.role, page, limit);
   }
 }

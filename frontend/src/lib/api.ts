@@ -74,7 +74,7 @@ apiClient.interceptors.response.use(
     };
 
     // Never retry these endpoints — they handle their own auth logic
-    const skipRetryUrls = ['/auth/refresh', '/auth/login', '/auth/register', '/auth/forgot-password', '/auth/reset-password'];
+    const skipRetryUrls = ['/auth/refresh', '/auth/login', '/auth/controller-login', '/auth/register', '/auth/forgot-password', '/auth/reset-password'];
     const shouldSkipRetry = skipRetryUrls.some(u => originalRequest.url?.includes(u));
 
     if (error.response?.status === 401 && !originalRequest._retry && !shouldSkipRetry) {
@@ -107,7 +107,9 @@ apiClient.interceptors.response.use(
         clearTokens();
         // Don't redirect if already on an auth page
         if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/auth')) {
-          window.location.href = '/auth/login';
+          window.location.href = window.location.pathname.startsWith('/controle')
+            ? '/auth/controller-login'
+            : '/auth/login';
         }
         return Promise.reject(refreshError);
       } finally {

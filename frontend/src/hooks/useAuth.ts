@@ -99,15 +99,16 @@ export function useResendVerification() {
 export function useLogout() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { logout } = useAuthStore();
+  const { logout, user } = useAuthStore();
 
   return useMutation({
     mutationFn: () => authApi.logout(),
     onSettled: () => {
+      const wasController = user?.role === 'CONTROLLER';
       clearTokens();
       logout();
       queryClient.clear();
-      router.push('/auth/login');
+      router.push(wasController ? '/auth/controller-login' : '/auth/login');
     },
   });
 }

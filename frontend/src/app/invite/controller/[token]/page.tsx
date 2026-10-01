@@ -89,8 +89,14 @@ export default function AcceptControllerInvitationPage() {
           <CheckCircle className="mx-auto h-12 w-12 text-green-500 mb-4" />
           <h1 className="text-xl font-bold text-gray-900 mb-2">Compte activé !</h1>
           <p className="text-sm text-gray-500 mb-6">
-            Votre compte contrôleur est maintenant actif. Connectez-vous sur l'application mobile ZAYA pour scanner les billets.
+            Votre compte contrôleur est maintenant actif. Connectez-vous à l&apos;espace contrôleur pour accéder à vos événements.
           </p>
+          <a
+            href="/auth/controller-login"
+            className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors mb-4"
+          >
+            Accéder à l&apos;espace contrôleur
+          </a>
           <p className="text-xs text-gray-400">Email : {info?.email}</p>
         </div>
       </div>
@@ -179,7 +185,7 @@ export default function AcceptControllerInvitationPage() {
         </div>
 
         <p className="mt-4 text-center text-xs text-gray-400">
-          Vous utiliserez cet email et ce mot de passe pour vous connecter sur l'application mobile ZAYA.
+          Vous utiliserez cet email et ce mot de passe pour vous connecter à l&apos;espace contrôleur ZAYA.
         </p>
       </div>
     </div>
