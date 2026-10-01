@@ -6,9 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/constants/colors.dart';
+import '../../../core/scanner/hardware_scanner.dart';
 import '../../events/domain/entities/event_entity.dart';
 import '../../events/presentation/providers/events_provider.dart';
 import '../../guests/data/guests_repository.dart';
+import '../../scanner/presentation/screens/scanner_screen.dart';
 import '../../sync/presentation/providers/sync_provider.dart';
 import 'tabs/data_tab.dart';
 import 'tabs/guests_tab.dart';
@@ -29,6 +31,7 @@ class HomeShell extends ConsumerStatefulWidget {
 class _HomeShellState extends ConsumerState<HomeShell> {
   int _tab = 0;
   Timer? _refresh;
+  StreamSubscription<String>? _triggerSub;
 
   @override
   void initState() {
@@ -36,6 +39,13 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(eventsNotifierProvider.notifier).loadEvents();
       refreshEvent(ref, widget.eventId);
+    });
+    // Terminal trigger pressed here: open the scanner on that code (shop pickup from Guichet)
+    _triggerSub = HardwareScanner.instance.scans.listen((code) {
+      if (!mounted || !(ModalRoute.of(context)?.isCurrent ?? false)) return;
+      final mode = _tab == 1 ? ScanMode.merch : ScanMode.tickets;
+      Navigator.pushNamed(context, '/scanner', arguments: ScannerArgs(widget.eventId, mode: mode, initialCode: code))
+          .then((_) => refreshEvent(ref, widget.eventId));
     });
     // Counters of the other doors: the server figures every 30 s
     _refresh = Timer.periodic(const Duration(seconds: 30), (_) {
@@ -46,6 +56,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   @override
   void dispose() {
     _refresh?.cancel();
+    _triggerSub?.cancel();
     super.dispose();
   }
 

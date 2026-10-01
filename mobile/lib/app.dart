@@ -138,11 +138,10 @@ class _TicketScannerAppState extends ConsumerState<TicketScannerApp> with Widget
             final eventId = settings.arguments as String;
             return MaterialPageRoute(builder: (_) => HomeShell(eventId: eventId));
           case '/scanner':
-            // Event id, or (event id, mode) from the Guichet tab
             final args = settings.arguments;
-            final (eventId, mode) = args is (String, ScanMode) ? args : (args as String, ScanMode.tickets);
+            final a = args is ScannerArgs ? args : ScannerArgs(args as String);
             return MaterialPageRoute(
-              builder: (_) => ScannerScreen(eventId: eventId, initialMode: mode),
+              builder: (_) => ScannerScreen(eventId: a.eventId, initialMode: a.mode, initialCode: a.initialCode),
             );
           case '/validation-result':
             final result = settings.arguments as ValidationResult;

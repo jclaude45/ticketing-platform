@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/constants/colors.dart';
 import '../../../../core/feedback/scan_feedback.dart';
+import '../../../../core/scanner/hardware_scanner.dart';
 import '../../../../core/network/network_info.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../../../../shared/widgets/zc_widgets.dart';
@@ -92,6 +93,17 @@ class _SettingsTabState extends ConsumerState<SettingsTab> {
               title: '${sync.pending} entrée(s) à envoyer',
               subtitle: online ? "Envoi en cours…" : 'Envoyée(s) automatiquement au retour du réseau.',
             ),
+          _Row(
+            icon: Icons.barcode_reader,
+            title: 'Scanner intégré (terminal)',
+            subtitle: 'Scanner avec la gâchette du terminal, caméra éteinte. La gâchette marche aussi caméra allumée.',
+            trailing: Switch(
+              value: ref.watch(hardwareScannerOnlyProvider),
+              activeThumbColor: AppColors.onInk,
+              activeTrackColor: AppColors.ink,
+              onChanged: (v) => ref.read(hardwareScannerOnlyProvider.notifier).set(v),
+            ),
+          ),
           _Row(
             icon: _sound ? Icons.volume_up_outlined : Icons.volume_off_outlined,
             title: 'Son des scans',

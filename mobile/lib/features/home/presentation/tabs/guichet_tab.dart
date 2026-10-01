@@ -83,7 +83,7 @@ class _GuichetTabState extends State<GuichetTab> {
             width: double.infinity,
             child: ZcButton(
               label: 'Scanner une commande',
-              onPressed: () => Navigator.pushNamed(context, '/scanner', arguments: (widget.eventId, ScanMode.merch)),
+              onPressed: () => Navigator.pushNamed(context, '/scanner', arguments: ScannerArgs(widget.eventId, mode: ScanMode.merch)),
             ),
           ),
           const SizedBox(height: 8),

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
 import 'core/di/injection_container.dart';
+import 'core/scanner/hardware_scanner.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,6 +17,7 @@ Future<void> main() async {
 
   // Initialize dependency injection
   await configureDependencies();
+  await ScannerModeNotifier.load();
 
   runApp(
     const ProviderScope(

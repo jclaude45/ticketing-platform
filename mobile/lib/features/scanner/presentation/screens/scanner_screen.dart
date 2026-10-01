@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../../core/constants/colors.dart';
+import '../../../../core/scanner/hardware_scanner.dart';
 import '../../../../core/di/injection_container.dart';
 import '../../../../core/feedback/scan_feedback.dart';
 import '../../../../core/network/network_info.dart';
@@ -22,13 +25,25 @@ import '../widgets/scan_overlay.dart';
 
 enum ScanMode { tickets, badges, merch }
 
+/// Arguments of the /scanner route (a plain event id is also accepted)
+class ScannerArgs {
+  final String eventId;
+  final ScanMode mode;
+  final String? initialCode;
+
+  const ScannerArgs(this.eventId, {this.mode = ScanMode.tickets, this.initialCode});
+}
+
 class ScannerScreen extends ConsumerStatefulWidget {
   final String eventId;
 
   /// Mode on opening (the Guichet tab opens it on shop pickups)
   final ScanMode initialMode;
 
-  const ScannerScreen({super.key, required this.eventId, this.initialMode = ScanMode.tickets});
+  /// Code read with the terminal's trigger before this screen was open
+  final String? initialCode;
+
+  const ScannerScreen({super.key, required this.eventId, this.initialMode = ScanMode.tickets, this.initialCode});
 
   @override
   ConsumerState<ScannerScreen> createState() => _ScannerScreenState();
@@ -43,6 +58,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
   bool _soundOn = ScanFeedback.instance.soundEnabled;
   bool _merchBusy = false;
   late ScanMode _scanMode = widget.initialMode;
+  StreamSubscription<String>? _triggerSub;
 
   // Flash animation
   late AnimationController _flashController;
@@ -63,7 +79,12 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(scannerNotifierProvider.notifier).setEventId(widget.eventId);
       ref.read(accreditationNotifierProvider.notifier).setEventId(widget.eventId);
-      _checkCameraPermission();
+      if (!ref.read(hardwareScannerOnlyProvider)) _checkCameraPermission();
+      // Terminal trigger: same path as the camera, only while this screen is in front
+      _triggerSub = HardwareScanner.instance.scans.listen((code) {
+        if (mounted && (ModalRoute.of(context)?.isCurrent ?? false)) _onQrDetected(code);
+      });
+      if (widget.initialCode != null) _onQrDetected(widget.initialCode!);
       ScanFeedback.instance.init().then((_) {
         if (mounted) setState(() => _soundOn = ScanFeedback.instance.soundEnabled);
       });
@@ -95,6 +116,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
 
   @override
   void dispose() {
+    _triggerSub?.cancel();
     _flashController.dispose();
     super.dispose();
   }
@@ -240,6 +262,14 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
     if (code != null && code.trim().isNotEmpty) await _handleMerch(code: code.trim());
   }
 
+  /// Camera <-> terminal trigger only (remembered, also in Paramètres)
+  Future<void> _toggleHardwareOnly() async {
+    final hardwareOnly = !ref.read(hardwareScannerOnlyProvider);
+    await ref.read(hardwareScannerOnlyProvider.notifier).set(hardwareOnly);
+    if (!hardwareOnly && !_hasCameraPermission) await _checkCameraPermission();
+    if (hardwareOnly) setState(() => _isTorchOn = false);
+  }
+
   void _switchMode(ScanMode mode) {
     if (_scanMode == mode) return;
     setState(() => _scanMode = mode);
@@ -256,6 +286,8 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
       loading: () => true,
       error: (_, __) => false,
     );
+    final hardwareOnly = ref.watch(hardwareScannerOnlyProvider);
+    final camera = _hasCameraPermission && !hardwareOnly;
     final isProcessing = switch (_scanMode) {
       ScanMode.tickets => scannerState.isProcessing,
       ScanMode.badges => accState.isProcessing,
@@ -266,8 +298,10 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Camera
-          if (_hasCameraPermission)
+          // Camera, or the panel of the terminal's trigger
+          if (hardwareOnly)
+            _buildTriggerPanel(isProcessing)
+          else if (_hasCameraPermission)
             Positioned.fill(
               child: QrScannerWidget(
                 key: _scannerKey,
@@ -279,7 +313,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
             _buildPermissionDenied(),
 
           // Scan overlay
-          if (_hasCameraPermission)
+          if (camera)
             Positioned.fill(
               child: ScanOverlay(
                 isScanning: !isProcessing,
@@ -313,7 +347,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
           ),
 
           // Center hint
-          if (_hasCameraPermission && !isProcessing)
+          if (camera && !isProcessing)
             Center(
               child: Padding(
                 padding: const EdgeInsets.only(top: 300),
@@ -339,7 +373,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
             bottom: 0,
             left: 0,
             right: 0,
-            child: _buildBottomControls(isOnline, scannerState.lastResult),
+            child: _buildBottomControls(isOnline, scannerState.lastResult, hardwareOnly),
           ),
         ],
       ),
@@ -465,7 +499,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
     );
   }
 
-  Widget _buildBottomControls(bool isOnline, ValidationResult? lastResult) {
+  Widget _buildBottomControls(bool isOnline, ValidationResult? lastResult, bool hardwareOnly) {
     return Container(
       padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(context).padding.bottom + 24),
       decoration: BoxDecoration(
@@ -493,17 +527,25 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
+              if (!hardwareOnly) ...[
+                _ControlButton(
+                  icon: _isTorchOn ? Icons.flashlight_on_rounded : Icons.flashlight_off_rounded,
+                  label: 'Torche',
+                  onTap: _toggleTorch,
+                  isActive: _isTorchOn,
+                ),
+                _ControlButton(
+                  icon: Icons.cameraswitch_rounded,
+                  label: _frontCamera ? 'Avant' : 'Arrière',
+                  onTap: _switchCamera,
+                  isActive: _frontCamera,
+                ),
+              ],
               _ControlButton(
-                icon: _isTorchOn ? Icons.flashlight_on_rounded : Icons.flashlight_off_rounded,
-                label: 'Torche',
-                onTap: _toggleTorch,
-                isActive: _isTorchOn,
-              ),
-              _ControlButton(
-                icon: Icons.cameraswitch_rounded,
-                label: _frontCamera ? 'Avant' : 'Arrière',
-                onTap: _switchCamera,
-                isActive: _frontCamera,
+                icon: hardwareOnly ? Icons.barcode_reader : Icons.photo_camera_outlined,
+                label: hardwareOnly ? 'Gâchette' : 'Caméra',
+                onTap: _toggleHardwareOnly,
+                isActive: hardwareOnly,
               ),
               if (_scanMode == ScanMode.merch)
                 _ControlButton(
@@ -609,6 +651,46 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
             style: GoogleFonts.inter(fontSize: 11, color: Colors.white38),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Camera off: the controller scans with the terminal's trigger.
+  Widget _buildTriggerPanel(bool isProcessing) {
+    final color = switch (_scanMode) {
+      ScanMode.badges => const Color(0xFF6366F1),
+      ScanMode.merch => const Color(0xFFF59E0B),
+      ScanMode.tickets => AppColors.scannerFrame,
+    };
+    return Positioned.fill(
+      child: Container(
+        color: const Color(0xFF0B0B0F),
+        alignment: const Alignment(0, -0.2),
+        padding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            isProcessing
+                ? SizedBox(width: 72, height: 72, child: CircularProgressIndicator(color: color, strokeWidth: 3))
+                : Icon(Icons.barcode_reader, size: 84, color: color),
+            const SizedBox(height: 24),
+            Text(
+              isProcessing ? 'Vérification…' : 'Appuyez sur la gâchette',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.w700, color: Colors.white),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              switch (_scanMode) {
+                ScanMode.tickets => 'Visez le QR code du billet avec le scanner du terminal.',
+                ScanMode.badges => 'Visez le badge du membre avec le scanner du terminal.',
+                ScanMode.merch => 'Visez le QR de retrait de la commande avec le scanner du terminal.',
+              },
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(fontSize: 14, color: Colors.white60, height: 1.5),
+            ),
+          ],
+        ),
       ),
     );
   }
