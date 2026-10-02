@@ -51,7 +51,7 @@ class ScannerScreen extends ConsumerStatefulWidget {
 
 class _ScannerScreenState extends ConsumerState<ScannerScreen>
     with TickerProviderStateMixin {
-  final GlobalKey<QrScannerWidgetState> _scannerKey = GlobalKey();
+  GlobalKey<QrScannerWidgetState> _scannerKey = GlobalKey();
   bool _hasCameraPermission = false;
   bool _isTorchOn = false;
   bool _frontCamera = false;
@@ -202,11 +202,25 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
   }
 
   Future<void> _switchCamera() async {
-    await _scannerKey.currentState?.switchCamera();
+    final front = !_frontCamera;
     setState(() {
-      _frontCamera = !_frontCamera;
+      _frontCamera = front;
       _isTorchOn = false;
     });
+    await _scannerKey.currentState?.switchCamera();
+  }
+
+  /// No usable front camera: a fresh rear camera (new key = new controller)
+  void _backToRearCamera() {
+    if (!mounted || !_frontCamera) return;
+    setState(() {
+      _frontCamera = false;
+      _isTorchOn = false;
+      _scannerKey = GlobalKey();
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Pas de caméra avant utilisable : caméra arrière"), duration: Duration(seconds: 2)),
+    );
   }
 
   Future<void> _toggleSound() async {
@@ -315,6 +329,8 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
                   key: _scannerKey,
                   onDetected: _onQrDetected,
                   isActive: !isProcessing && !_showingResult,
+                  front: _frontCamera,
+                  onFrontUnavailable: _backToRearCamera,
                 ),
               )
             else
@@ -333,7 +349,13 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
               ),
             ),
 
-            Positioned(top: 0, left: 0, right: 0, child: _buildTopBar(isOnline, ref.watch(syncNotifierProvider).pending, overCamera: camera)),
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              // Own layers: switching mode repaints the selector, not the whole screen
+              child: RepaintBoundary(child: _buildTopBar(isOnline, ref.watch(syncNotifierProvider).pending, overCamera: camera)),
+            ),
 
             if (camera && !isProcessing)
               Center(
@@ -350,7 +372,12 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
                 ),
               ),
 
-            Positioned(bottom: 0, left: 0, right: 0, child: _buildBottomSheet(scannerState.lastResult, hardwareOnly)),
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: RepaintBoundary(child: _buildBottomSheet(scannerState.lastResult, hardwareOnly)),
+            ),
           ],
         ),
       ),

@@ -208,6 +208,8 @@ class _ZcAnimatedIllustrationState extends State<ZcAnimatedIllustration> with Si
         'assets/animations/${widget.name}.json',
         controller: _controller,
         height: widget.height,
+        // Short loops: each frame's drawing is built once, then replayed
+        renderCache: RenderCache.drawingCommands,
         onLoaded: (composition) {
           _controller.duration = composition.duration;
           // Not on screen yet: shown at its first frame, played when it becomes active
@@ -215,7 +217,8 @@ class _ZcAnimatedIllustrationState extends State<ZcAnimatedIllustration> with Si
         },
         errorBuilder: (_, __, ___) => SizedBox(height: widget.height),
     );
-    return filter == null ? lottie : ColorFiltered(colorFilter: filter, child: lottie);
+    // Own layer: a frame of the drawing doesn't repaint the page around it (shadows...)
+    return RepaintBoundary(child: filter == null ? lottie : ColorFiltered(colorFilter: filter, child: lottie));
   }
 }
 

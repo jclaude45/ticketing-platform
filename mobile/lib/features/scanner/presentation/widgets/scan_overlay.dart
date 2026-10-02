@@ -59,14 +59,15 @@ class _ScanOverlayState extends State<ScanOverlay>
     }
   }
 
+  /// Only a change of state touches the animation: rebuilds of the screen (mode switch,
+  /// network...) used to restart it each time
   @override
   void didUpdateWidget(ScanOverlay oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.isProcessing) {
-      _scanLineController.stop();
-    } else if (widget.isScanning) {
-      _scanLineController.repeat(reverse: true);
-    }
+    final running = widget.isScanning && !widget.isProcessing;
+    final wasRunning = oldWidget.isScanning && !oldWidget.isProcessing;
+    if (running == wasRunning) return;
+    running ? _scanLineController.repeat(reverse: true) : _scanLineController.stop();
   }
 
   @override
@@ -83,12 +84,14 @@ class _ScanOverlayState extends State<ScanOverlay>
 
     return Stack(
       children: [
-        // Dark overlay with cutout
-        CustomPaint(
-          size: Size(size.width, size.height),
-          painter: _OverlayPainter(
-            frameSize: frameSize,
-            frameColor: frameColor,
+        // Dark overlay with cutout: painted once, not on every frame of the scan line
+        RepaintBoundary(
+          child: CustomPaint(
+            size: Size(size.width, size.height),
+            painter: _OverlayPainter(
+              frameSize: frameSize,
+              frameColor: frameColor,
+            ),
           ),
         ),
 
@@ -101,10 +104,13 @@ class _ScanOverlayState extends State<ScanOverlay>
               child: SizedBox(
                 width: frameSize,
                 height: frameSize,
-                child: _ScanFrame(
-                  color: frameColor,
-                  cornerLength: 32,
-                  thickness: 4,
+                // Corners (with a blur) drawn once; the pulse only scales the layer
+                child: RepaintBoundary(
+                  child: _ScanFrame(
+                    color: frameColor,
+                    cornerLength: 32,
+                    thickness: 4,
+                  ),
                 ),
               ),
             ),
@@ -117,8 +123,9 @@ class _ScanOverlayState extends State<ScanOverlay>
             child: SizedBox(
               width: frameSize - 4,
               height: frameSize - 4,
-              child: ClipRect(
-                child: AnimatedBuilder(
+              child: RepaintBoundary(
+                child: ClipRect(
+                  child: AnimatedBuilder(
                   animation: _scanLineAnimation,
                   builder: (_, __) {
                     return CustomPaint(
@@ -128,6 +135,7 @@ class _ScanOverlayState extends State<ScanOverlay>
                       ),
                     );
                   },
+                  ),
                 ),
               ),
             ),
@@ -196,7 +204,7 @@ class _OverlayPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_OverlayPainter oldDelegate) =>
-      oldDelegate.frameSize != frameSize;
+      oldDelegate.frameSize != frameSize || oldDelegate.frameColor != frameColor;
 }
 
 class _ScanLinePainter extends CustomPainter {
