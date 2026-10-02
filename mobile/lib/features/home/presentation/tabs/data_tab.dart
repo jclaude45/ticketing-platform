@@ -7,14 +7,33 @@ import '../../../../core/constants/colors.dart';
 import '../../../../shared/widgets/zc_widgets.dart';
 import '../home_shell.dart';
 
-/// "Rapport contrôle": share of the tickets already checked at the door.
-class DataTab extends ConsumerWidget {
+/// "Rapport contrôle": share of the tickets already checked at the door. The ring fills
+/// and the percentage counts up each time the tab is opened, and slide to new figures.
+class DataTab extends ConsumerStatefulWidget {
   final String eventId;
 
-  const DataTab({super.key, required this.eventId});
+  /// The tab is on screen: opening it replays the animation
+  final bool active;
+
+  const DataTab({super.key, required this.eventId, this.active = true});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DataTab> createState() => _DataTabState();
+}
+
+class _DataTabState extends ConsumerState<DataTab> {
+  /// Bumped on each opening: a new key restarts the animation from 0
+  int _openings = 0;
+
+  @override
+  void didUpdateWidget(DataTab old) {
+    super.didUpdateWidget(old);
+    if (widget.active && !old.active) setState(() => _openings++);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final eventId = widget.eventId;
     final entries = watchEntries(ref, eventId);
     final event = watchEvent(ref, eventId);
     final total = entries.total ?? entries.checkedIn;
@@ -40,17 +59,26 @@ class DataTab extends ConsumerWidget {
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final size = math.min(272.0, constraints.maxWidth - 40);
-                  return SizedBox.square(
-                    dimension: size,
-                    child: CustomPaint(
-                      painter: _DonutPainter(share: share, rest: AppColors.chartRest),
-                      child: Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text('$donePct %', style: zcText(ZcSize.h1, weight: ZcWeight.bold, height: 1.2)),
-                            Text('contrôlé', style: zcText(ZcSize.small, color: AppColors.grey)),
-                          ],
+                  return TweenAnimationBuilder<double>(
+                    key: ValueKey(_openings),
+                    tween: Tween(begin: 0, end: share),
+                    duration: const Duration(milliseconds: 1100),
+                    curve: Curves.easeOutCubic,
+                    builder: (context, value, _) => SizedBox.square(
+                      dimension: size,
+                      child: CustomPaint(
+                        painter: _DonutPainter(share: value, rest: AppColors.chartRest),
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '${(value * 100).round()} %',
+                                style: zcText(ZcSize.h1, weight: ZcWeight.bold, height: 1.2),
+                              ),
+                              Text('contrôlé', style: zcText(ZcSize.small, color: AppColors.grey)),
+                            ],
+                          ),
                         ),
                       ),
                     ),

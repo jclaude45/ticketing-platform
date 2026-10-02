@@ -66,7 +66,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       ScannerTab(eventId: widget.eventId, active: _tab == 0),
       GuichetTab(eventId: widget.eventId, active: _tab == 1),
       GuestsTab(eventId: widget.eventId),
-      DataTab(eventId: widget.eventId),
+      DataTab(eventId: widget.eventId, active: _tab == 3),
       SettingsTab(eventId: widget.eventId),
     ];
     return Scaffold(
