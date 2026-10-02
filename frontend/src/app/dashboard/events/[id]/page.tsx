@@ -1,328 +1,203 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
 import {
-  AlertTriangle, BarChart3, Calendar, CheckCircle2, Edit, ExternalLink, FolderKanban, Globe, Lock, Mail, MapPin, ShoppingBag,
-  Play, Ticket, Trash2, Users, X,
+  AlertTriangle, ArrowRight, BarChart3, Calendar, CheckCircle2, Edit, ExternalLink, FolderKanban, Globe, MapPin,
+  MoreHorizontal, Palette, Play, Ticket, Trash2, Users, X,
 } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
-import { useEvent, useDeleteEvent, usePublishEvent, useCancelEvent } from '@/hooks/useEvents';
+import { useDeleteEvent, usePublishEvent, useCancelEvent } from '@/hooks/useEvents';
+import { useEventAccess, EVENT_STATUS_LABELS, EVENT_STATUS_STYLES } from '@/hooks/useEventAccess';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { StatsCard } from '@/components/analytics/StatsCard';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
-import { formatDate, formatNumber, getStatusColor } from '@/lib/utils';
+import { ZayaLogo } from '@/components/site/ZayaLogo';
+import { formatDate, formatNumber } from '@/lib/utils';
 import { cn } from '@/lib/utils';
-import { projectApi, subscriptionApi } from '@/lib/api';
-import { useAuthStore } from '@/store/auth.store';
+import { resolveMediaUrl } from '@/lib/api';
 
-interface ProjectMember {
-  id: string;
-  userId: string;
-  projectRole: string;
-  user: { id: string; firstName: string; lastName: string; email: string };
+/** "…" menu of the rare, destructive actions */
+function MoreMenu({ items }: { items: { label: string; icon: React.ReactNode; onClick: () => void; danger?: boolean }[] }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const close = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, []);
+  if (items.length === 0) return null;
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        aria-label="Plus d'actions"
+        aria-expanded={open}
+        className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur transition-colors hover:bg-white/25"
+      >
+        <MoreHorizontal className="h-5 w-5" />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full z-30 mt-2 w-56 overflow-hidden rounded-2xl border border-gray-100 bg-white py-1 shadow-xl dark:border-gray-700 dark:bg-gray-900">
+          {items.map(i => (
+            <button
+              key={i.label}
+              type="button"
+              onClick={() => { setOpen(false); i.onClick(); }}
+              className={cn(
+                'flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800',
+                i.danger ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-200',
+              )}
+            >
+              {i.icon}{i.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { data: event, isLoading } = useEvent(id);
+  const { event, isLoading, isContributor, isManager } = useEventAccess(id);
   const deleteEvent = useDeleteEvent();
   const publishEvent = usePublishEvent();
   const cancelEvent = useCancelEvent();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
-  const { user } = useAuthStore();
-
-  // Fetch the current user's project membership for this event
-  const { data: membershipData } = useQuery({
-    queryKey: ['project-members', id],
-    queryFn: async () => {
-      try {
-        const res = await projectApi.getMembers(id);
-        return res.data.data as { members: ProjectMember[]; invitations: any[] };
-      } catch {
-        return { members: [], invitations: [] };
-      }
-    },
-    enabled: !!id,
-  });
-
-  const myMembership = membershipData?.members.find(m => m.userId === user?.id);
-  const isContributor = myMembership?.projectRole === 'CONTRIBUTOR';
-  const isManager = myMembership?.projectRole === 'MANAGER';
-
-  const { data: subLimits } = useQuery({
-    queryKey: ['my-subscription-limits'],
-    queryFn: () => subscriptionApi.getMySubscription().then(r => (r.data as any).data.limits),
-    staleTime: 30_000,
-  });
-  const communicationAllowed: boolean = subLimits?.allowCommunication ?? false;
 
   if (isLoading) return <PageLoader text="Chargement de l'événement..." />;
-  if (!event) return <div className="text-center py-12 text-gray-500">Événement introuvable</div>;
+  if (!event) return <div className="py-12 text-center text-gray-500">Événement introuvable</div>;
 
   const ticketsIssued = event._count?.tickets ?? 0;
-  const occupancy = event.totalCapacity > 0
-    ? Math.round((ticketsIssued / event.totalCapacity) * 100)
-    : 0;
-
+  const occupancy = event.totalCapacity > 0 ? Math.round((ticketsIssued / event.totalCapacity) * 100) : 0;
   const hasTemplates = (event.ticketTemplates?.length ?? 0) > 0;
+  const isOwner = !isManager && !isContributor;
 
-  // ── Vue restreinte pour les COLLABORATEURs ──────────────────────────────────
+  const hero = (actions?: React.ReactNode) => (
+    <div className="relative rounded-[28px] bg-[#181818]">
+      {/* Picture clipped to the card; the "…" menu below may overflow it */}
+      <div className="absolute inset-0 overflow-hidden rounded-[28px]">
+        {event.bannerUrl ? (
+          <img src={resolveMediaUrl(event.bannerUrl)} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <ZayaLogo markOnly className="absolute -right-10 -top-10 text-[280px] text-white/[0.04]" />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/10" />
+      </div>
+      <div className="relative flex min-h-[260px] flex-col justify-end gap-5 p-6 sm:p-8 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0">
+          <span className={cn('inline-block rounded-full px-3 py-1 text-xs font-semibold', EVENT_STATUS_STYLES[event.status] ?? 'bg-white text-black')}>
+            {EVENT_STATUS_LABELS[event.status] ?? event.status}
+          </span>
+          <h1 className="mt-3 break-words text-3xl font-black uppercase leading-[0.95] tracking-tight text-white sm:text-[44px]">
+            {event.name}
+          </h1>
+          <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1.5 text-sm text-white/80">
+            <span className="flex items-center gap-1.5">
+              <Calendar className="h-4 w-4" />
+              {formatDate(event.startDate)}{event.endDate && ` – ${formatDate(event.endDate)}`}
+            </span>
+            <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4" />{event.venue}, {event.city}</span>
+            <span className="flex items-center gap-1.5"><Users className="h-4 w-4" />{formatNumber(event.totalCapacity)} places</span>
+          </div>
+        </div>
+        {actions && <div className="flex flex-shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+      </div>
+    </div>
+  );
+
+  // ── Project contributors only reach the project ─────────────────────────────
   if (isContributor) {
     return (
       <div className="space-y-6">
-        <nav className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-          <Link href="/dashboard/events" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">Événements</Link>
-          <span>/</span>
-          <span className="text-gray-900 dark:text-white font-medium">{event.name}</span>
-        </nav>
-
-        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
-          <div className="relative h-52 bg-gradient-to-br from-indigo-600 to-purple-700">
-            {event.bannerUrl && (
-              <img src={event.bannerUrl} alt={event.name} className="w-full h-full object-cover" />
-            )}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
-            <div className="absolute bottom-4 left-6">
-              <span className={cn('badge text-xs font-semibold mb-2 inline-block', getStatusColor(event.status))}>
-                {event.status}
-              </span>
-              <h1 className="text-xl sm:text-2xl font-bold text-white">{event.name}</h1>
-            </div>
-          </div>
-
-          <div className="p-6">
-            <div className="flex flex-wrap items-center gap-4 mb-4 text-sm text-gray-600 dark:text-gray-400">
-              <div className="flex items-center gap-1.5">
-                <Calendar className="h-4 w-4 text-indigo-500" />
-                {formatDate(event.startDate)}
-                {event.endDate && ` – ${formatDate(event.endDate)}`}
-              </div>
-              <div className="flex items-center gap-1.5">
-                <MapPin className="h-4 w-4 text-indigo-500" />
-                {event.venue}, {event.city}, {event.country}
-              </div>
-            </div>
-
-            <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed mb-6">{event.description}</p>
-
-            {/* Info banner */}
-            <div className="flex items-start gap-3 mb-6 p-3 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800">
-              <FolderKanban className="h-4 w-4 text-indigo-600 dark:text-indigo-400 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-indigo-800 dark:text-indigo-300">
-                Vous avez accès uniquement à la <strong>gestion de projet</strong> de cet événement en tant que Collaborateur.
-              </p>
-            </div>
-
-            <Link
-              href={`/dashboard/events/${id}/project`}
-              className="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold bg-violet-600 hover:bg-violet-700 text-white rounded-xl transition-colors shadow-sm"
-            >
-              <FolderKanban className="h-4 w-4" />
-              Accéder au projet
-            </Link>
-          </div>
+        {hero()}
+        <div className="flex flex-col gap-4 rounded-[24px] border border-gray-200 bg-white p-6 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800 dark:bg-gray-900">
+          <p className="flex items-start gap-3 text-sm text-gray-600 dark:text-gray-300">
+            <FolderKanban className="mt-0.5 h-5 w-5 flex-shrink-0 text-black dark:text-white" />
+            En tant que collaborateur, vous avez accès à la gestion de projet de cet événement.
+          </p>
+          <Link href={`/dashboard/events/${id}/project`} className="btn-primary gap-2">
+            Accéder au projet <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
       </div>
     );
   }
 
-  // ── Vue complète (organisateur / ADMIN / MANAGER) ────────────────────────────
+  const pill = 'flex h-10 items-center gap-2 rounded-full px-5 text-sm font-semibold transition-opacity hover:opacity-85';
+  const actions = (
+    <>
+      {isOwner && event.status === 'DRAFT' && (
+        <button
+          type="button"
+          onClick={() => publishEvent.mutate(id)}
+          disabled={publishEvent.isPending || !hasTemplates}
+          title={!hasTemplates ? 'Ajoutez au moins un tarif avant de publier' : undefined}
+          className={cn(pill, 'bg-[#FFDD00] text-black disabled:cursor-not-allowed disabled:opacity-50')}
+        >
+          <Globe className="h-4 w-4" />Publier
+        </button>
+      )}
+      {event.status === 'PUBLISHED' && (
+        <a href={`/billetterie/${id}`} target="_blank" rel="noopener noreferrer" className={cn(pill, 'bg-white text-black')}>
+          <ExternalLink className="h-4 w-4" />Page de vente
+        </a>
+      )}
+      <Link href={`/dashboard/events/${id}/edit`} className={cn(pill, 'bg-white/15 text-white backdrop-blur hover:bg-white/25 hover:opacity-100')}>
+        <Edit className="h-4 w-4" />Modifier
+      </Link>
+      <MoreMenu
+        items={[
+          ...(isOwner && event.status === 'PUBLISHED'
+            ? [{ label: "Annuler l'événement", icon: <X className="h-4 w-4" />, onClick: () => setCancelOpen(true) }]
+            : []),
+          ...(isOwner ? [{ label: 'Supprimer', icon: <Trash2 className="h-4 w-4" />, onClick: () => setDeleteOpen(true), danger: true }] : []),
+        ]}
+      />
+    </>
+  );
+
+  const shortcuts = [
+    { label: 'Design du billet', desc: 'Éditeur visuel de vos billets', href: `/dashboard/events/${id}/tickets/template`, icon: Palette },
+    { label: 'Générer des billets', desc: 'Créer des billets en lot', href: `/dashboard/events/${id}/tickets/generate`, icon: Play },
+    { label: 'Statistiques', desc: 'Ventes, scans et audience', href: `/dashboard/events/${id}/analytics`, icon: BarChart3 },
+  ];
+
   return (
     <div className="space-y-6">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-        <Link href="/dashboard/events" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">Events</Link>
-        <span>/</span>
-        <span className="text-gray-900 dark:text-white font-medium">{event.name}</span>
-      </nav>
+      {hero(actions)}
 
-      {/* Hero card */}
-      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
-        <div className="relative h-52 bg-gradient-to-br from-indigo-600 to-purple-700">
-          {event.bannerUrl && (
-            <img src={event.bannerUrl} alt={event.name} className="w-full h-full object-cover" />
+      {event.description && (
+        <p className="max-w-3xl whitespace-pre-line text-[15px] leading-relaxed text-gray-600 dark:text-gray-300">{event.description}</p>
+      )}
+
+      {/* Draft: what is missing before publishing */}
+      {event.status === 'DRAFT' && (
+        <div className="flex items-start gap-3 rounded-[20px] border border-[#FFDD00] bg-[#FFDD00]/15 p-4 text-sm text-black dark:text-white">
+          <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+          {!hasTemplates ? (
+            <p>
+              <span className="font-semibold">Au moins un tarif est requis pour publier.</span>{' '}
+              <Link href={`/dashboard/events/${id}/edit`} className="underline underline-offset-2">Ajoutez des tarifs</Link>{' '}
+              ou créez directement un{' '}
+              <Link href={`/dashboard/events/${id}/tickets/template`} className="underline underline-offset-2">modèle de billet</Link>.
+            </p>
+          ) : (
+            <p>
+              <span className="font-semibold">Cet événement est en brouillon.</span>{' '}
+              {isOwner ? 'Publiez-le pour qu\'il apparaisse sur la billetterie publique.' : "L'organisateur doit le publier pour ouvrir la vente."}
+            </p>
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
-          <div className="absolute bottom-4 left-6 right-6 flex items-end justify-between">
-            <div>
-              <span className={cn('badge text-xs font-semibold mb-2 inline-block', getStatusColor(event.status))}>
-                {event.status}
-              </span>
-              <h1 className="text-xl sm:text-2xl font-bold text-white">{event.name}</h1>
-            </div>
-          </div>
         </div>
+      )}
 
-        <div className="p-6">
-          <div className="flex flex-wrap items-center gap-4 mb-6 text-sm text-gray-600 dark:text-gray-400">
-            <div className="flex items-center gap-1.5">
-              <Calendar className="h-4 w-4 text-indigo-500" />
-              {formatDate(event.startDate)}
-              {event.endDate && ` – ${formatDate(event.endDate)}`}
-            </div>
-            <div className="flex items-center gap-1.5">
-              <MapPin className="h-4 w-4 text-indigo-500" />
-              {event.venue}, {event.city}, {event.country}
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Users className="h-4 w-4 text-indigo-500" />
-              Capacité : {formatNumber(event.totalCapacity)}
-            </div>
-          </div>
-
-          <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed mb-6">{event.description}</p>
-
-          {/* DRAFT banner */}
-          {event.status === 'DRAFT' && (
-            <div className="flex items-start gap-3 mb-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-              <div className="text-sm text-amber-800 dark:text-amber-300">
-                {!hasTemplates ? (
-                  <>
-                    <span className="font-medium">Au moins un tarif est requis pour publier.</span>{' '}
-                    Modifiez l&apos;événement pour ajouter des tarifs, ou créez directement un{' '}
-                    <Link href={`/dashboard/events/${id}/tickets/template`} className="underline hover:no-underline">
-                      modèle de billet
-                    </Link>.
-                  </>
-                ) : (
-                  <>
-                    <span className="font-medium">Cet événement est en brouillon.</span>{' '}
-                    Cliquez sur <span className="font-semibold">Publier</span> pour qu&apos;il apparaisse sur la billetterie publique.
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Action buttons */}
-          <div className="flex flex-wrap gap-2">
-            {/* Edit — visible pour organisateur et MANAGER */}
-            <Link
-              href={`/dashboard/events/${id}/edit`}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-            >
-              <Edit className="h-4 w-4" />Modifier
-            </Link>
-            <Link
-              href={`/dashboard/events/${id}/tickets`}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors"
-            >
-              <Ticket className="h-4 w-4" />Billets
-            </Link>
-            <Link
-              href={`/dashboard/events/${id}/analytics`}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
-            >
-              <BarChart3 className="h-4 w-4" />Analytique
-            </Link>
-            <Link
-              href={`/dashboard/events/${id}/team`}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 rounded-lg hover:bg-emerald-200 dark:hover:bg-emerald-900/50 transition-colors"
-            >
-              <Users className="h-4 w-4" />Équipe
-            </Link>
-            <Link
-              href={`/dashboard/events/${id}/project`}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 rounded-lg hover:bg-violet-200 dark:hover:bg-violet-900/50 transition-colors"
-            >
-              <FolderKanban className="h-4 w-4" />Projet
-            </Link>
-            <Link
-              href={`/dashboard/events/${id}/communication`}
-              className={cn(
-                'relative flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors',
-                communicationAllowed
-                  ? 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 hover:bg-rose-200 dark:hover:bg-rose-900/50'
-                  : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'
-              )}
-              title={communicationAllowed ? undefined : 'Non disponible dans votre plan actuel'}
-            >
-              <Mail className="h-4 w-4" />
-              Communication
-              {!communicationAllowed && (
-                <Lock className="h-3.5 w-3.5 ml-0.5 opacity-70" />
-              )}
-            </Link>
-            <Link
-              href={`/dashboard/events/${id}/boutique`}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 rounded-lg hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors"
-            >
-              <ShoppingBag className="h-4 w-4" />Boutique
-            </Link>
-            {/* Public sales page — only reachable once the event is published */}
-            {event.status === 'PUBLISHED' ? (
-              <a
-                href={`/billetterie/${id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 rounded-lg hover:bg-sky-200 dark:hover:bg-sky-900/50 transition-colors"
-              >
-                <ExternalLink className="h-4 w-4" />Page de vente
-              </a>
-            ) : (
-              <span
-                title="Publiez l'événement pour activer sa page de vente"
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 rounded-lg cursor-not-allowed"
-              >
-                <ExternalLink className="h-4 w-4" />Page de vente
-              </span>
-            )}
-            {/* Publish / Cancel / Delete — uniquement pour l'organisateur réel (pas les MANAGERs invités) */}
-            {!isManager && event.status === 'DRAFT' && (
-              <button
-                onClick={() => publishEvent.mutate(id)}
-                disabled={publishEvent.isPending || !hasTemplates}
-                title={!hasTemplates ? 'Créez un template de ticket avant de publier' : undefined}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <Globe className="h-4 w-4" />Publier
-              </button>
-            )}
-            {!isManager && event.status === 'PUBLISHED' && (
-              <button
-                onClick={() => setCancelOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-lg hover:bg-yellow-200 dark:hover:bg-yellow-900/50 transition-colors"
-              >
-                <X className="h-4 w-4" />Annuler
-              </button>
-            )}
-            {!isManager && (
-              <button
-                onClick={() => setDeleteOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors ml-auto"
-              >
-                <Trash2 className="h-4 w-4" />Supprimer
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatsCard
-          title="Billets émis"
-          value={formatNumber(ticketsIssued)}
-          icon={<Ticket className="h-5 w-5" />}
-          color="indigo"
-        />
-        <StatsCard
-          title="Occupation"
-          value={`${occupancy}%`}
-          icon={<CheckCircle2 className="h-5 w-5" />}
-          color="green"
-        />
-        <StatsCard
-          title="Capacité"
-          value={formatNumber(event.totalCapacity)}
-          icon={<Users className="h-5 w-5" />}
-          color="purple"
-        />
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <StatsCard title="Billets émis" value={formatNumber(ticketsIssued)} icon={<Ticket className="h-5 w-5" />} color="indigo" />
+        <StatsCard title="Occupation" value={`${occupancy}%`} icon={<CheckCircle2 className="h-5 w-5" />} color="green" />
+        <StatsCard title="Capacité" value={formatNumber(event.totalCapacity)} icon={<Users className="h-5 w-5" />} color="purple" />
         <StatsCard
           title="Disponible"
           value={formatNumber(event.totalCapacity - ticketsIssued)}
@@ -331,29 +206,21 @@ export default function EventDetailPage() {
         />
       </div>
 
-      {/* Quick links */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-        {[
-          { label: 'Design du billet', href: `/dashboard/events/${id}/tickets/template`, icon: Ticket, desc: 'Éditeur visuel des billets' },
-          { label: 'Générer des billets', href: `/dashboard/events/${id}/tickets/generate`, icon: Play, desc: 'Créer des billets en lot' },
-          { label: 'Invitations', href: `/dashboard/events/${id}/invitations`, icon: Mail, desc: 'Inviter des personnes par email ou Excel' },
-          { label: 'Boutique', href: `/dashboard/events/${id}/boutique`, icon: ShoppingBag, desc: 'T-shirts, souvenirs et commandes' },
-          { label: 'Statistiques', href: `/dashboard/events/${id}/analytics`, icon: BarChart3, desc: 'Taux de scan et occupation' },
-          { label: 'Gérer l\'équipe', href: `/dashboard/events/${id}/team`, icon: Users, desc: 'Personnel et accréditations' },
-          { label: 'Gestion de projet', href: `/dashboard/events/${id}/project`, icon: FolderKanban, desc: 'Rétroplanning et budget' },
-        ].map((item) => (
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {shortcuts.map(s => (
           <Link
-            key={item.href}
-            href={item.href}
-            className="flex items-center gap-4 p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl hover:border-indigo-300 dark:hover:border-indigo-700 hover:shadow-md transition-all group"
+            key={s.href}
+            href={s.href}
+            className="group flex items-center gap-4 rounded-[20px] border border-gray-200 bg-white p-4 transition-all hover:border-black hover:shadow-md dark:border-gray-800 dark:bg-gray-900 dark:hover:border-white"
           >
-            <div className="w-10 h-10 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center group-hover:bg-indigo-600 transition-colors">
-              <item.icon className="h-5 w-5 text-indigo-600 dark:text-indigo-400 group-hover:text-white transition-colors" />
-            </div>
-            <div>
-              <p className="font-medium text-gray-900 dark:text-white text-sm">{item.label}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">{item.desc}</p>
-            </div>
+            <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-black text-white dark:bg-white dark:text-black">
+              <s.icon className="h-5 w-5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold text-black dark:text-white">{s.label}</span>
+              <span className="block text-xs text-gray-500 dark:text-gray-400">{s.desc}</span>
+            </span>
+            <ArrowRight className="h-4 w-4 text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-black dark:group-hover:text-white" />
           </Link>
         ))}
       </div>

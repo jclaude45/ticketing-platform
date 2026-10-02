@@ -72,17 +72,17 @@ export const EVENT_CURRENCIES = [
 export type EventTypeValue = typeof EVENT_TYPES[number]['value'];
 
 export const createEventSchema = z.object({
-  name: z.string().min(3, 'Event name must be at least 3 characters').max(200),
-  description: z.string().min(10, 'Description must be at least 10 characters').max(2000).optional().or(z.literal('')),
+  name: z.string().min(3, 'Le nom doit contenir au moins 3 caractères').max(200),
+  description: z.string().min(10, 'La description doit contenir au moins 10 caractères').max(2000).optional().or(z.literal('')),
   type: z.enum(['CONCERT','CONFERENCE','FESTIVAL','SPORT','PARTY','EXHIBITION','THEATER','WORKSHOP','OTHER']).default('OTHER'),
   currency: z.enum(['CDF','USD','EUR','XAF','GBP']).default('USD'),
-  venue: z.string().min(2, 'Venue is required').max(200),
+  venue: z.string().min(2, 'Le lieu est requis').max(200),
   address: z.string().max(300).optional(),
-  city: z.string().min(1, 'City is required').max(100),
-  country: z.string().min(1, 'Country is required').max(100),
-  startDate: z.string().min(1, 'Start date is required'),
-  endDate: z.string().min(1, 'End date is required'),
-  totalCapacity: z.number().int().positive('Capacity must be a positive number'),
+  city: z.string().min(1, 'La ville est requise').max(100),
+  country: z.string().min(1, 'Le pays est requis').max(100),
+  startDate: z.string().min(1, 'La date de début est requise'),
+  endDate: z.string().min(1, 'La date de fin est requise'),
+  totalCapacity: z.number().int().positive('La capacité doit être un nombre positif'),
   bannerUrl: z.string().optional(),
 });
 
