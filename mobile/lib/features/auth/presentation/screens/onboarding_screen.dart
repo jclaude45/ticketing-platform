@@ -16,18 +16,18 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   static const _pages = [
     (
-      image: 'illus_scan',
+      image: 'telephone_qr',
       height: 196.0,
       text: "Billets scannés à l'entrée pour une expérience événementielle fluide et sécurisée !",
     ),
     (
-      image: 'illus_pos',
+      image: 'colis_localisation',
       height: 156.0,
       text: 'Vente instantanée, expérience optimale. Simplifiez la vente sur place avec notre appli, '
           'rendant chaque achat rapide et facile !',
     ),
     (
-      image: 'illus_stats',
+      image: 'analyses_graphique',
       height: 140.0,
       text: 'Des analyses instantanées qui transforment les données en décisions percutantes. '
           'Explorez la puissance des rapports en temps réel, accessible de n\'importe où.',
@@ -70,7 +70,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   child: Column(
                     children: [
                       const Spacer(flex: 2),
-                      SizedBox(height: 200, child: Center(child: ZcIllustration(page.image, height: page.height))),
+                      SizedBox(
+                        height: 200,
+                        child: Center(child: ZcAnimatedIllustration(page.image, height: page.height, active: i == _page)),
+                      ),
                       const SizedBox(height: 54),
                       Text(page.text, textAlign: TextAlign.center, style: zcText(ZcSize.body, color: AppColors.grey, height: 1.75)),
                       const Spacer(flex: 3),

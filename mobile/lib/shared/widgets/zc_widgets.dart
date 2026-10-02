@@ -156,6 +156,53 @@ class _ZcAnimatedBackdropState extends State<ZcAnimatedBackdrop> with SingleTick
   }
 }
 
+/// Line drawing that builds itself up (Lottie, assets/animations), in the ink colour
+/// (white in dark mode). Plays once from the start each time [active] turns on.
+class ZcAnimatedIllustration extends StatefulWidget {
+  final String name;
+  final double height;
+  final bool active;
+
+  const ZcAnimatedIllustration(this.name, {super.key, required this.height, this.active = true});
+
+  @override
+  State<ZcAnimatedIllustration> createState() => _ZcAnimatedIllustrationState();
+}
+
+class _ZcAnimatedIllustrationState extends State<ZcAnimatedIllustration> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(vsync: this);
+
+  @override
+  void didUpdateWidget(ZcAnimatedIllustration old) {
+    super.didUpdateWidget(old);
+    if (widget.active && !old.active && _controller.duration != null) _controller.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ColorFiltered(
+      colorFilter: ColorFilter.mode(AppColors.ink, BlendMode.srcIn),
+      child: Lottie.asset(
+        'assets/animations/${widget.name}.json',
+        controller: _controller,
+        height: widget.height,
+        onLoaded: (composition) {
+          _controller.duration = composition.duration;
+          // Not on screen yet: shown complete if it's never activated, played when it is
+          widget.active ? _controller.forward(from: 0) : _controller.value = 0;
+        },
+        errorBuilder: (_, __, ___) => SizedBox(height: widget.height),
+      ),
+    );
+  }
+}
+
 /// Lets a column with [Spacer]s scroll when it does not fit (small phone, keyboard).
 class ZcFillScroll extends StatelessWidget {
   final EdgeInsets padding;
