@@ -11,7 +11,10 @@ import '../../../scanner/presentation/screens/scanner_screen.dart';
 class GuichetTab extends StatefulWidget {
   final String eventId;
 
-  const GuichetTab({super.key, required this.eventId});
+  /// The tab is on screen: its drawing plays each time it is opened
+  final bool active;
+
+  const GuichetTab({super.key, required this.eventId, this.active = true});
 
   @override
   State<GuichetTab> createState() => _GuichetTabState();
@@ -64,7 +67,7 @@ class _GuichetTabState extends State<GuichetTab> {
         children: [
           const Spacer(),
           const SizedBox(height: 40),
-          const ZcIllustration('illus_pos', height: 156),
+          ZcAnimatedIllustration('colis_localisation', height: 156, active: widget.active),
           const SizedBox(height: 44),
           Text(
             'Retrait boutique',
