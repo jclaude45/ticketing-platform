@@ -263,7 +263,7 @@ function InviteMemberPanel({ eventId, onSuccess }: { eventId: string; onSuccess:
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+    <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 py-6">
       <h3 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
         <UserPlus className="h-5 w-5 text-indigo-600" />
         Inviter un membre
@@ -1263,7 +1263,7 @@ function BudgetTab({ eventId }: BudgetTabProps) {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm p-4">
+        <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 py-4">
           <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
             Budget total
           </p>
@@ -1272,7 +1272,7 @@ function BudgetTab({ eventId }: BudgetTabProps) {
           </p>
         </div>
 
-        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm p-4">
+        <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 py-4">
           <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
             Dépensé
           </p>
@@ -1281,7 +1281,7 @@ function BudgetTab({ eventId }: BudgetTabProps) {
           </p>
         </div>
 
-        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm p-4">
+        <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 py-4">
           <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
             Restant
           </p>
@@ -1290,7 +1290,7 @@ function BudgetTab({ eventId }: BudgetTabProps) {
           </p>
         </div>
 
-        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm p-4">
+        <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 py-4">
           <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
             Progression
           </p>
@@ -1308,7 +1308,7 @@ function BudgetTab({ eventId }: BudgetTabProps) {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Donut chart */}
-        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm p-4">
+        <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 py-4">
           <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
             Répartition par catégorie
           </h3>
@@ -1360,7 +1360,7 @@ function BudgetTab({ eventId }: BudgetTabProps) {
         </div>
 
         {/* Budget lines table */}
-        <div className="lg:col-span-2 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
+        <div className="lg:col-span-2 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
               Lignes budgétaires
@@ -1640,7 +1640,7 @@ function GanttView({ tasks, onTaskClick }: { tasks: ProjectTask[]; onTaskClick: 
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 overflow-hidden">
       <div className="overflow-x-auto">
         <div style={{ minWidth: LABEL_W + totalDays * DAY_W }}>
           {/* Header row — week labels */}
@@ -1830,7 +1830,7 @@ export default function ProjectPage() {
         <div className="flex items-center gap-3">
           <Link
             href={`/dashboard/events/${eventId}`}
-            className="flex items-center justify-center h-9 w-9 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors shadow-sm"
+            className="flex items-center justify-center h-9 w-9 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
           </Link>
@@ -1958,7 +1958,7 @@ export default function ProjectPage() {
           )}
 
           {/* Current members list */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+          <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 py-6">
             <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Membres actifs</h3>
             {membersQuery.isLoading ? (
               <p className="text-gray-500 text-sm">Chargement...</p>

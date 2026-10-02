@@ -41,7 +41,7 @@ export default function AdministrationPage() {
 
   if (!can('ADMIN')) {
     return (
-      <div className="mx-auto max-w-md rounded-xl border border-gray-200 bg-white p-8 text-center dark:border-gray-800 dark:bg-gray-900">
+      <div className="mx-auto max-w-md border-b border-gray-200 bg-white py-8 text-center dark:border-gray-800 dark:bg-gray-900">
         <ShieldAlert className="mx-auto mb-3 h-10 w-10 text-gray-400" />
         <p className="font-semibold text-gray-900 dark:text-white">Accès réservé aux administrateurs du compte</p>
       </div>
@@ -164,7 +164,7 @@ function CollaboratorsTab() {
         </p>
       </form>
 
-      <div className="rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+      <div className="border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
         {isLoading ? (
           <div className="flex justify-center p-8"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
         ) : collaborators.length === 0 ? (
@@ -295,7 +295,7 @@ function ZonesTab() {
         </p>
       </form>
 
-      <div className="rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+      <div className="border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
         {isLoading ? (
           <div className="flex justify-center p-8"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
         ) : (

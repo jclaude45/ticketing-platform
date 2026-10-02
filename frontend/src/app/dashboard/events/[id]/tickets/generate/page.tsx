@@ -108,7 +108,7 @@ export default function GenerateTicketsPage() {
 
       {/* Block form if cancelled */}
       {isCancelled ? (
-        <div className="rounded-xl border border-gray-200 bg-white p-8 text-center shadow-sm">
+        <div className="border-b border-gray-200 bg-white py-8 text-center">
           <Ban className="mx-auto h-12 w-12 text-gray-400 mb-3" />
           <p className="text-base font-semibold text-gray-900">Événement annulé</p>
           <p className="text-sm text-gray-500 mt-1">
@@ -123,7 +123,7 @@ export default function GenerateTicketsPage() {
           </button>
         </div>
       ) : isFull ? (
-        <div className="rounded-xl border border-red-200 bg-white p-8 text-center shadow-sm">
+        <div className="border-b border-red-200 bg-white py-8 text-center">
           <AlertTriangle className="mx-auto h-12 w-12 text-red-400 mb-3" />
           <p className="text-base font-semibold text-gray-900">Génération impossible</p>
           <p className="text-sm text-gray-500 mt-1">

@@ -403,7 +403,7 @@ export default function TicketsPage() {
       </AnimatePresence>
 
       {/* ── Tickets table ─────────────────────────────────────────────────── */}
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div className="overflow-hidden border-b border-gray-200 bg-white">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-100">
             {/* Table head */}

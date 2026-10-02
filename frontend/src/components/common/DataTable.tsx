@@ -117,7 +117,7 @@ export function DataTable<T extends { id: string }>({
   const allSelected = sorted.length > 0 && selected.size === sorted.length;
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
+    <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 overflow-hidden">
       {searchable && (
         <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center gap-3">
           <div className="relative flex-1 max-w-xs">

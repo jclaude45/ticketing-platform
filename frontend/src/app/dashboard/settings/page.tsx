@@ -192,7 +192,7 @@ export default function SettingsPage() {
 
           {/* ── PROFIL ─────────────────────────────────────────────────── */}
           {activeTab === 'profile' && (
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="border-b border-gray-200 bg-white py-6">
               <h2 className="text-base font-semibold text-gray-900 mb-1">Informations personnelles</h2>
               <p className="text-sm text-gray-500 mb-6">Votre nom et email publics</p>
 
@@ -290,7 +290,7 @@ export default function SettingsPage() {
 
           {/* ── SÉCURITÉ ────────────────────────────────────────────────── */}
           {activeTab === 'security' && (
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="border-b border-gray-200 bg-white py-6">
               <h2 className="text-base font-semibold text-gray-900 mb-1">Changer le mot de passe</h2>
               <p className="text-sm text-gray-500 mb-6">Utilisez un mot de passe fort d'au moins 8 caractères</p>
 
@@ -334,7 +334,7 @@ export default function SettingsPage() {
 
           {/* ── 2FA ─────────────────────────────────────────────────────── */}
           {activeTab === '2fa' && (
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="border-b border-gray-200 bg-white py-6">
               <div className="flex items-start justify-between mb-6">
                 <div>
                   <h2 className="text-base font-semibold text-gray-900">Double authentification (2FA)</h2>
@@ -400,7 +400,7 @@ export default function SettingsPage() {
 
           {/* ── CLÉS RSA ─────────────────────────────────────────────────── */}
           {activeTab === 'keys' && (
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="border-b border-gray-200 bg-white py-6">
               <h2 className="text-base font-semibold text-gray-900 mb-1">Clés cryptographiques RSA-4096</h2>
               <p className="text-sm text-gray-500 mb-6">Ces clés signent chaque QR Code de billet. La rotation révoque les anciens QR codes générés.</p>
 
@@ -445,7 +445,7 @@ export default function SettingsPage() {
 
           {/* ── NOTIFICATIONS ────────────────────────────────────────────── */}
           {activeTab === 'notifications' && (
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="border-b border-gray-200 bg-white py-6">
               <h2 className="text-base font-semibold text-gray-900 mb-1">Notifications par email</h2>
               <p className="text-sm text-gray-500 mb-6">Choisissez les événements pour lesquels vous souhaitez être notifié</p>
 

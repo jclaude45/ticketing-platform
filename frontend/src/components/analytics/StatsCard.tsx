@@ -18,16 +18,11 @@ interface StatsCardProps {
   isLoading?: boolean;
 }
 
-const colorMap: Record<NonNullable<StatsCardProps['color']>, string> = {
-  indigo:  'bg-indigo-100  dark:bg-indigo-900/30  text-indigo-600  dark:text-indigo-400',
-  purple:  'bg-purple-100  dark:bg-purple-900/30  text-purple-600  dark:text-purple-400',
-  violet:  'bg-violet-100  dark:bg-violet-900/30  text-violet-600  dark:text-violet-400',
-  green:   'bg-green-100   dark:bg-green-900/30   text-green-600   dark:text-green-400',
-  emerald: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400',
-  blue:    'bg-blue-100    dark:bg-blue-900/30    text-blue-600    dark:text-blue-400',
-  amber:   'bg-amber-100   dark:bg-amber-900/30   text-amber-600   dark:text-amber-400',
-  red:     'bg-red-100     dark:bg-red-900/30     text-red-600     dark:text-red-400',
-  yellow:  'bg-yellow-100  dark:bg-yellow-900/30  text-yellow-600  dark:text-yellow-400',
+// Plain icon like the app rows: ink, the status colours keep their meaning
+const iconColor: Record<NonNullable<StatsCardProps['color']>, string> = {
+  indigo: 'text-black dark:text-white', purple: 'text-black dark:text-white', violet: 'text-black dark:text-white',
+  blue: 'text-black dark:text-white', amber: 'text-black dark:text-white',
+  green: 'text-green-600', emerald: 'text-green-600', red: 'text-red-600', yellow: 'text-amber-500',
 };
 
 export function StatsCard({
@@ -42,27 +37,24 @@ export function StatsCard({
             <div className="h-3 w-24 rounded bg-gray-200 dark:bg-gray-700" />
             <div className="h-8 w-16 rounded bg-gray-200 dark:bg-gray-700" />
           </div>
-          <div className="h-11 w-11 rounded-xl bg-gray-200 dark:bg-gray-700" />
+          <div className="h-6 w-6 rounded bg-gray-200 dark:bg-gray-700" />
         </div>
       </div>
     );
   }
 
   return (
-    <motion.div
-      whileHover={{ y: -2, boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)' }}
-      className="stats-card card-hover"
-    >
+    <motion.div className="stats-card">
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</p>
-          <p className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mt-1">
+          <p className="text-2xl sm:text-3xl font-black tracking-tight text-black dark:text-white mt-1">
             {value}
             {suffix && <span className="text-sm font-normal text-gray-400 ml-1">{suffix}</span>}
           </p>
           {description && <p className="text-xs text-gray-500 mt-1">{description}</p>}
         </div>
-        <div className={cn('flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center', colorMap[color])}>
+        <div className={cn('flex-shrink-0 flex items-center justify-center', iconColor[color])}>
           {icon}
         </div>
       </div>

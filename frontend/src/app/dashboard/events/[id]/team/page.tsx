@@ -730,7 +730,7 @@ export default function TeamPage() {
           { label: 'Sans accréditation', value: members.length - accreditedCount, color: 'text-amber-500' },
           { label: 'Rôles distincts', value: new Set(members.map((m) => m.role)).size, color: 'text-indigo-600' },
         ].map(({ label, value, color }) => (
-          <div key={label} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <div key={label} className="border-b border-gray-200 bg-white py-4">
             <p className="text-xs text-gray-500">{label}</p>
             <p className={cn('text-3xl font-bold', color)}>{value}</p>
           </div>
@@ -754,7 +754,7 @@ export default function TeamPage() {
       </div>
 
       {/* Table */}
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div className="overflow-hidden border-b border-gray-200 bg-white">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-100">
             <thead className="bg-gray-50">

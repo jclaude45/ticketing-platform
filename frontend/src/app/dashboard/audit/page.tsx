@@ -119,7 +119,7 @@ export default function HistoriquePage() {
           { label: 'Annulés',  value: cancelled,  icon: <Ban className="h-5 w-5 text-red-500" />,     bg: 'bg-red-50' },
           { label: 'Scannés',  value: scanned,    icon: <ScanLine className="h-5 w-5 text-emerald-500" />, bg: 'bg-emerald-50' },
         ].map((s) => (
-          <div key={s.label} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm flex items-center gap-4">
+          <div key={s.label} className="border-b border-gray-200 bg-white py-4 flex items-center gap-4">
             <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', s.bg)}>
               {s.icon}
             </div>
@@ -163,7 +163,7 @@ export default function HistoriquePage() {
       </div>
 
       {/* Table */}
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div className="overflow-hidden border-b border-gray-200 bg-white">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-100">
             <thead className="bg-gray-50">

@@ -66,7 +66,7 @@ function QuotaBar({
 
 function SkeletonCard() {
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-5 animate-pulse space-y-3">
+    <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 py-5 animate-pulse space-y-3">
       <div className="h-5 w-1/2 bg-gray-200 dark:bg-gray-700 rounded" />
       <div className="h-4 w-1/3 bg-gray-100 dark:bg-gray-800 rounded" />
       <div className="space-y-2 mt-4">
@@ -134,7 +134,7 @@ export default function SubscriptionPage() {
       </div>
 
       {/* Current plan card */}
-      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-6 space-y-5">
+      <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 py-6 space-y-5">
         <div className="flex items-start justify-between">
           <div>
             <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-1">

@@ -278,7 +278,7 @@ export default function CommunicationPage() {
               et aux rappels automatiques J-7 / J-1.
             </p>
           </div>
-          <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl p-6 text-left space-y-3 shadow-sm">
+          <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 py-6 text-left space-y-3">
             <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
               Ce module comprend&nbsp;:
             </p>
@@ -368,7 +368,7 @@ export default function CommunicationPage() {
             { label: 'WhatsApp', value: stats?.whatsappSent ?? 0, icon: <MessageSquare className="h-5 w-5 text-emerald-500" />, color: 'emerald' },
             { label: 'Campagnes totales', value: stats?.campaignCount ?? 0, icon: <BarChart3 className="h-5 w-5 text-indigo-500" />, color: 'indigo' },
           ].map(s => (
-            <div key={s.label} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+            <div key={s.label} className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 py-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs text-gray-500 dark:text-gray-400">{s.label}</span>
                 {s.icon}
@@ -422,7 +422,7 @@ export default function CommunicationPage() {
                 <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
               </div>
             ) : campaigns.length === 0 ? (
-              <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-12 text-center">
+              <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 py-12 text-center">
                 <Send className="h-12 w-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
                 <p className="text-gray-500 dark:text-gray-400 font-medium">Aucune campagne créée</p>
                 <p className="text-sm text-gray-400 dark:text-gray-500 mt-1 mb-4">
@@ -496,7 +496,7 @@ export default function CommunicationPage() {
             </div>
 
             {templates.length === 0 ? (
-              <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-12 text-center">
+              <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 py-12 text-center">
                 <LayoutTemplate className="h-12 w-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
                 <p className="text-gray-500 dark:text-gray-400 font-medium">Aucun modèle</p>
                 <p className="text-sm text-gray-400 dark:text-gray-500 mt-1 mb-6">
@@ -609,7 +609,7 @@ function CampaignRow({
   const canSend = campaign.status === 'DRAFT' || campaign.status === 'SCHEDULED';
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 flex items-start gap-4">
+    <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 py-4 flex items-start gap-4">
       <div className={cn('p-2 rounded-lg flex-shrink-0', CHANNEL_COLORS[campaign.channel])}>
         {CHANNEL_ICONS[campaign.channel]}
       </div>
@@ -703,7 +703,7 @@ function TemplateCard({
 
   return (
     <>
-      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 flex flex-col gap-3">
+      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 py-4 flex flex-col gap-3">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-2 flex-wrap">
             <span className={cn('flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full font-medium', CHANNEL_COLORS[template.channel])}>
@@ -858,7 +858,7 @@ function ReminderTab({
         ].map(({ type, campaign, label, desc, icon }) => (
           <div
             key={type}
-            className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5"
+            className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 py-5"
           >
             <div className="flex items-center gap-3 mb-3">
               <span className="text-2xl">{icon}</span>
@@ -908,7 +908,7 @@ function ReminderTab({
       </div>
 
       {/* Timeline preview */}
-      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5">
+      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 py-5">
         <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Calendrier des envois</h3>
         <div className="space-y-3">
           {[
@@ -1120,7 +1120,7 @@ function NewCampaignModal({
 
             {showPreview && isEmail ? (
               <div
-                className="w-full min-h-[200px] rounded-lg border border-gray-200 dark:border-gray-700 bg-white p-4 text-sm overflow-auto"
+                className="w-full min-h-[200px] border-b border-gray-200 dark:border-gray-700 bg-white py-4 text-sm overflow-auto"
                 dangerouslySetInnerHTML={{ __html: form.body }}
               />
             ) : (

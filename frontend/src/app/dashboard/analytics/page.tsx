@@ -115,7 +115,7 @@ export default function AnalyticsPage() {
       {/* Charts row */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Évolution temporelle — 2/3 */}
-        <div className="lg:col-span-2 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="lg:col-span-2 border-b border-gray-200 bg-white py-6">
           <div className="mb-4 flex items-center justify-between">
             <div>
               <h2 className="text-base font-semibold text-gray-900">Événements par mois</h2>
@@ -135,7 +135,7 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Top events par billets — 1/3 */}
-        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="border-b border-gray-200 bg-white py-6">
           <div className="mb-4 flex items-center justify-between">
             <div>
               <h2 className="text-base font-semibold text-gray-900">Top événements</h2>
@@ -192,7 +192,7 @@ export default function AnalyticsPage() {
 
       {/* Occupation */}
       <div className="grid grid-cols-1 gap-6">
-        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="border-b border-gray-200 bg-white py-6">
           <div className="mb-4 flex items-center justify-between">
             <div>
               <h2 className="text-base font-semibold text-gray-900">Taux d'occupation</h2>
@@ -208,7 +208,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Events table */}
-      <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+      <div className="border-b border-gray-200 bg-white overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="text-base font-semibold text-gray-900">Événements actifs</h2>
           <a

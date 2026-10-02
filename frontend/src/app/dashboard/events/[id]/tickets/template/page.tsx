@@ -96,7 +96,7 @@ export default function TicketTemplatesListPage() {
             return (
               <div
                 key={tpl.id}
-                className="group relative overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow"
+                className="group relative overflow-hidden border-b border-gray-200 bg-white transition-shadow"
               >
                 {/* Preview image */}
                 <div className="relative h-36 overflow-hidden bg-gray-100">

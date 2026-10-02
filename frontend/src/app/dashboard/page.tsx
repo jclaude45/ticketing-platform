@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { subscriptionApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import type { OrganizerLimits } from '@/types';
+import { EVENT_STATUS_LABELS } from '@/hooks/useEventAccess';
 
 function QuotaBar({ used, max, color }: { used: number; max: number; color: string }) {
   if (max === -1) return <p className="text-xs text-indigo-500 flex items-center gap-1 mt-1"><Infinity className="h-3 w-3" /> Illimité</p>;
@@ -52,7 +53,7 @@ function SubscriptionWidget() {
 
   return (
     <motion.div variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0 } }}
-      className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5 shadow-sm"
+      className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 py-5"
     >
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2.5">
@@ -171,7 +172,7 @@ export default function DashboardPage() {
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Scan activity chart */}
-        <motion.div variants={itemVariants} className="lg:col-span-2 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm">
+        <motion.div variants={itemVariants} className="lg:col-span-2 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 py-6">
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="font-semibold text-gray-900 dark:text-white">Activité des scans</h3>
@@ -217,7 +218,7 @@ export default function DashboardPage() {
         </motion.div>
 
         {/* Monthly events trend */}
-        <motion.div variants={itemVariants} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 shadow-sm">
+        <motion.div variants={itemVariants} className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 py-6">
           <h3 className="font-semibold text-gray-900 dark:text-white mb-1">Tendance des événements</h3>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Création d&apos;événements par mois</p>
           <ResponsiveContainer width="100%" height={220}>
@@ -251,7 +252,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Recent events */}
-      <motion.div variants={itemVariants} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
+      <motion.div variants={itemVariants} className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800">
           <h3 className="font-semibold text-gray-900 dark:text-white">Événements récents</h3>
           <Link
@@ -284,7 +285,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className={cn('badge text-xs', getStatusColor(event.status))}>
-                    {event.status}
+                    {EVENT_STATUS_LABELS[event.status] ?? event.status}
                   </span>
                   <div className="text-right hidden sm:block">
                     <p className="text-sm font-medium text-gray-900 dark:text-white">{event.ticketsScanned}</p>

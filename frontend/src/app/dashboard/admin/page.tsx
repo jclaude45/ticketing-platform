@@ -41,7 +41,7 @@ function KpiCard({ label, value, sub, icon, color }: {
   icon: React.ReactNode; color: string;
 }) {
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-4 flex items-center gap-4 shadow-sm">
+    <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 py-4 flex items-center gap-4">
       <div className={cn('w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0', color)}>
         {icon}
       </div>
@@ -424,7 +424,7 @@ export default function AdminPage() {
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4 min-h-0">
 
         {/* ── Left: Organisateurs ── */}
-        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm flex flex-col overflow-hidden">
+        <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex flex-col overflow-hidden">
           {/* Search header */}
           <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
             <div className="flex items-center gap-2 mb-2">
@@ -470,7 +470,7 @@ export default function AdminPage() {
         </div>
 
         {/* ── Right: Detail ── */}
-        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
+        <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 overflow-hidden">
           {selectedOrg ? (
             <OrganizerDetail org={selectedOrg} plans={plans} />
           ) : (

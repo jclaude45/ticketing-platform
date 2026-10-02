@@ -44,7 +44,7 @@ export function ControllerList({ controllers, isLoading = false }: Props) {
     return (
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="animate-pulse rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div key={i} className="animate-pulse border-b border-gray-200 bg-white py-5">
             <div className="flex items-center gap-3 mb-4">
               <div className="h-10 w-10 rounded-full bg-gray-200" />
               <div className="space-y-2 flex-1">
@@ -64,7 +64,7 @@ export function ControllerList({ controllers, isLoading = false }: Props) {
 
   if (!controllers.length) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 bg-white py-20 text-center">
+      <div className="flex flex-col items-center justify-center border-b border-dashed border-gray-300 bg-white py-20 text-center">
         <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
           <Shield className="h-8 w-8 text-gray-400" />
         </div>

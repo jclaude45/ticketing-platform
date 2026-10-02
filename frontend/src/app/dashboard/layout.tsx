@@ -40,7 +40,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (!isAuthenticated || isController) return null;
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-950 overflow-hidden">
+    <div className="flex h-screen bg-white dark:bg-gray-950 overflow-hidden">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div

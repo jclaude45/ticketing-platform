@@ -14,7 +14,7 @@ const COLORS = ['#181818', '#FFDD00', '#e5e7eb'];
 export function OccupancyChart({ scanned, total, capacity, isLoading }: OccupancyChartProps) {
   if (isLoading) {
     return (
-      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5 shadow-sm animate-pulse">
+      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 py-5 animate-pulse">
         <div className="h-3 w-24 rounded bg-gray-200 dark:bg-gray-700 mb-1" />
         <div className="h-[200px] rounded-lg bg-gray-100 dark:bg-gray-800 mt-4" />
       </div>
@@ -33,7 +33,7 @@ export function OccupancyChart({ scanned, total, capacity, isLoading }: Occupanc
   const occupancyPct = cap > 0 ? Math.round((scanned / cap) * 100) : 0;
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5 shadow-sm">
+    <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 py-5">
       <h3 className="font-semibold text-gray-900 dark:text-white mb-1 text-sm">Occupancy</h3>
       <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Ticket status breakdown</p>
       <div className="relative">

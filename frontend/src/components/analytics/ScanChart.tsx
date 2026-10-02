@@ -44,7 +44,7 @@ export function ScanChart({ data, title, label, color = '#181818', isLoading }: 
 
   const wrapper = (content: React.ReactNode) =>
     title ? (
-      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5 shadow-sm">
+      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 py-5">
         <h3 className="font-semibold text-gray-900 dark:text-white mb-1 text-sm">{title}</h3>
         <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Hourly scan activity</p>
         {content}

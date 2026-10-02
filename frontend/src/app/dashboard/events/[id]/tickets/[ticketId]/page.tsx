@@ -117,11 +117,11 @@ export default function TicketDetailPage() {
       {isLoading ? (
         <div className="space-y-4">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="animate-pulse rounded-xl border border-gray-100 bg-white p-6 h-32" />
+            <div key={i} className="animate-pulse border-b border-gray-100 bg-white py-6 h-32" />
           ))}
         </div>
       ) : !ticket ? (
-        <div className="rounded-xl border border-gray-200 bg-white p-10 text-center">
+        <div className="border-b border-gray-200 bg-white py-10 text-center">
           <Ticket className="mx-auto h-10 w-10 text-gray-300 mb-3" />
           <p className="text-gray-500">Billet introuvable</p>
         </div>
@@ -153,7 +153,7 @@ export default function TicketDetailPage() {
           </div>
 
           {/* Event info */}
-          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="border-b border-gray-200 bg-white py-6">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-400 mb-4">Événement</h2>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="flex items-start gap-3">
@@ -200,7 +200,7 @@ export default function TicketDetailPage() {
           </div>
 
           {/* Holder info */}
-          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="border-b border-gray-200 bg-white py-6">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-400 mb-4">Titulaire</h2>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="flex items-start gap-3">
@@ -242,7 +242,7 @@ export default function TicketDetailPage() {
 
           {/* QR Code */}
           {ticket.qrCode && (
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="border-b border-gray-200 bg-white py-6">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-400 mb-4">QR Code</h2>
               <div className="flex items-center gap-6">
                 <img
@@ -267,7 +267,7 @@ export default function TicketDetailPage() {
 
           {/* Scan history */}
           {ticket.scanValidations?.length > 0 && (
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="border-b border-gray-200 bg-white py-6">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-400 mb-4">
                 Historique des scans ({ticket.scanValidations.length})
               </h2>

@@ -127,7 +127,7 @@ export default function EditControllerPage() {
           }}
         >
           {/* Identity */}
-          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm space-y-4">
+          <div className="border-b border-gray-200 bg-white py-6 space-y-4">
             <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
               <User className="h-4 w-4 text-indigo-500" />
               Identité
@@ -160,7 +160,7 @@ export default function EditControllerPage() {
           </div>
 
           {/* Access */}
-          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="border-b border-gray-200 bg-white py-6">
             <label className="flex items-center justify-between gap-4 cursor-pointer">
               <div>
                 <p className="text-sm font-semibold text-gray-900">Accès à l&apos;application</p>
@@ -192,7 +192,7 @@ export default function EditControllerPage() {
           </div>
 
           {/* Events */}
-          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="border-b border-gray-200 bg-white py-6">
             <h3 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
               <Calendar className="h-4 w-4 text-indigo-500" />
               Événements assignés

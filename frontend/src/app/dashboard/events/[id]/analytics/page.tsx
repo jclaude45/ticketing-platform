@@ -117,7 +117,7 @@ export default function EventAnalyticsPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
 
         {/* Scan timeline — 2/3 */}
-        <div className="lg:col-span-2 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="lg:col-span-2 border-b border-gray-200 bg-white py-6">
           <div className="mb-4 flex items-center justify-between">
             <div>
               <h2 className="text-base font-semibold text-gray-900">Scans par heure</h2>
@@ -134,7 +134,7 @@ export default function EventAnalyticsPage() {
         </div>
 
         {/* Occupancy donut — 1/3 */}
-        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm flex flex-col">
+        <div className="border-b border-gray-200 bg-white py-6 flex flex-col">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-base font-semibold text-gray-900">Occupation</h2>
           </div>
@@ -150,7 +150,7 @@ export default function EventAnalyticsPage() {
       <div className="grid grid-cols-1 gap-6">
 
         {/* Controllers leaderboard */}
-        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="border-b border-gray-200 bg-white py-6">
           <div className="mb-4 flex items-center justify-between">
             <div>
               <h2 className="text-base font-semibold text-gray-900">Classement contrôleurs</h2>

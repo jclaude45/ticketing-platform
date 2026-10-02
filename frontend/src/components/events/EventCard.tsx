@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Calendar, Edit, Eye, MapPin, Ticket, Users } from 'lucide-react';
 import { type Event } from '@/types';
 import { cn, formatDate, getStatusColor } from '@/lib/utils';
+import { EVENT_STATUS_LABELS } from '@/hooks/useEventAccess';
 
 interface EventCardProps {
   event: Event;
@@ -22,7 +23,7 @@ export function EventCard({ event }: EventCardProps) {
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -4 }}
       transition={{ duration: 0.2 }}
-      className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden hover:shadow-lg transition-all duration-200"
+      className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 overflow-hidden transition-all duration-200"
     >
       {/* Cover */}
       <div className="relative h-40 bg-gradient-to-br from-indigo-500 to-purple-600 overflow-hidden">
@@ -35,7 +36,7 @@ export function EventCard({ event }: EventCardProps) {
         )}
         <div className="absolute top-3 right-3">
           <span className={cn('badge text-xs font-semibold shadow-sm', getStatusColor(event.status))}>
-            {event.status}
+            {EVENT_STATUS_LABELS[event.status] ?? event.status}
           </span>
         </div>
       </div>

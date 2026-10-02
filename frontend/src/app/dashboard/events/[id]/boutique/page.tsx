@@ -450,7 +450,7 @@ function OrdersTab({ eventId }: { eventId: string }) {
             const canCancel = ['PAID', 'READY', 'SHIPPED'].includes(o.status);
             const st = STATUS[o.status] ?? { label: o.status, cls: 'bg-gray-100 text-gray-600' };
             return (
-              <div key={o.id} className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+              <div key={o.id} className="border-b border-gray-200 bg-white py-4 dark:border-gray-800 dark:bg-gray-900">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
                     <p className="font-semibold text-gray-900 dark:text-white">
@@ -546,7 +546,7 @@ function SettingsTab({ eventId }: { eventId: string }) {
   const input = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white';
 
   return (
-    <div className="flex max-w-xl flex-col gap-5 rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+    <div className="flex max-w-xl flex-col gap-5 border-b border-gray-200 bg-white py-5 dark:border-gray-800 dark:bg-gray-900">
       <div>
         <p className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white"><Store className="h-4 w-4" /> Retrait sur place</p>
         <p className="mb-2 mt-1 text-xs text-gray-500">Toujours proposé. Indiquez où et quand les acheteurs récupèrent leurs articles (affiché sur la page et dans l&apos;email).</p>

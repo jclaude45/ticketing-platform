@@ -478,7 +478,7 @@ export default function SubscriptionsPage() {
 
       {/* ── Organizers tab ── */}
       {tab === 'organizers' && (
-        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
+        <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 overflow-hidden">
           {subsLoading ? (
             <div className="p-6 space-y-3">
               {[1, 2, 3].map(i => <div key={i} className="h-16 rounded-xl bg-gray-100 dark:bg-gray-800 animate-pulse" />)}
@@ -536,7 +536,7 @@ export default function SubscriptionsPage() {
                       <div className="px-5 pb-5 bg-gray-50 dark:bg-gray-800/30 border-t border-gray-100 dark:border-gray-800 space-y-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
                           {/* Ticket quota */}
-                          <div className="bg-white dark:bg-gray-900 rounded-xl p-4 border border-gray-200 dark:border-gray-800">
+                          <div className="bg-white dark:bg-gray-900 py-4 border-b border-gray-200 dark:border-gray-800">
                             <div className="flex items-center justify-between mb-2">
                               <span className="text-xs font-medium text-gray-500 flex items-center gap-1"><Ticket className="h-3.5 w-3.5" />Billets générés</span>
                               <span className="text-xs font-bold text-gray-900 dark:text-white">{sub.ticketsUsed} / {formatLimit(sub.plan.maxTickets)}</span>
@@ -553,7 +553,7 @@ export default function SubscriptionsPage() {
                           </div>
 
                           {/* Badge quota */}
-                          <div className="bg-white dark:bg-gray-900 rounded-xl p-4 border border-gray-200 dark:border-gray-800">
+                          <div className="bg-white dark:bg-gray-900 py-4 border-b border-gray-200 dark:border-gray-800">
                             <div className="flex items-center justify-between mb-2">
                               <span className="text-xs font-medium text-gray-500 flex items-center gap-1"><Users className="h-3.5 w-3.5" />Badges générés</span>
                               <span className="text-xs font-bold text-gray-900 dark:text-white">{sub.badgesUsed} / {formatLimit(sub.plan.maxBadges)}</span>

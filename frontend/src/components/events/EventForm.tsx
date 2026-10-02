@@ -47,7 +47,7 @@ function Field({ label, error, children, required, hint }: {
 /** Numbered block of the form, in the zaya.live style */
 function Section({ n, title, desc, children }: { n: string; title: string; desc: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-[24px] border border-gray-200 bg-white p-5 sm:p-7 dark:border-gray-800 dark:bg-gray-900">
+    <section className="border-b border-gray-200 py-8 dark:border-gray-800">
       <div className="mb-6 flex items-start gap-4">
         <span className="text-3xl font-black leading-none tracking-tight text-black dark:text-white">{n}</span>
         <div>
@@ -202,7 +202,7 @@ export function EventForm({ event, isEdit }: EventFormProps) {
         onSubmit={handleSubmit(onSubmit)}
         className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start"
       >
-        <div className="space-y-6">
+        <div>
           <Section n="01" title="L'essentiel" desc="Le nom et le type de votre événement.">
             <Field label="Nom de l'événement" error={errors.name?.message} required>
               <input {...register('name')} placeholder="Ex : Fally Ipupu en concert" className={cn(inputClass, 'text-lg font-semibold')} />
@@ -272,9 +272,9 @@ export function EventForm({ event, isEdit }: EventFormProps) {
 
             <div>
               <p className="mb-2 text-sm font-medium text-black dark:text-gray-200">Tarifs</p>
-              <div className="space-y-3">
+              <div>
                 {tariffs.map((t, i) => (
-                  <div key={t._key} className="rounded-2xl bg-[#F7F7F7] p-4 dark:bg-gray-800">
+                  <div key={t._key} className="border-b border-gray-200 py-4 first:border-t dark:border-gray-800">
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_140px_120px_auto] sm:items-end">
                       <div>
                         <label className="mb-1 block text-xs text-gray-500">Nom du tarif</label>
@@ -299,7 +299,7 @@ export function EventForm({ event, isEdit }: EventFormProps) {
                         onClick={() => removeTariff(t._key)}
                         disabled={tariffs.length <= 1}
                         aria-label="Supprimer ce tarif"
-                        className="flex h-[50px] w-[50px] items-center justify-center rounded-xl text-gray-400 transition-colors hover:bg-white hover:text-red-600 disabled:pointer-events-none disabled:opacity-0 dark:hover:bg-gray-700"
+                        className="flex h-[50px] w-[50px] items-center justify-center rounded-xl text-gray-400 transition-colors hover:bg-gray-100 hover:text-red-600 disabled:pointer-events-none disabled:opacity-0 dark:hover:bg-gray-700"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -346,7 +346,7 @@ export function EventForm({ event, isEdit }: EventFormProps) {
 
         {/* ── Live preview + actions ── */}
         <aside className="space-y-4 lg:sticky lg:top-6">
-          <div className="rounded-[24px] border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+          <div className="border-b border-gray-200 bg-white py-5 dark:border-gray-800 dark:bg-gray-900">
             <p className="mb-4 text-xs font-medium uppercase tracking-[0.12em] text-gray-400">Aperçu sur la billetterie</p>
             <div className="relative aspect-square overflow-hidden rounded-[18px] bg-[#eee] dark:bg-gray-800">
               {bannerUrl

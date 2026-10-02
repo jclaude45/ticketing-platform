@@ -66,7 +66,7 @@ export function ControllerForm({
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
 
       {/* Identity */}
-      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+      <div className="border-b border-gray-200 bg-white py-6">
         <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
           <User className="h-4 w-4 text-indigo-500" />
           Identité du contrôleur
@@ -96,7 +96,7 @@ export function ControllerForm({
       </div>
 
       {/* Contact */}
-      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+      <div className="border-b border-gray-200 bg-white py-6">
         <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
           <Mail className="h-4 w-4 text-indigo-500" />
           Adresse email
@@ -126,7 +126,7 @@ export function ControllerForm({
       </div>
 
       {/* Event assignment */}
-      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+      <div className="border-b border-gray-200 bg-white py-6">
         <h3 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
           <Calendar className="h-4 w-4 text-indigo-500" />
           Événements assignés

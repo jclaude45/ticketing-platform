@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
-  AlertTriangle, ArrowRight, BarChart3, Calendar, CheckCircle2, Edit, ExternalLink, FolderKanban, Globe, MapPin,
+  AlertTriangle, ArrowRight, BarChart3, ChevronRight, Calendar, CheckCircle2, Edit, ExternalLink, FolderKanban, Globe, MapPin,
   MoreHorizontal, Palette, Play, Ticket, Trash2, Users, X,
 } from 'lucide-react';
 import { useDeleteEvent, usePublishEvent, useCancelEvent } from '@/hooks/useEvents';
@@ -114,7 +114,7 @@ export default function EventDetailPage() {
     return (
       <div className="space-y-6">
         {hero()}
-        <div className="flex flex-col gap-4 rounded-[24px] border border-gray-200 bg-white p-6 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800 dark:bg-gray-900">
+        <div className="flex flex-col gap-4 border-b border-gray-200 bg-white py-6 sm:flex-row sm:items-center sm:justify-between dark:border-gray-800 dark:bg-gray-900">
           <p className="flex items-start gap-3 text-sm text-gray-600 dark:text-gray-300">
             <FolderKanban className="mt-0.5 h-5 w-5 flex-shrink-0 text-black dark:text-white" />
             En tant que collaborateur, vous avez accès à la gestion de projet de cet événement.
@@ -176,7 +176,7 @@ export default function EventDetailPage() {
 
       {/* Draft: what is missing before publishing */}
       {event.status === 'DRAFT' && (
-        <div className="flex items-start gap-3 rounded-[20px] border border-[#FFDD00] bg-[#FFDD00]/15 p-4 text-sm text-black dark:text-white">
+        <div className="flex items-start gap-3 border-l-4 border-[#FFDD00] bg-[#FFDD00]/15 px-4 py-3 text-sm text-black dark:text-white">
           <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
           {!hasTemplates ? (
             <p>
@@ -194,7 +194,7 @@ export default function EventDetailPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-x-8 md:grid-cols-4">
         <StatsCard title="Billets émis" value={formatNumber(ticketsIssued)} icon={<Ticket className="h-5 w-5" />} color="indigo" />
         <StatsCard title="Occupation" value={`${occupancy}%`} icon={<CheckCircle2 className="h-5 w-5" />} color="green" />
         <StatsCard title="Capacité" value={formatNumber(event.totalCapacity)} icon={<Users className="h-5 w-5" />} color="purple" />
@@ -206,21 +206,20 @@ export default function EventDetailPage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      {/* Shortcuts as rows, like the settings of the zcontrole app */}
+      <div className="border-t border-gray-200 dark:border-gray-800">
         {shortcuts.map(s => (
           <Link
             key={s.href}
             href={s.href}
-            className="group flex items-center gap-4 rounded-[20px] border border-gray-200 bg-white p-4 transition-all hover:border-black hover:shadow-md dark:border-gray-800 dark:bg-gray-900 dark:hover:border-white"
+            className="group flex min-h-[73px] items-center gap-4 border-b border-gray-200 px-1 py-3.5 transition-colors hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-900"
           >
-            <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-black text-white dark:bg-white dark:text-black">
-              <s.icon className="h-5 w-5" />
-            </span>
+            <s.icon className="h-[22px] w-[22px] flex-shrink-0 text-black dark:text-white" />
             <span className="min-w-0 flex-1">
-              <span className="block text-sm font-semibold text-black dark:text-white">{s.label}</span>
-              <span className="block text-xs text-gray-500 dark:text-gray-400">{s.desc}</span>
+              <span className="block text-[15px] font-medium text-black dark:text-white">{s.label}</span>
+              <span className="mt-0.5 block text-sm text-gray-500 dark:text-gray-400">{s.desc}</span>
             </span>
-            <ArrowRight className="h-4 w-4 text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-black dark:group-hover:text-white" />
+            <ChevronRight className="h-5 w-5 text-gray-400 transition-transform group-hover:translate-x-0.5 group-hover:text-black dark:group-hover:text-white" />
           </Link>
         ))}
       </div>

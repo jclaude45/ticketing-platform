@@ -280,7 +280,7 @@ export function GenerateTicketsForm({ eventId }: Props) {
       <AnimatePresence mode="wait">
         {step === 1 && (
           <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="border-b border-gray-200 bg-white py-6">
               <h3 className="text-sm font-semibold text-gray-900 mb-1">
                 1. Choisir le type de billet
               </h3>
@@ -371,7 +371,7 @@ export function GenerateTicketsForm({ eventId }: Props) {
           <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
 
             {/* Mode selector */}
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="border-b border-gray-200 bg-white py-6">
               <h3 className="text-sm font-semibold text-gray-900 mb-4">2. Mode de génération</h3>
               <div className="grid grid-cols-2 gap-3">
                 {[
@@ -401,7 +401,7 @@ export function GenerateTicketsForm({ eventId }: Props) {
 
             {/* Count mode */}
             {mode === 'count' && (
-              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+              <div className="border-b border-gray-200 bg-white py-6">
                 <label className="block text-sm font-medium text-gray-700 mb-3">
                   Nombre de billets à générer
                 </label>
@@ -452,7 +452,7 @@ export function GenerateTicketsForm({ eventId }: Props) {
 
             {/* Named mode */}
             {mode === 'named' && (
-              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+              <div className="border-b border-gray-200 bg-white py-6">
                 {/* Hidden CSV file input */}
                 <input
                   ref={csvInputRef}
