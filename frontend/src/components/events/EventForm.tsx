@@ -56,10 +56,10 @@ function toLocalDateTime(iso: string): string {
   return iso.slice(0, 16);
 }
 
-const COLORS = ['#4f46e5', '#7c3aed', '#db2777', '#dc2626', '#d97706', '#16a34a', '#0891b2', '#374151'];
+const COLORS = ['#181818', '#707070', '#db2777', '#dc2626', '#d97706', '#16a34a', '#0891b2', '#374151'];
 
 function newTariff(): TariffInput {
-  return { _key: crypto.randomUUID(), name: '', price: 0, quantity: 100, color: '#4f46e5' };
+  return { _key: crypto.randomUUID(), name: '', price: 0, quantity: 100, color: '#181818' };
 }
 
 export function EventForm({ event, isEdit }: EventFormProps) {
@@ -77,7 +77,7 @@ export function EventForm({ event, isEdit }: EventFormProps) {
         name: t.name,
         price: Number(t.price),
         quantity: t.quantity,
-        color: t.color ?? '#4f46e5',
+        color: t.color ?? '#181818',
       }));
     }
     return [newTariff()];

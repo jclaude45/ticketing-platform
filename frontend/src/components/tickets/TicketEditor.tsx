@@ -727,7 +727,7 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
           <div className="w-px h-6 bg-gray-200 dark:bg-gray-700" />
           <button onClick={exportJSON} className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 transition-colors"><Download className="h-3.5 w-3.5" /><span className="hidden sm:inline">JSON</span></button>
           <button onClick={exportPNG} className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 transition-colors"><Download className="h-3.5 w-3.5" /><span className="hidden sm:inline">PNG</span></button>
-          <button onClick={save} disabled={saveTemplate.isPending} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all disabled:opacity-60">
+          <button onClick={save} disabled={saveTemplate.isPending} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full hover:from-indigo-700 hover:to-purple-700 transition-all disabled:opacity-60">
             {saveTemplate.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}Enregistrer
           </button>
         </div>

@@ -160,7 +160,7 @@ function PlanForm({ plan, onClose, onSave, saving }: PlanFormProps) {
             Annuler
           </button>
           <button onClick={() => onSave(form)} disabled={!form.name.trim() || saving}
-            className="px-5 py-2 rounded-xl text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+            className="px-5 py-2 rounded-full text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors">
             {saving ? 'Enregistrement…' : 'Enregistrer'}
           </button>
         </div>
@@ -242,7 +242,7 @@ function AssignModal({ sub, plans, onClose, onSave, saving }: AssignModalProps) 
           <button
             onClick={() => onSave({ planId, status, expiresAt: expiresAt || null, notes })}
             disabled={saving}
-            className="px-5 py-2 rounded-xl text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            className="px-5 py-2 rounded-full text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
           >
             {saving ? 'Enregistrement…' : 'Enregistrer'}
           </button>
@@ -358,7 +358,7 @@ export default function SubscriptionsPage() {
         {tab === 'plans' && (
           <button
             onClick={() => setPlanModal('create')}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors shadow-sm"
+            className="flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors shadow-sm"
           >
             <Plus className="h-4 w-4" />
             Nouveau plan
@@ -596,7 +596,7 @@ export default function SubscriptionsPage() {
                         <div className="flex flex-wrap gap-2">
                           <button
                             onClick={() => setAssignModal(sub)}
-                            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+                            className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
                           >
                             <Pencil className="h-3.5 w-3.5" /> Modifier l'abonnement
                           </button>

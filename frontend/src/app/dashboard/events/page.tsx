@@ -41,7 +41,7 @@ export default function EventsPage() {
         </div>
         <button
           onClick={() => refetch()}
-          className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
+          className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
         >
           <RefreshCw className="h-4 w-4" />
           Réessayer

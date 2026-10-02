@@ -12,8 +12,8 @@
     --card-foreground: 222.2 84% 4.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
-    --primary: 239 84% 67%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 0 0% 9%;
+    --primary-foreground: 0 0% 100%;
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
     --muted: 210 40% 96.1%;
@@ -24,8 +24,43 @@
     --destructive-foreground: 210 40% 98%;
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 239 84% 67%;
+    --ring: 0 0% 9%;
     --radius: 0.75rem;
+
+    /* ZAYA design: greys behind the indigo / purple / violet utilities (tailwind.config.ts) */
+    --indigo-50: 245 245 245;
+    --indigo-100: 235 235 235;
+    --indigo-200: 214 214 214;
+    --indigo-300: 184 184 184;
+    --indigo-400: 143 143 143;
+    --indigo-500: 61 61 61;
+    --indigo-600: 24 24 24;
+    --indigo-700: 0 0 0;
+    --indigo-800: 0 0 0;
+    --indigo-900: 10 10 10;
+    --indigo-950: 5 5 5;
+    --purple-50: 247 247 247;
+    --purple-100: 238 238 238;
+    --purple-200: 220 220 220;
+    --purple-300: 190 190 190;
+    --purple-400: 150 150 150;
+    --purple-500: 90 90 90;
+    --purple-600: 58 58 58;
+    --purple-700: 30 30 30;
+    --purple-800: 20 20 20;
+    --purple-900: 14 14 14;
+    --purple-950: 8 8 8;
+    --violet-50: 247 247 247;
+    --violet-100: 238 238 238;
+    --violet-200: 220 220 220;
+    --violet-300: 190 190 190;
+    --violet-400: 150 150 150;
+    --violet-500: 90 90 90;
+    --violet-600: 58 58 58;
+    --violet-700: 30 30 30;
+    --violet-800: 20 20 20;
+    --violet-900: 14 14 14;
+    --violet-950: 8 8 8;
   }
 
   .dark {
@@ -35,8 +70,8 @@
     --card-foreground: 210 40% 98%;
     --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
-    --primary: 239 84% 67%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 0 0% 92%;
+    --primary-foreground: 0 0% 9%;
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
     --muted: 217.2 32.6% 17.5%;
@@ -47,7 +82,41 @@
     --destructive-foreground: 210 40% 98%;
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
-    --ring: 239 84% 67%;
+    --ring: 0 0% 80%;
+
+    --indigo-50: 38 38 38;
+    --indigo-100: 48 48 48;
+    --indigo-200: 64 64 64;
+    --indigo-300: 212 212 212;
+    --indigo-400: 190 190 190;
+    --indigo-500: 150 150 150;
+    --indigo-600: 74 74 74;
+    --indigo-700: 95 95 95;
+    --indigo-800: 40 40 40;
+    --indigo-900: 30 30 30;
+    --indigo-950: 18 18 18;
+    --purple-50: 42 42 42;
+    --purple-100: 52 52 52;
+    --purple-200: 70 70 70;
+    --purple-300: 200 200 200;
+    --purple-400: 175 175 175;
+    --purple-500: 130 130 130;
+    --purple-600: 90 90 90;
+    --purple-700: 110 110 110;
+    --purple-800: 45 45 45;
+    --purple-900: 34 34 34;
+    --purple-950: 22 22 22;
+    --violet-50: 42 42 42;
+    --violet-100: 52 52 52;
+    --violet-200: 70 70 70;
+    --violet-300: 200 200 200;
+    --violet-400: 175 175 175;
+    --violet-500: 130 130 130;
+    --violet-600: 90 90 90;
+    --violet-700: 110 110 110;
+    --violet-800: 45 45 45;
+    --violet-900: 34 34 34;
+    --violet-950: 22 22 22;
   }
 }
 
@@ -76,10 +145,10 @@
     @apply transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5;
   }
   .sidebar-item {
-    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150;
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-full text-sm font-medium transition-colors duration-150;
   }
   .sidebar-item-active {
-    @apply bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300;
+    @apply bg-black text-white dark:bg-white dark:text-black;
   }
   .sidebar-item-inactive {
     @apply text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100;
@@ -94,7 +163,7 @@
     @apply flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-primary {
-    @apply inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:from-indigo-700 hover:to-purple-700 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center rounded-full bg-black px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .badge {
     @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;

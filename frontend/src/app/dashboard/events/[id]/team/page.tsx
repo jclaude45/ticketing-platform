@@ -379,7 +379,7 @@ function MemberModal({ eventId, member, onClose, onSaved }: {
               </p>
               <div className="flex gap-2">
                 <button type="button" onClick={() => setShowCamera(true)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 transition-colors">
+                  className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 transition-colors">
                   <Camera className="h-3.5 w-3.5" />
                   Caméra
                 </button>
@@ -440,7 +440,7 @@ function MemberModal({ eventId, member, onClose, onSaved }: {
               Annuler
             </button>
             <button type="submit" disabled={saving || uploadingPhoto}
-              className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors disabled:opacity-50">
+              className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors disabled:opacity-50">
               {(saving || uploadingPhoto) && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
               {member ? 'Enregistrer' : 'Ajouter'}
             </button>
@@ -588,7 +588,7 @@ function AccreditationModal({ eventId, member, onClose, onSaved }: {
               Annuler
             </button>
             <button type="submit" disabled={saving}
-              className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors disabled:opacity-50">
+              className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors disabled:opacity-50">
               {saving && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
               {existing ? 'Mettre à jour' : "Créer l'accréditation"}
             </button>
@@ -715,7 +715,7 @@ export default function TeamPage() {
               <FileSpreadsheet className="h-4 w-4 text-green-600" /> Importer Excel
             </button>
             <button onClick={() => setAddOpen(true)}
-              className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 transition-colors">
+              className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 transition-colors">
               <Plus className="h-4 w-4" /> Ajouter un membre
             </button>
           </div>

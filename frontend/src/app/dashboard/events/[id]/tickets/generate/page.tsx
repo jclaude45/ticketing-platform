@@ -132,7 +132,7 @@ export default function GenerateTicketsPage() {
           </p>
           <button
             onClick={() => router.push(`/dashboard/events/${eventId}/edit`)}
-            className="mt-4 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
+            className="mt-4 inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
           >
             Modifier la capacité
           </button>

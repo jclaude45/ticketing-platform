@@ -297,7 +297,7 @@ export default function CommunicationPage() {
           </div>
           <Link
             href="/dashboard/subscription"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-semibold rounded-xl shadow-md hover:shadow-lg hover:from-indigo-700 hover:to-purple-700 transition-all"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-semibold rounded-full shadow-md hover:shadow-lg hover:from-indigo-700 hover:to-purple-700 transition-all"
           >
             <Crown className="h-4 w-4" />
             Voir les plans disponibles
@@ -410,7 +410,7 @@ export default function CommunicationPage() {
               </h2>
               <button
                 onClick={() => setShowNewCampaign(true)}
-                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-full text-sm font-medium transition-colors"
               >
                 <Plus className="h-4 w-4" />
                 Nouvelle campagne
@@ -430,7 +430,7 @@ export default function CommunicationPage() {
                 </p>
                 <button
                   onClick={() => setShowNewCampaign(true)}
-                  className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
+                  className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-full text-sm font-medium"
                 >
                   <Plus className="h-4 w-4" />
                   Créer une campagne
@@ -474,7 +474,7 @@ export default function CommunicationPage() {
                 </button>
                 <button
                   onClick={() => setShowNewTemplate(true)}
-                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-full text-sm font-medium transition-colors"
                 >
                   <Plus className="h-4 w-4" />
                   Nouveau modèle
@@ -505,7 +505,7 @@ export default function CommunicationPage() {
                 <button
                   onClick={() => initDefaultsMutation.mutate()}
                   disabled={initDefaultsMutation.isPending}
-                  className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
+                  className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-full text-sm font-medium transition-colors disabled:opacity-60"
                 >
                   {initDefaultsMutation.isPending
                     ? <Loader2 className="h-4 w-4 animate-spin" />
@@ -671,7 +671,7 @@ function CampaignRow({
           <button
             onClick={() => onSend(campaign)}
             disabled={isSending}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-full transition-colors disabled:opacity-50"
           >
             {isSending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
             Envoyer
@@ -823,7 +823,7 @@ function ReminderTab({
               <button
                 onClick={onSetupReminders}
                 disabled={isLoading}
-                className="mt-4 flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
+                className="mt-4 flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-full text-sm font-medium transition-colors disabled:opacity-60"
               >
                 {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarClock className="h-4 w-4" />}
                 Configurer les rappels J-7 et J-1
@@ -1179,7 +1179,7 @@ function NewCampaignModal({
           <button
             onClick={handleSubmit as any}
             disabled={createMutation.isPending}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-full text-sm font-medium transition-colors disabled:opacity-60"
           >
             {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             {form.sendNow ? 'Créer et envoyer' : form.scheduledAt ? 'Planifier' : 'Créer'}
@@ -1281,7 +1281,7 @@ function NewTemplateModal({ onClose, onCreated }: { onClose: () => void; onCreat
             <button
               type="submit"
               disabled={createMutation.isPending}
-              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg text-sm font-medium disabled:opacity-60"
+              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-full text-sm font-medium disabled:opacity-60"
             >
               {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Créer

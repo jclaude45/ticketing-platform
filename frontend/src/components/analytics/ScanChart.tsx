@@ -31,7 +31,7 @@ const CustomTooltip = ({ active, payload, label, dataLabel }: {
   return null;
 };
 
-export function ScanChart({ data, title, label, color = '#6366f1', isLoading }: ScanChartProps) {
+export function ScanChart({ data, title, label, color = '#181818', isLoading }: ScanChartProps) {
   if (isLoading) {
     return (
       <div className="animate-pulse">

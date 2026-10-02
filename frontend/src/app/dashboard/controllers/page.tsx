@@ -62,7 +62,7 @@ export default function ControllersPage() {
           </button>
           <button
             onClick={() => router.push('/dashboard/controllers/new')}
-            className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 transition-colors"
+            className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 transition-colors"
           >
             <Plus className="h-4 w-4" />
             Nouveau contrôleur

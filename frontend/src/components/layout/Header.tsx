@@ -18,9 +18,27 @@ import { AccountSwitcher } from './AccountSwitcher';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
 function getPageTitle(pathname: string): string {
+  // Ids in the path (/events/<uuid>) are not titles: use the section they belong to
+  const isId = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(s);
   const segments = pathname.split('/').filter(Boolean);
   const last = segments[segments.length - 1];
+  if (last && isId(last)) {
+    const parent = segments[segments.length - 2];
+    if (parent === 'events') return 'Événement';
+    if (parent === 'controllers') return 'Contrôleur';
+    if (parent === 'template') return 'Créateur de billets';
+    return 'Détails';
+  }
   if (!last || last === 'dashboard') return 'Tableau de bord';
+  if (last === 'team') return 'Équipe';
+  if (last === 'project') return 'Projet';
+  if (last === 'boutique') return 'Boutique';
+  if (last === 'communication') return 'Communication';
+  if (last === 'invitations') return 'Invitations';
+  if (last === 'admin') return 'Super admin';
+  if (last === 'administration') return 'Administration';
+  if (last === 'subscription') return 'Mon abonnement';
+  if (last === 'subscriptions') return 'Abonnements';
   if (last === 'events') return 'Événements';
   if (last === 'new') return 'Créer';
   if (last === 'edit') return 'Modifier';
@@ -101,7 +119,7 @@ export function Header() {
   const dropdownClosed = 'opacity-0 scale-95 pointer-events-none';
 
   return (
-    <header className="h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-4 lg:px-6 sticky top-0 z-30">
+    <header className="h-16 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between px-4 lg:px-6 sticky top-0 z-30">
       {/* Left: menu + title */}
       <div className="flex items-center gap-3">
         <button
@@ -110,13 +128,13 @@ export function Header() {
         >
           <Menu className="h-5 w-5" />
         </button>
-        <h1 className="text-lg font-semibold text-gray-900 dark:text-white">{pageTitle}</h1>
+        <h1 className="text-xl font-black uppercase tracking-tight text-black dark:text-white">{pageTitle}</h1>
       </div>
 
       {/* Right controls */}
       <div className="flex items-center gap-2">
         {/* Search */}
-        <div className="hidden md:flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-lg px-3 py-2 w-48 lg:w-64">
+        <div className="hidden md:flex items-center gap-2 bg-[#F7F7F7] dark:bg-gray-800 rounded-full px-4 py-2 w-48 lg:w-64">
           <Search className="h-4 w-4 text-gray-400 flex-shrink-0" />
           <input
             type="text"
@@ -143,7 +161,7 @@ export function Header() {
           >
             <Bell className="h-5 w-5" />
             {unreadCount > 0 && (
-              <span className="absolute top-1 right-1 w-4 h-4 bg-indigo-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+              <span className="absolute top-1 right-1 w-4 h-4 bg-[#FFDD00] text-black text-[10px] font-bold rounded-full flex items-center justify-center">
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}

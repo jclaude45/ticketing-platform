@@ -145,7 +145,7 @@ function ProductsTab({ eventId }: { eventId: string }) {
         </p>
         <button
           onClick={() => setEditing('new')}
-          className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+          className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
         >
           <Plus className="h-4 w-4" /> Ajouter un article
         </button>
@@ -376,7 +376,7 @@ function ProductModal({ eventId, product, onClose }: { eventId: string; product:
           <button
             onClick={() => save.mutate()}
             disabled={!canSave}
-            className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
           >
             {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
             Enregistrer
@@ -498,7 +498,7 @@ function OrdersTab({ eventId }: { eventId: string }) {
                         key={a.status}
                         onClick={() => update.mutate({ orderId: o.id, status: a.status })}
                         disabled={update.isPending}
-                        className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                        className="rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
                       >
                         {a.label}
                       </button>
@@ -595,7 +595,7 @@ function SettingsTab({ eventId }: { eventId: string }) {
         <button
           onClick={() => save.mutate()}
           disabled={!form || save.isPending}
-          className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
         >
           {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
           Enregistrer

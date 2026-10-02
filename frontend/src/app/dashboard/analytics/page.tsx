@@ -130,7 +130,7 @@ export default function AnalyticsPage() {
             })) ?? []}
             isLoading={isLoading}
             label="Événements"
-            color="#6366f1"
+            color="#181818"
           />
         </div>
 

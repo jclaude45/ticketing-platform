@@ -208,8 +208,8 @@ export default function DashboardPage() {
               <Bar dataKey="scans" fill="url(#scanGradient)" radius={[4, 4, 0, 0]} />
               <defs>
                 <linearGradient id="scanGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#6366f1" stopOpacity={1} />
-                  <stop offset="100%" stopColor="#a855f7" stopOpacity={0.8} />
+                  <stop offset="0%" stopColor="#181818" stopOpacity={1} />
+                  <stop offset="100%" stopColor="#707070" stopOpacity={0.8} />
                 </linearGradient>
               </defs>
             </BarChart>
@@ -240,9 +240,9 @@ export default function DashboardPage() {
               <Line
                 type="monotone"
                 dataKey="count"
-                stroke="#6366f1"
+                stroke="#181818"
                 strokeWidth={2}
-                dot={{ fill: '#6366f1', r: 4 }}
+                dot={{ fill: '#181818', r: 4 }}
                 activeDot={{ r: 6 }}
               />
             </LineChart>

@@ -227,11 +227,11 @@ const CATEGORIES: TaskCategory[] = [
 ];
 
 const CHART_PALETTE = [
-  '#6366f1',
+  '#181818',
   '#f59e0b',
   '#10b981',
   '#ef4444',
-  '#8b5cf6',
+  '#707070',
   '#06b6d4',
 ];
 
@@ -293,7 +293,7 @@ function InviteMemberPanel({ eventId, onSuccess }: { eventId: string; onSuccess:
             <option value="MANAGER">Responsable</option>
           </select>
           <button type="submit" disabled={loading}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-60 flex items-center gap-1.5">
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-full transition-colors disabled:opacity-60 flex items-center gap-1.5">
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             Inviter
           </button>
@@ -570,7 +570,7 @@ function TaskModal({ eventId, task, defaultStatus, onClose }: TaskModalProps) {
               <button
                 type="submit"
                 disabled={isPending}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-full transition-colors disabled:opacity-50"
               >
                 {isPending ? 'Enregistrement…' : 'Enregistrer'}
               </button>
@@ -936,7 +936,7 @@ function AddLineModal({ eventId, onClose }: AddLineModalProps) {
             <button
               type="submit"
               disabled={mutation.isPending}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-full transition-colors disabled:opacity-50"
             >
               {mutation.isPending ? 'Enregistrement…' : 'Enregistrer'}
             </button>
@@ -1101,7 +1101,7 @@ function AddExpenseModal({ eventId, lineId, lines, onClose }: AddExpenseModalPro
             <button
               type="submit"
               disabled={mutation.isPending || !selectedLineId}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-full transition-colors disabled:opacity-50"
             >
               {mutation.isPending ? 'Enregistrement…' : 'Enregistrer'}
             </button>
@@ -1217,7 +1217,7 @@ function BudgetTab({ eventId }: BudgetTabProps) {
           onClick={() => setExpenseModal({ lineId: null })}
           disabled={budget.lines.length === 0}
           title={budget.lines.length === 0 ? "Créez d'abord une ligne budgétaire" : undefined}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-full bg-indigo-600 hover:bg-indigo-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Receipt className="h-4 w-4" />
           Ajouter une dépense
@@ -1375,7 +1375,7 @@ function BudgetTab({ eventId }: BudgetTabProps) {
               </p>
               <button
                 onClick={() => setShowAddLine(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-full transition-colors"
               >
                 <Plus className="h-4 w-4" />
                 Ajouter une ligne

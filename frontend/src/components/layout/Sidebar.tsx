@@ -15,6 +15,7 @@ import { useLogout } from '@/hooks/useAuth';
 import { getInitials } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { resolveMediaUrl } from '@/lib/api';
+import { ZayaLogo } from '@/components/site/ZayaLogo';
 
 interface NavItem {
   label: string;
@@ -92,7 +93,7 @@ function NavLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
       )}
       title={collapsed ? item.label : undefined}
     >
-      <Icon className={cn('flex-shrink-0 h-5 w-5', isActive ? 'text-indigo-600 dark:text-indigo-400' : '')} />
+      <Icon className={cn('flex-shrink-0 h-5 w-5', isActive ? 'text-white dark:text-black' : '')} />
       {/* Label — always in DOM, animated width/opacity avoids AnimatePresence removeChild bug */}
       <motion.span
         animate={collapsed ? { opacity: 0, width: 0 } : { opacity: 1, width: 'auto' }}
@@ -103,7 +104,7 @@ function NavLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
       </motion.span>
       {/* Active indicator — always rendered, height animated to avoid layoutId removeChild bug */}
       <motion.div
-        className="absolute right-0 top-1/2 -translate-y-1/2 w-1 bg-indigo-600 rounded-l-full"
+        className="absolute right-2 top-1/2 -translate-y-1/2 w-1.5 bg-[#FFDD00] rounded-full"
         animate={{ height: isActive ? 24 : 0, opacity: isActive ? 1 : 0 }}
         transition={{ duration: 0.15, ease: 'easeInOut' }}
       />
@@ -126,19 +127,13 @@ export function Sidebar() {
     <motion.aside
       animate={{ width: sidebarCollapsed ? 72 : 256 }}
       transition={{ duration: 0.2, ease: 'easeInOut' }}
-      className="relative flex flex-col h-screen bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 shadow-sm flex-shrink-0"
+      className="relative flex flex-col h-screen bg-white dark:bg-gray-900 border-r border-gray-100 dark:border-gray-800 flex-shrink-0"
     >
       {/* Logo */}
-      <div className={cn('flex items-center gap-3 px-4 py-5 border-b border-gray-200 dark:border-gray-800', sidebarCollapsed && 'justify-center px-2')}>
-        <img src="/zaya-logo.svg" alt="ZAYA" className="flex-shrink-0 w-8 h-8 rounded-lg shadow" />
-        {/* Always in DOM — opacity+width transition avoids AnimatePresence removeChild bug */}
-        <motion.span
-          animate={sidebarCollapsed ? { opacity: 0, width: 0 } : { opacity: 1, width: 'auto' }}
-          transition={{ duration: 0.2 }}
-          className="overflow-hidden whitespace-nowrap font-extrabold text-gray-900 dark:text-white text-base tracking-tight"
-        >
-          ZAYA
-        </motion.span>
+      <div className={cn('flex h-16 items-center gap-3 px-5', sidebarCollapsed && 'justify-center px-2')}>
+        <Link href="/dashboard" aria-label="ZAYA — tableau de bord" className="text-black dark:text-white">
+          <ZayaLogo markOnly={sidebarCollapsed} className="text-[26px] !text-current" />
+        </Link>
       </div>
 
       {/* Toggle button — desktop only */}
@@ -157,7 +152,7 @@ export function Sidebar() {
             <motion.p
               animate={sidebarCollapsed ? { opacity: 0, height: 0, marginBottom: 0 } : { opacity: 1, height: 'auto', marginBottom: 6 }}
               transition={{ duration: 0.2 }}
-              className="px-3 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider overflow-hidden"
+              className="px-3 text-[11px] font-medium text-[#9a9a9a] uppercase tracking-[0.12em] overflow-hidden"
             >
               {section.title}
             </motion.p>

@@ -35,7 +35,7 @@ export default function TicketTemplateEditorPage() {
         price: Number(template.price ?? 0),
         currency: template.currency ?? 'USD',
         quantity: template.availableCount ?? template.quantity ?? 100,
-        color: template.color ?? '#4f46e5',
+        color: template.color ?? '#181818',
       }
     : undefined;
 

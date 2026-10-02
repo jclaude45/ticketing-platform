@@ -278,7 +278,7 @@ export default function SettingsPage() {
                   <button
                     type="submit"
                     disabled={updateProfile.isPending}
-                    className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60 transition-colors"
+                    className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60 transition-colors"
                   >
                     {updateProfile.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                     Sauvegarder
@@ -322,7 +322,7 @@ export default function SettingsPage() {
                   <button
                     type="submit"
                     disabled={changePassword.isPending}
-                    className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60 transition-colors"
+                    className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60 transition-colors"
                   >
                     {changePassword.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                     Modifier le mot de passe
@@ -478,7 +478,7 @@ export default function SettingsPage() {
                 <button
                   onClick={() => saveNotifs.mutate()}
                   disabled={saveNotifs.isPending}
-                  className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60 transition-colors"
+                  className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60 transition-colors"
                 >
                   {saveNotifs.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                   Sauvegarder les préférences

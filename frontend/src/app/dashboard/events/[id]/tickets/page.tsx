@@ -522,7 +522,7 @@ export default function TicketsPage() {
                         <div className="flex items-center gap-2">
                           <span
                             className="h-2.5 w-2.5 flex-shrink-0 rounded-full"
-                            style={{ backgroundColor: ticket.template?.color ?? '#6366f1' }}
+                            style={{ backgroundColor: ticket.template?.color ?? '#181818' }}
                           />
                           <span className="text-sm text-gray-700 truncate max-w-[120px]">
                             {ticket.template?.name ?? '—'}

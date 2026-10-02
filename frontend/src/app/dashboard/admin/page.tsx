@@ -499,7 +499,7 @@ export default function AdminPage() {
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} />
                       <Tooltip formatter={(v: number) => [N(v), 'Billets']} />
-                      <Bar dataKey="count" fill="#6366f1" radius={[4,4,0,0]} />
+                      <Bar dataKey="count" fill="#181818" radius={[4,4,0,0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 )}

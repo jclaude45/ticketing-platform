@@ -9,7 +9,7 @@ interface OccupancyChartProps {
   isLoading?: boolean;
 }
 
-const COLORS = ['#6366f1', '#a855f7', '#e5e7eb'];
+const COLORS = ['#181818', '#FFDD00', '#e5e7eb'];
 
 export function OccupancyChart({ scanned, total, capacity, isLoading }: OccupancyChartProps) {
   if (isLoading) {

@@ -93,7 +93,7 @@ export function TwoFactorSetup() {
             type="button"
             onClick={() => setStep('verify')}
             disabled={!qrCode}
-            className="w-full py-3 px-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold rounded-lg hover:from-indigo-600 hover:to-purple-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full py-3 px-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold rounded-full hover:from-indigo-600 hover:to-purple-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
           >
             J&apos;ai scanné le code
           </button>
@@ -138,7 +138,7 @@ export function TwoFactorSetup() {
             <button
               type="submit"
               disabled={verify2FA.isPending}
-              className="flex-1 py-2.5 px-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold rounded-lg hover:from-indigo-600 hover:to-purple-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="flex-1 py-2.5 px-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold rounded-full hover:from-indigo-600 hover:to-purple-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {verify2FA.isPending ? <><Loader2 className="h-4 w-4 animate-spin" />Vérification...</> : 'Vérifier'}
             </button>
@@ -177,7 +177,7 @@ export function TwoFactorSetup() {
 
           <a
             href="/dashboard"
-            className="block w-full py-3 px-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold rounded-lg hover:from-indigo-600 hover:to-purple-700 transition-all text-center"
+            className="block w-full py-3 px-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold rounded-full hover:from-indigo-600 hover:to-purple-700 transition-all text-center"
           >
             Aller au tableau de bord
           </a>

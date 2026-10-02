@@ -129,7 +129,7 @@ export default function EventAnalyticsPage() {
             data={analytics?.scansByHour ?? []}
             isLoading={isLoading}
             label="Scans"
-            color="#6366f1"
+            color="#181818"
           />
         </div>
 
