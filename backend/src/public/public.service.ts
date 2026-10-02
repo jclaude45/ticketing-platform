@@ -3,8 +3,9 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { TicketGenerationService } from '../tickets/ticket-generation.service';
-import { Role } from '@prisma/client';
+import { Role, EventType } from '@prisma/client';
 import { PurchaseTicketDto } from './dto/purchase-ticket.dto';
+import { ContactDto } from './dto/contact.dto';
 import * as nodemailer from 'nodemailer';
 import { ConfigService } from '@nestjs/config';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -45,7 +46,7 @@ export class PublicService {
 
   // ─── List published events ──────────────────────────────────────────────────
 
-  async listEvents(page = 1, limit = 12, search?: string, city?: string) {
+  async listEvents(page = 1, limit = 12, search?: string, city?: string, type?: string) {
     const skip = (page - 1) * limit;
     const where: any = { status: 'PUBLISHED', AND: [] };
 
@@ -61,6 +62,9 @@ export class PublicService {
     if (city) {
       where.AND.push({ city: { contains: city, mode: 'insensitive' } });
     }
+    if (type && (Object.values(EventType) as string[]).includes(type)) {
+      where.AND.push({ type });
+    }
     if (where.AND.length === 0) delete where.AND;
 
     const [events, total] = await Promise.all([
@@ -71,7 +75,7 @@ export class PublicService {
         orderBy: { startDate: 'asc' },
         select: {
           id: true, name: true, description: true,
-          venue: true, city: true, country: true,
+          venue: true, city: true, country: true, type: true,
           startDate: true, endDate: true,
           bannerUrl: true, totalCapacity: true,
           organizer: { select: { firstName: true, lastName: true } },
@@ -98,10 +102,10 @@ export class PublicService {
       where: { id },
       select: {
         id: true, name: true, description: true,
-        venue: true, address: true, city: true, country: true,
+        venue: true, address: true, city: true, country: true, type: true,
         startDate: true, endDate: true,
         bannerUrl: true, totalCapacity: true, status: true,
-        organizer: { select: { firstName: true, lastName: true } },
+        organizer: { select: { firstName: true, lastName: true, avatar: true } },
         ticketTemplates: {
           select: {
             id: true, name: true, description: true,
@@ -240,6 +244,81 @@ export class PublicService {
     return rows.map(r => r.city);
   }
 
+  // ─── Subscription plans (landing page pricing) ──────────────────────────────
+
+  async getPlans() {
+    const plans = await this.prisma.subscriptionPlan.findMany({
+      where: { isActive: true },
+      orderBy: { price: 'asc' },
+      select: {
+        id: true, name: true, description: true, price: true,
+        maxTickets: true, maxBadges: true, maxEvents: true,
+        showPoweredBy: true, allowBulkExport: true, allowCommunication: true,
+      },
+    });
+    return plans;
+  }
+
+  // ─── Contact form ("Parle-nous") ────────────────────────────────────────────
+
+  /** Messages per visitor address over the last 10 minutes */
+  private readonly contactHits = new Map<string, number[]>();
+
+  async sendContact(dto: ContactDto, ip?: string) {
+    // Bots fill the hidden field: pretend it worked
+    if (dto.website) return { sent: true };
+
+    const now = Date.now();
+    const key = ip || 'unknown';
+    const recent = (this.contactHits.get(key) ?? []).filter(t => now - t < 10 * 60_000);
+    if (recent.length >= 3) {
+      throw new BadRequestException('Trop de messages envoyés. Réessayez dans quelques minutes.');
+    }
+    this.contactHits.set(key, [...recent, now]);
+    if (this.contactHits.size > 5000) this.contactHits.clear();
+
+    // CONTACT_EMAIL when set, else every super admin
+    const configured = this.config.get<string>('CONTACT_EMAIL');
+    const recipients = configured
+      ? configured.split(',').map(e => e.trim()).filter(Boolean)
+      : (await this.prisma.user.findMany({
+          where: { role: Role.SUPER_ADMIN, isActive: true },
+          select: { email: true },
+        })).map(u => u.email);
+
+    if (!this.mailer || recipients.length === 0) {
+      this.logger.warn(`Contact message from ${dto.email} not delivered: no mailer or recipient`);
+      throw new BadRequestException("L'envoi est momentanément indisponible. Écrivez-nous par email.");
+    }
+
+    const esc = (v: string) =>
+      v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const rows: [string, string | undefined][] = [
+      ['Nom', `${dto.firstName} ${dto.lastName}`],
+      ['Email', dto.email],
+      ['Entreprise', dto.company],
+      ['Pays', dto.country],
+      ['Profil', dto.profile],
+      ['Mises à jour ZAYA', dto.newsletter ? 'Oui' : 'Non'],
+    ];
+
+    await this.mailer.sendMail({
+      from: this.config.get<string>('email.from') || this.config.get<string>('email.user'),
+      to: recipients,
+      replyTo: dto.email,
+      subject: `Contact zaya.live — ${dto.firstName} ${dto.lastName}${dto.profile ? ` (${dto.profile})` : ''}`,
+      html: `<div style="font-family:Arial,sans-serif;font-size:14px;color:#111">
+  <h2 style="margin:0 0 16px">Nouveau message depuis le formulaire « Parle-nous »</h2>
+  <table cellpadding="6" style="border-collapse:collapse">
+    ${rows.filter(([, v]) => v).map(([k, v]) => `<tr><td style="color:#666">${k}</td><td><strong>${esc(v!)}</strong></td></tr>`).join('')}
+  </table>
+  <p style="margin:16px 0 4px;color:#666">Message :</p>
+  <p style="white-space:pre-wrap;margin:0">${esc(dto.message)}</p>
+</div>`,
+    });
+    return { sent: true };
+  }
+
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
   private formatEvent(e: any) {
@@ -256,6 +335,7 @@ export class PublicService {
     return {
       ...e,
       bannerUrl: resolveBanner(e.bannerUrl),
+      ...(e.organizer && { organizer: { ...e.organizer, avatar: resolveBanner(e.organizer.avatar ?? null) } }),
       ticketTemplates: templates,
       minPrice,
       soldOut: templates.every((t: any) => t.availableCount === 0),

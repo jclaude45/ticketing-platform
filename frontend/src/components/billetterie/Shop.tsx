@@ -83,7 +83,7 @@ export function ProductCard({
 
   const chip = (active: boolean, disabled: boolean) => cn(
     'rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors',
-    active ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-gray-200 text-gray-700 hover:border-gray-300 dark:border-gray-700 dark:text-gray-300',
+    active ? 'border-black bg-black text-white' : 'border-gray-200 text-gray-700 hover:border-gray-300 dark:border-gray-700 dark:text-gray-300',
     disabled && !active && 'opacity-40 line-through',
   );
   const optionAvailable = (s: string | null, c: string | null) =>
@@ -99,7 +99,7 @@ export function ProductCard({
       <div className={cn('flex min-w-0 flex-1 flex-col gap-2', !compact && 'p-4')}>
         <div className="flex items-start justify-between gap-2">
           <p className="text-sm font-semibold text-gray-900 dark:text-white">{product.name}</p>
-          <p className="whitespace-nowrap text-sm font-bold text-indigo-600 dark:text-indigo-400">{money(product.price, product.currency)}</p>
+          <p className="whitespace-nowrap text-sm font-bold text-black dark:text-white">{money(product.price, product.currency)}</p>
         </div>
         {!compact && product.description && <p className="text-xs text-gray-500">{product.description}</p>}
 
@@ -134,7 +134,7 @@ export function ProductCard({
               <button
                 type="button"
                 onClick={() => onCartChange(setCartQty(cart, variant, 1))}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700"
+                className="inline-flex items-center gap-1.5 rounded-full bg-black px-3.5 py-1.5 text-xs font-semibold text-white hover:opacity-85"
               >
                 <Plus className="h-3.5 w-3.5" /> Ajouter
               </button>
@@ -153,7 +153,7 @@ export function CartSummary({ lines, cart, onCartChange }: { lines: CartLine[]; 
     <ul className="space-y-2">
       {lines.map(({ product, variant, quantity }) => (
         <li key={variant.id} className="flex items-center gap-3 rounded-xl border border-gray-200 p-3 dark:border-gray-700">
-          <ShoppingBag className="h-4 w-4 flex-shrink-0 text-indigo-500" />
+          <ShoppingBag className="h-4 w-4 flex-shrink-0 text-black" />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">{product.name}</p>
             <p className="text-xs text-gray-500">

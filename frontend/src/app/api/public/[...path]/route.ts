@@ -7,6 +7,8 @@ const BACKEND = (process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL
 const ALLOWED: RegExp[] = [
   /^\/public\/events$/,
   /^\/public\/events\/cities$/,
+  /^\/public\/plans$/,
+  /^\/public\/contact$/,
   /^\/public\/events\/[\w-]+$/,
   /^\/public\/events\/[\w-]+\/register$/,
   /^\/public\/events\/[\w-]+\/view$/,

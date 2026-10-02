@@ -1,148 +1,121 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
+import Image from 'next/image';
+import { Search, X, Loader2, Ticket } from 'lucide-react';
 import { publicApi, resolveMediaUrl } from '@/lib/api';
-import {
-  Search, MapPin, Calendar, ChevronLeft, ChevronRight,
-  Ticket, X, ArrowRight, Users,
-} from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { capitalize, formatEventDay, fromPriceLabel } from '@/components/site/format';
 
-interface TicketTemplate {
-  id: string; name: string; price: number; currency: string; availableCount: number;
-}
 interface PublicEvent {
   id: string; name: string; description?: string;
-  venue: string; city: string; country: string;
+  venue: string; city: string; country: string; type?: string;
   startDate: string; endDate: string; bannerUrl?: string;
   totalCapacity: number; minPrice: number | null; soldOut: boolean;
-  ticketTemplates: TicketTemplate[];
+  ticketTemplates: { id: string; name: string; price: number; currency: string; availableCount: number }[];
   organizer: { firstName: string; lastName: string };
   _count: { tickets: number };
 }
+type Page = { data: PublicEvent[]; meta: { total: number; page: number; totalPages: number } };
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-}
-function formatDateShort(iso: string) {
-  return new Date(iso).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
-}
+const unwrap = (r: any) => (r.data?.data ?? r.data) as any;
 
-function priceLabel(event: PublicEvent): { label: string; className: string } {
-  if (event.soldOut) return { label: 'Complet', className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' };
-  if (event.minPrice === null) return { label: 'Consulter', className: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400' };
-  if (event.minPrice === 0) return { label: 'Gratuit', className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' };
-  const cur = event.ticketTemplates[0]?.currency ?? 'USD';
-  return { label: `Dès ${Number(event.minPrice).toFixed(2)} ${cur}`, className: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300' };
-}
+/** The four categories of the mockup, mapped to the event types of the API */
+const CATEGORIES = [
+  { type: 'PARTY', label: 'Night Club', title: 'Night Club', bg: 'bg-[#B8062C]', image: '/zaya-site/nightclub.webp' },
+  { type: 'FESTIVAL', label: 'Festival', title: 'Festivals', bg: 'bg-[#D77D2C]', image: '/zaya-site/festival.webp' },
+  { type: 'SPORT', label: 'Sport', title: 'Sport', bg: 'bg-gradient-to-b from-[#119C65] to-[#58C93F]' },
+  { type: 'CONFERENCE', label: 'Conférence', title: 'Conférences', bg: 'bg-gradient-to-b from-[#601399] to-[#9A65BB]' },
+];
 
-// ─── Event Card ───────────────────────────────────────────────────────────────
+// ─── Hero carousel: upcoming events with a picture ───────────────────────────
 
-function EventCard({ event }: { event: PublicEvent }) {
-  const badge = priceLabel(event);
-  const available = event.ticketTemplates.reduce((s, t) => s + t.availableCount, 0);
-  const pct = event.totalCapacity > 0 ? Math.min(100, ((event.totalCapacity - available) / event.totalCapacity) * 100) : 0;
-  const hot = pct >= 70 && !event.soldOut;
+function HeroCarousel({ events }: { events: PublicEvent[] }) {
+  const [index, setIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+
+  useEffect(() => {
+    if (events.length < 2 || paused) return;
+    const t = setInterval(() => setIndex(i => (i + 1) % events.length), 6000);
+    return () => clearInterval(t);
+  }, [events.length, paused]);
+
+  if (events.length === 0) return null;
+  const current = events[Math.min(index, events.length - 1)];
 
   return (
-    <Link
-      href={`/billetterie/${event.id}`}
-      className="group flex flex-col bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+    <section
+      className="relative h-[760px] overflow-hidden bg-white sm:h-[640px] lg:h-[694px]"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      aria-roledescription="carrousel"
     >
-      {/* Banner */}
-      <div className="relative h-48 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 overflow-hidden flex-shrink-0">
-        {event.bannerUrl ? (
-          <img
-            src={resolveMediaUrl(event.bannerUrl)}
-            alt={event.name}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-          />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <Ticket className="h-16 w-16 text-white/20" />
+      {events.map((e, i) => (
+        <div
+          key={e.id}
+          className={cn('absolute inset-0 transition-opacity duration-700', i === index ? 'opacity-100' : 'pointer-events-none opacity-0')}
+          aria-hidden={i !== index}
+        >
+          <div className="absolute inset-x-0 top-0 h-[560px] sm:inset-y-0 sm:left-auto sm:right-0 sm:h-auto sm:w-[70%] lg:w-[62%]">
+            <Image src={resolveMediaUrl(e.bannerUrl)!} alt="" fill sizes="(min-width: 640px) 70vw, 100vw" priority={i === 0} className="object-cover object-center" />
           </div>
-        )}
-        {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-
-        {/* Badges */}
-        <div className="absolute top-3 left-3 right-3 flex items-start justify-between">
-          <span className={cn('text-xs font-bold px-2.5 py-1 rounded-full backdrop-blur-sm', badge.className)}>
-            {badge.label}
-          </span>
-          {hot && (
-            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-orange-500 text-white animate-pulse">
-              🔥 Bientôt complet
-            </span>
-          )}
         </div>
+      ))}
+      {/* White fades: left side for the text, bottom towards the page */}
+      <div className="absolute inset-y-0 left-0 hidden w-[62%] bg-gradient-to-r from-white from-40% via-white/60 to-transparent sm:block" />
+      <div className="absolute inset-x-0 bottom-0 h-[55%] bg-gradient-to-b from-transparent via-white/85 to-white sm:h-[40%]" />
 
-        {/* Date on banner */}
-        <div className="absolute bottom-3 left-3">
-          <span className="text-xs font-semibold text-white/90 bg-black/30 backdrop-blur-sm rounded-lg px-2.5 py-1">
-            {formatDateShort(event.startDate)}
-          </span>
+      <div className="relative mx-auto flex h-full max-w-[1366px] flex-col justify-end px-6 pb-10 text-center sm:px-[110px] sm:pb-[60px] sm:text-left">
+        <h1 className="line-clamp-2 break-words text-[56px] font-black uppercase leading-[0.95] tracking-tight sm:max-w-[700px] sm:text-[72px] lg:text-[80px]">
+          {current.name}
+        </h1>
+        <div className="mt-6 space-y-1 text-xl font-light text-[#111] sm:mt-4 sm:space-y-1.5 sm:text-[31px] sm:leading-tight">
+          <p>{capitalize(formatEventDay(current.startDate))}</p>
+          <p>{current.city}, {current.venue}</p>
+          <p>{fromPriceLabel(current)}</p>
         </div>
-      </div>
-
-      {/* Content */}
-      <div className="flex flex-col flex-1 p-4 gap-2.5">
-        <h3 className="font-bold text-gray-900 dark:text-white text-[15px] leading-tight line-clamp-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-          {event.name}
-        </h3>
-
-        <div className="flex items-center gap-1.5 text-xs text-gray-500">
-          <MapPin className="h-3.5 w-3.5 flex-shrink-0 text-rose-400" />
-          <span className="truncate">{event.venue}, <span className="font-medium">{event.city}</span></span>
-        </div>
-
-        {event.description && (
-          <p className="text-xs text-gray-400 line-clamp-2 leading-relaxed">{event.description}</p>
-        )}
-
-        {/* Ticket categories */}
-        {event.ticketTemplates.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-0.5">
-            {event.ticketTemplates.slice(0, 3).map(t => (
-              <span key={t.id} className={cn(
-                'text-[11px] font-medium px-2 py-0.5 rounded-full border',
-                t.availableCount === 0
-                  ? 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 line-through'
-                  : 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-100 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400',
-              )}>
-                {t.name}
-              </span>
-            ))}
-            {event.ticketTemplates.length > 3 && (
-              <span className="text-[11px] text-gray-400 px-1 py-0.5">+{event.ticketTemplates.length - 3}</span>
-            )}
-          </div>
-        )}
-
-        {/* Footer */}
-        <div className="mt-auto pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between gap-2">
-          {!event.soldOut && event.totalCapacity > 0 && (
-            <div className="flex-1 min-w-0">
-              <div className="h-1 w-full bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                <div
-                  className={cn('h-1 rounded-full transition-all', pct >= 80 ? 'bg-orange-400' : 'bg-indigo-400')}
-                  style={{ width: `${pct}%` }}
+        <div className="mt-6 flex flex-col items-center gap-8 sm:mt-6 sm:flex-row sm:justify-between">
+          <Link href={`/billetterie/${current.id}`} className="rounded-full bg-black px-9 py-3 text-lg font-bold uppercase text-white transition-opacity hover:opacity-85">
+            Acheter
+          </Link>
+          {events.length > 1 && (
+            <div className="flex items-center gap-1.5 sm:self-end sm:pb-2">
+              {events.map((e, i) => (
+                <button
+                  key={e.id}
+                  onClick={() => setIndex(i)}
+                  aria-label={`Afficher ${e.name}`}
+                  className={cn('h-[10px] rounded-full bg-[#707070] transition-all', i === index ? 'w-8' : 'w-[10px]')}
                 />
-              </div>
-              <p className="text-[10px] text-gray-400 mt-1">{available} place{available > 1 ? 's' : ''} restante{available > 1 ? 's' : ''}</p>
+              ))}
             </div>
           )}
-          <span className={cn(
-            'flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-xl flex-shrink-0 transition-colors',
-            event.soldOut
-              ? 'bg-gray-100 dark:bg-gray-800 text-gray-400'
-              : 'bg-indigo-600 text-white group-hover:bg-indigo-700',
-          )}>
-            {event.soldOut ? 'Complet' : <>Voir <ArrowRight className="h-3 w-3" /></>}
-          </span>
         </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── Event card ───────────────────────────────────────────────────────────────
+
+function EventCard({ event }: { event: PublicEvent }) {
+  return (
+    <Link href={`/billetterie/${event.id}`} className="group block">
+      <div className="relative aspect-square overflow-hidden rounded-[20px] bg-[#eee]">
+        {event.bannerUrl ? (
+          <Image src={resolveMediaUrl(event.bannerUrl)!} alt={event.name} fill sizes="(min-width: 1024px) 230px, 45vw"
+            className="object-cover transition-transform duration-500 group-hover:scale-105" />
+        ) : (
+          <div className="flex h-full items-center justify-center"><Ticket className="h-14 w-14 text-[#bbb]" strokeWidth={1.4} /></div>
+        )}
+      </div>
+      <h3 className="mt-3 truncate text-lg font-normal tracking-normal text-black sm:text-xl">{event.name}</h3>
+      <div className="mt-1 space-y-1.5 text-[15px] font-light tracking-wide text-[#8a8a8a] sm:text-lg">
+        <p>{formatEventDay(event.startDate)}</p>
+        <p className="truncate">{event.venue}</p>
+        <p>{fromPriceLabel(event)}</p>
       </div>
     </Link>
   );
@@ -151,242 +124,166 @@ function EventCard({ event }: { event: PublicEvent }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function BilletteriePage() {
+  const [type, setType] = useState('');
+  const [city, setCity] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
-  const [city, setCity]     = useState('');
-  const [page, setPage]     = useState(1);
 
-  const handleSearch = useCallback((v: string) => { setSearch(v); setPage(1); }, []);
+  // Typing settles for 300 ms before a new search
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
-  const { data, isLoading, isFetching, isError } = useQuery({
-    queryKey: ['public-events', page, search, city],
-    queryFn: async () => {
-      const r = await publicApi.listEvents({ page, limit: 12, search: search || undefined, city: city || undefined });
-      const payload = (r.data as any);
-      // Handle both direct { data, meta } and wrapped { success, data: { data, meta } }
-      const inner = payload?.data ?? payload;
-      return inner as { data: PublicEvent[]; meta: any };
-    },
-    staleTime: 30_000,
-    placeholderData: prev => prev,
-    retry: 1,
-  });
-
-  const { data: citiesData } = useQuery({
-    queryKey: ['public-cities'],
-    queryFn: () => publicApi.getCities().then(r => ((r.data as any).data ?? r.data) as string[]),
+  const { data: heroEvents = [] } = useQuery({
+    queryKey: ['public-events-hero'],
+    queryFn: () => publicApi.listEvents({ page: 1, limit: 20 }).then(r => unwrap(r) as Page),
+    select: (p: Page) => p.data
+      .filter(e => e.bannerUrl && new Date(e.endDate).getTime() > Date.now())
+      .slice(0, 4),
     staleTime: 60_000,
   });
 
-  const events = data?.data ?? [];
-  const meta   = data?.meta;
-  const cities = citiesData ?? [];
+  const { data: cities = [] } = useQuery({
+    queryKey: ['public-cities'],
+    queryFn: () => publicApi.getCities().then(r => unwrap(r) as string[]),
+    staleTime: 60_000,
+  });
+
+  const list = useInfiniteQuery({
+    queryKey: ['public-events', search, city, type],
+    queryFn: ({ pageParam }) =>
+      publicApi.listEvents({ page: pageParam, limit: 12, search: search || undefined, city: city || undefined, type: type || undefined })
+        .then(r => unwrap(r) as Page),
+    initialPageParam: 1,
+    getNextPageParam: last => (last.meta && last.meta.page < last.meta.totalPages ? last.meta.page + 1 : undefined),
+    staleTime: 30_000,
+    placeholderData: prev => prev,
+  });
+
+  const events = useMemo(() => list.data?.pages.flatMap(p => p.data) ?? [], [list.data]);
+  const filtered = !!(type || city || search);
+  const category = CATEGORIES.find(c => c.type === type);
+  const onlyCity = city || (events.length > 0 && events.every(e => e.city === events[0].city) ? events[0].city : '');
+  const title = `${search ? 'Résultats' : category ? category.title : 'Événements populaires'}${onlyCity ? ` à ${onlyCity}` : ''}`;
 
   return (
     <>
-      {/* ── Hero ────────────────────────────────────────────────────────── */}
-      <section className="relative bg-gradient-to-br from-indigo-950 via-purple-900 to-slate-900 overflow-hidden">
-        {/* Background texture */}
-        <div className="absolute inset-0 opacity-10" style={{
-          backgroundImage: 'radial-gradient(circle at 25% 25%, #818cf8 0%, transparent 50%), radial-gradient(circle at 75% 75%, #a78bfa 0%, transparent 50%)',
-        }} />
+      <HeroCarousel events={heroEvents} />
 
-        <div className="relative max-w-4xl mx-auto px-4 sm:px-6 py-16 sm:py-24 text-center space-y-6">
-          <h1 className="text-3xl sm:text-5xl font-extrabold text-white leading-tight tracking-tight">
-            Trouvez votre<br />
-            <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-300 to-purple-300">
-              prochain événement
-            </span>
-          </h1>
-
-          <p className="text-base sm:text-lg text-indigo-200/80 max-w-xl mx-auto">
-            Concerts, conférences, festivals, soirées — achetez vos billets en quelques clics.
-          </p>
-
-          {/* Search bar */}
-          <div className="flex flex-col sm:flex-row gap-3 max-w-2xl mx-auto mt-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
-              <input
-                type="text"
-                placeholder="Rechercher un événement, une ville…"
-                defaultValue={search}
-                onChange={e => handleSearch(e.target.value)}
-                className="w-full rounded-xl bg-white dark:bg-gray-900 border border-white/10 pl-11 pr-4 py-3.5 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 shadow-lg"
-              />
-              {search && (
-                <button onClick={() => handleSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                  <X className="h-4 w-4" />
-                </button>
+      {/* ── Categories ── */}
+      <section className="mx-auto max-w-[1366px] pt-10 lg:px-[134px] lg:pt-11">
+        <div className="flex snap-x gap-4 overflow-x-auto px-6 pb-2 lg:grid lg:grid-cols-4 lg:gap-6 lg:overflow-visible lg:px-0 [&::-webkit-scrollbar]:hidden">
+          {CATEGORIES.map(c => (
+            <button
+              key={c.type}
+              onClick={() => setType(t => (t === c.type ? '' : c.type))}
+              aria-pressed={type === c.type}
+              className={cn(
+                'relative h-[80px] w-[185px] flex-shrink-0 snap-start overflow-hidden rounded-[22px] text-left transition-transform hover:-translate-y-0.5 lg:h-[107px] lg:w-auto lg:rounded-[30px]',
+                c.bg,
+                type === c.type && 'ring-4 ring-black ring-offset-2',
               )}
-            </div>
-          </div>
-
-          {/* Stats */}
-          {meta && meta.total > 0 && (
-            <p className="text-sm text-indigo-300/70">
-              <strong className="text-white">{meta.total}</strong> événement{meta.total > 1 ? 's' : ''} disponible{meta.total > 1 ? 's' : ''}
-            </p>
-          )}
+            >
+              {c.image && <Image src={c.image} alt="" fill sizes="250px" className="object-cover opacity-30 mix-blend-luminosity" />}
+              <span className="absolute bottom-3 left-4 text-sm font-bold text-white lg:bottom-4 lg:left-5 lg:text-lg">{c.label}</span>
+            </button>
+          ))}
         </div>
       </section>
 
-      {/* ── Filters ─────────────────────────────────────────────────────── */}
-      {cities.length > 0 && (
-        <section className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 sticky top-16 z-30">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3 overflow-x-auto scrollbar-hide">
-            <span className="text-xs font-semibold text-gray-400 whitespace-nowrap flex-shrink-0">
-              <MapPin className="h-3.5 w-3.5 inline mr-1" />Ville :
-            </span>
-            <button
-              onClick={() => { setCity(''); setPage(1); }}
-              className={cn(
-                'flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors',
-                !city ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-indigo-50',
+      {/* ── Events ── */}
+      <section id="evenements" className="mx-auto max-w-[1366px] scroll-mt-24 px-6 pb-20 pt-12 lg:px-[147px] lg:pt-[88px]">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <h2 className="max-w-[560px] text-[36px] font-light tracking-normal uppercase leading-[0.95] lg:text-[40px]">{title}</h2>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+            <label className="relative block">
+              <Search className="absolute bottom-2.5 left-0 h-4 w-4 text-[#8a8a8a]" />
+              <input
+                value={searchInput}
+                onChange={e => setSearchInput(e.target.value)}
+                placeholder="Rechercher un événement"
+                className="w-full border-0 border-b border-[#9a9a9a] bg-transparent py-2 pl-6 pr-6 text-[15px] placeholder:text-[#8a8a8a] focus:border-black focus:outline-none focus:ring-0 sm:w-[240px]"
+              />
+              {searchInput && (
+                <button onClick={() => setSearchInput('')} className="absolute bottom-2.5 right-0 text-[#8a8a8a] hover:text-black" aria-label="Effacer">
+                  <X className="h-4 w-4" />
+                </button>
               )}
-            >
-              Toutes
-            </button>
-            {cities.map(c => (
-              <button
-                key={c}
-                onClick={() => { setCity(c === city ? '' : c); setPage(1); }}
-                className={cn(
-                  'flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors whitespace-nowrap',
-                  city === c ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-indigo-50',
-                )}
+            </label>
+            {cities.length > 1 && (
+              <select
+                value={city}
+                onChange={e => setCity(e.target.value)}
+                className="border-0 border-b border-[#9a9a9a] bg-transparent py-2 pl-0.5 pr-8 text-[15px] focus:border-black focus:outline-none focus:ring-0"
               >
-                {c}
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* ── Events grid ─────────────────────────────────────────────────── */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
-
-        {/* Active filters */}
-        {(search || city) && (
-          <div className="flex items-center gap-2 mb-6 flex-wrap">
-            <span className="text-sm text-gray-500">Filtres actifs :</span>
-            {search && (
-              <button
-                onClick={() => handleSearch('')}
-                className="flex items-center gap-1.5 text-xs font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-3 py-1.5 rounded-full hover:bg-indigo-200 transition-colors"
-              >
-                « {search} » <X className="h-3 w-3" />
-              </button>
-            )}
-            {city && (
-              <button
-                onClick={() => { setCity(''); setPage(1); }}
-                className="flex items-center gap-1.5 text-xs font-medium bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 px-3 py-1.5 rounded-full hover:bg-rose-200 transition-colors"
-              >
-                <MapPin className="h-3 w-3" />{city} <X className="h-3 w-3" />
-              </button>
+                <option value="">Toutes les villes</option>
+                {cities.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
             )}
           </div>
-        )}
+        </div>
 
-        {/* Loading */}
-        {isError ? (
-          <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center">
-              <span className="text-3xl">⚠️</span>
-            </div>
-            <div>
-              <p className="font-bold text-gray-700 dark:text-gray-300">Impossible de charger les événements</p>
-              <p className="text-sm text-gray-400 mt-1">Vérifiez votre connexion et réessayez.</p>
-            </div>
+        {list.isError && events.length === 0 ? (
+          <div className="py-24 text-center">
+            <p className="text-xl">Impossible de charger les événements.</p>
+            <button onClick={() => list.refetch()} className="mt-4 rounded-full bg-black px-6 py-2.5 text-sm uppercase text-white">Réessayer</button>
           </div>
-        ) : isLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+        ) : list.isLoading ? (
+          <div className="mt-8 grid grid-cols-2 gap-x-5 gap-y-10 lg:grid-cols-4 lg:gap-x-[51px] lg:gap-y-[60px]">
             {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="rounded-2xl bg-gray-200 dark:bg-gray-800 animate-pulse h-80" />
+              <div key={i}>
+                <div className="aspect-square animate-pulse rounded-[20px] bg-[#eee]" />
+                <div className="mt-3 h-5 w-3/4 animate-pulse rounded bg-[#eee]" />
+                <div className="mt-2 h-4 w-1/2 animate-pulse rounded bg-[#f3f3f3]" />
+              </div>
             ))}
           </div>
         ) : events.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-32 text-center gap-5">
-            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/30 dark:to-purple-900/30 flex items-center justify-center">
-              <Ticket className="h-10 w-10 text-indigo-400" />
-            </div>
-            <div>
-              <p className="font-bold text-gray-700 dark:text-gray-300 text-lg">Aucun événement trouvé</p>
-              <p className="text-sm text-gray-400 mt-1 max-w-xs mx-auto">
-                {search || city ? 'Essayez d\'autres termes ou retirez les filtres.' : 'Revenez bientôt pour découvrir les prochains événements.'}
-              </p>
-            </div>
-            {(search || city) && (
-              <button
-                onClick={() => { handleSearch(''); setCity(''); }}
-                className="text-sm font-medium text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
-              >
-                <X className="h-4 w-4" /> Effacer tous les filtres
+          <div className="py-24 text-center">
+            <p className="text-xl">Aucun événement {filtered ? 'ne correspond à votre recherche' : 'pour le moment'}.</p>
+            {filtered && (
+              <button onClick={() => { setType(''); setCity(''); setSearchInput(''); }} className="mt-4 rounded-full bg-black px-6 py-2.5 text-sm uppercase text-white">
+                Voir tous les événements
               </button>
             )}
           </div>
         ) : (
           <>
-            {/* Section header */}
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-                  {city ? `Événements à ${city}` : search ? `Résultats` : 'Tous les événements'}
-                </h2>
-                <p className="text-sm text-gray-500 mt-0.5">
-                  {meta?.total ?? 0} événement{(meta?.total ?? 0) > 1 ? 's' : ''}
-                  {isFetching && !isLoading && <span className="ml-2 text-indigo-400 text-xs animate-pulse">Mise à jour…</span>}
-                </p>
+            <div className={cn('mt-8 grid grid-cols-2 gap-x-5 gap-y-10 transition-opacity lg:grid-cols-4 lg:gap-x-[51px] lg:gap-y-[60px]', list.isFetching && !list.isFetchingNextPage && 'opacity-60')}>
+              {events.map(e => <EventCard key={e.id} event={e} />)}
+            </div>
+            {list.hasNextPage && (
+              <div className="mt-14 text-center">
+                <button
+                  onClick={() => list.fetchNextPage()}
+                  disabled={list.isFetchingNextPage}
+                  className="inline-flex items-center gap-2 rounded-full bg-black px-8 py-3 text-base uppercase text-white transition-opacity hover:opacity-85 disabled:opacity-60"
+                >
+                  {list.isFetchingNextPage && <Loader2 className="h-4 w-4 animate-spin" />} Voir plus
+                </button>
               </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-              {events.map(ev => <EventCard key={ev.id} event={ev} />)}
-            </div>
+            )}
           </>
         )}
+      </section>
 
-        {/* Pagination */}
-        {meta && meta.totalPages > 1 && (
-          <div className="flex items-center justify-center gap-3 pt-12">
-            <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page <= 1}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 transition-colors"
-            >
-              <ChevronLeft className="h-4 w-4" /> Précédent
-            </button>
-
-            {/* Page numbers */}
-            <div className="flex items-center gap-1">
-              {Array.from({ length: Math.min(5, meta.totalPages) }, (_, i) => {
-                const p = Math.max(1, Math.min(meta.totalPages - 4, page - 2)) + i;
-                return (
-                  <button
-                    key={p}
-                    onClick={() => setPage(p)}
-                    className={cn(
-                      'w-9 h-9 rounded-lg text-sm font-semibold transition-colors',
-                      p === page
-                        ? 'bg-indigo-600 text-white'
-                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800',
-                    )}
-                  >
-                    {p}
-                  </button>
-                );
-              })}
-            </div>
-
-            <button
-              onClick={() => setPage(p => Math.min(meta.totalPages, p + 1))}
-              disabled={page >= meta.totalPages}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 transition-colors"
-            >
-              Suivant <ChevronRight className="h-4 w-4" />
-            </button>
+      {/* ── Welcome banner ── */}
+      <section className="mx-auto max-w-[1366px] px-6 pb-10 lg:px-[69px]">
+        <div className="relative overflow-hidden rounded-[40px] bg-[#f2f2f2] lg:h-[440px] lg:rounded-[60px]">
+          <div className="relative h-[290px] overflow-hidden rounded-b-[40px] lg:absolute lg:inset-0 lg:h-auto lg:rounded-none">
+            <Image src="/zaya-site/foule.webp" alt="" fill sizes="(min-width: 1024px) 1230px, 100vw" className="object-cover object-[center_30%] grayscale" />
+            <div className="absolute inset-0 hidden bg-gradient-to-r from-transparent via-white/20 to-white/85 lg:block" />
           </div>
-        )}
+          <div className="relative px-6 pb-10 pt-8 text-center lg:absolute lg:bottom-[80px] lg:right-[30px] lg:max-w-[400px] lg:p-0 lg:text-left">
+            <p className="text-[40px] font-black uppercase leading-[0.95] tracking-tight lg:text-[50px]">
+              « Welcome to Zaya, where real events meet real lives »
+            </p>
+            <a href="#telecharger" className="mt-4 inline-block rounded-full bg-black px-4 py-2 text-lg uppercase text-white transition-opacity hover:opacity-85">
+              Télécharger
+            </a>
+          </div>
+        </div>
       </section>
     </>
   );

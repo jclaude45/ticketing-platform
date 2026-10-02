@@ -145,7 +145,7 @@ export function TicketVisual({ data }: { data: TicketData }) {
 
 // ─── Export PDF button ────────────────────────────────────────────────────────
 
-export function ExportPDFButton({ tickets }: { tickets: TicketData[] }) {
+export function ExportPDFButton({ tickets, className }: { tickets: TicketData[]; className?: string }) {
   const [loading, setLoading] = useState(false);
 
   const handleExport = async () => {
@@ -201,7 +201,9 @@ export function ExportPDFButton({ tickets }: { tickets: TicketData[] }) {
     <button
       onClick={handleExport}
       disabled={loading}
-      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+      className={className
+        ? `flex items-center gap-2 text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed transition-opacity ${className}`
+        : 'flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed transition-colors'}
     >
       {loading
         ? <><Loader2 className="h-4 w-4 animate-spin" /> Génération…</>

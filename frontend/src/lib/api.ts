@@ -619,7 +619,7 @@ export const notificationsApi = {
 const publicClient = axios.create({ baseURL: '/api' });
 
 export const publicApi = {
-  listEvents: (params?: { page?: number; limit?: number; search?: string; city?: string }) =>
+  listEvents: (params?: { page?: number; limit?: number; search?: string; city?: string; type?: string }) =>
     publicClient.get('/public/events', { params }),
   getCities: () =>
     publicClient.get('/public/events/cities'),
@@ -656,6 +656,13 @@ export const publicApi = {
 
   getPaymentStatus: (reference: string) =>
     publicClient.get(`/public/payments/${reference}/status`),
+
+  /** "Parle-nous" form of the landing page */
+  sendContact: (data: {
+    lastName: string; firstName: string; email: string; company?: string;
+    country?: string; profile?: string; message: string; newsletter?: boolean; website?: string;
+  }) =>
+    publicClient.post('/public/contact', data),
 };
 
 export default apiClient;

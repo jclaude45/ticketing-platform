@@ -1,32 +1,19 @@
 'use client';
 
-import { useState, useMemo, useEffect, useRef } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import Image from 'next/image';
+import { ArrowLeft, Loader2, Heart, Share2, Tag, MapPin, Map as MapIcon, CircleDollarSign, ShoppingCart, Ticket, Check } from 'lucide-react';
 import { publicApi, resolveMediaUrl } from '@/lib/api';
-import {
-  ArrowLeft, MapPin, Calendar, Clock, Users, Ticket,
-  CheckCircle2, Loader2, X, AlertCircle,
-  Plus, Minus, ShoppingCart, Phone, CreditCard, Smartphone, ShoppingBag, Store, Truck,
-} from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { TicketVisual, ExportPDFButton, type TicketData } from '@/components/billetterie/TicketCard';
-import {
-  ProductCard, CartSummary, cartLines, money, variantLabel, type Cart, type ShopCatalog,
-} from '@/components/billetterie/Shop';
-
-interface TicketTemplate {
-  id: string;
-  name: string;
-  description?: string;
-  price: number;
-  currency: string;
-  quantity: number;
-  availableCount: number;
-  color: string;
-}
+import { Checkout, type CheckoutTemplate } from '@/components/billetterie/Checkout';
+import { ProductCard, cartLines, money, type Cart, type ShopCatalog } from '@/components/billetterie/Shop';
+import { ZayaLogo } from '@/components/site/ZayaLogo';
+import { StoreButtons } from '@/components/site/StoreButtons';
+import { EVENT_TYPE_LABELS } from '@/components/site/site-config';
+import { capitalize, formatEventDayTime, fromPriceLabel } from '@/components/site/format';
 
 interface PublicEvent {
   id: string;
@@ -36,686 +23,63 @@ interface PublicEvent {
   address?: string;
   city: string;
   country: string;
+  type?: string;
   startDate: string;
   endDate: string;
   bannerUrl?: string;
   totalCapacity: number;
   minPrice: number | null;
   soldOut: boolean;
-  ticketTemplates: TicketTemplate[];
-  organizer: { firstName: string; lastName: string };
+  ticketTemplates: CheckoutTemplate[];
+  organizer: { firstName: string; lastName: string; avatar?: string | null };
   _count: { tickets: number };
 }
 
-interface PurchasedTicket {
-  ticketId: string;
-  serialNumber: string;
-  templateName: string;
-  price: number;
-  currency: string;
-  qrCode?: string;
+const FAVORITES_KEY = 'zaya_favoris';
+
+function readFavorites(): string[] {
+  try { return JSON.parse(localStorage.getItem(FAVORITES_KEY) ?? '[]'); } catch { return []; }
 }
 
-interface MerchOrderSummary {
-  code: string;
-  status: string;
-  fulfillment: 'PICKUP' | 'DELIVERY';
-  total: number;
-  currency: string;
-  items: { productName: string; size: string | null; color: string | null; quantity: number }[];
-}
+/** Heart (favourite on this device) and share, over the poster */
+function PosterActions({ event }: { event: PublicEvent }) {
+  const [liked, setLiked] = useState(false);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => setLiked(readFavorites().includes(event.id)), [event.id]);
 
-interface PurchaseResult {
-  eventName: string;
-  holderName: string;
-  holderEmail: string;
-  tickets: PurchasedTicket[];
-  total: number;
-  currency: string;
-  merchOrder?: MerchOrderSummary | null;
-}
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('fr-FR', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-  });
-}
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-}
-
-// ─── Quantity stepper ─────────────────────────────────────────────────────────
-
-function QtyButton({ onClick, disabled, children }: { onClick: () => void; disabled: boolean; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="w-7 h-7 rounded-lg border border-gray-200 dark:border-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-    >
-      {children}
-    </button>
-  );
-}
-
-// ─── Mobile Money waiting screen ─────────────────────────────────────────────
-
-function MobileMoneyWaiting({
-  reference, holderName, holderEmail, total, currency, eventName,
-  onSuccess, onCancel,
-}: {
-  reference: string;
-  holderName: string;
-  holderEmail: string;
-  total: number;
-  currency: string;
-  eventName: string;
-  onSuccess: (result: PurchaseResult) => void;
-  onCancel: () => void;
-}) {
-  const [dots, setDots] = useState('');
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    const dotsInterval = setInterval(() => setDots(d => d.length >= 3 ? '' : d + '.'), 500);
-    return () => clearInterval(dotsInterval);
-  }, []);
-
-  useEffect(() => {
-    const poll = async () => {
-      try {
-        const res = await publicApi.getPaymentStatus(reference);
-        const d = (res.data as any).data ?? res.data;
-        if (d.status === 'COMPLETED') {
-          if (intervalRef.current) clearInterval(intervalRef.current);
-          onSuccess({
-            eventName,
-            holderName,
-            holderEmail,
-            tickets: Array.isArray(d.tickets) ? d.tickets : [],
-            total,
-            currency,
-            merchOrder: d.merchOrder ?? null,
-          });
-        } else if (d.status === 'FAILED' || d.status === 'CANCELLED') {
-          if (intervalRef.current) clearInterval(intervalRef.current);
-          onCancel();
-        }
-      } catch {
-        // ignore transient errors, keep polling
-      }
-    };
-
-    poll();
-    intervalRef.current = setInterval(poll, 5000);
-    // Timers are paused while the Mac sleeps / the tab is hidden: check right away on return
-    const onVisible = () => { if (document.visibilityState === 'visible') poll(); };
-    document.addEventListener('visibilitychange', onVisible);
-    window.addEventListener('focus', onVisible);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      document.removeEventListener('visibilitychange', onVisible);
-      window.removeEventListener('focus', onVisible);
-    };
-  }, [reference, holderName, holderEmail, total, currency, eventName, onSuccess, onCancel]);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-        <div className="bg-gradient-to-br from-indigo-600 to-purple-700 px-6 py-8 text-center space-y-4">
-          <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mx-auto">
-            <Smartphone className="h-8 w-8 text-white" />
-          </div>
-          <h2 className="text-lg font-bold text-white">Validez sur votre téléphone</h2>
-          <p className="text-indigo-100 text-sm">
-            Une demande de paiement de <strong>{total.toFixed(2)} {currency}</strong> a été envoyée à votre numéro Mobile Money.
-          </p>
-        </div>
-        <div className="px-6 py-6 space-y-4 text-center">
-          <div className="flex items-center justify-center gap-2 text-indigo-600 dark:text-indigo-400">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            <span className="text-sm font-medium">En attente de confirmation{dots}</span>
-          </div>
-          <p className="text-xs text-gray-500">
-            Ouvrez votre application Mobile Money et confirmez le paiement.
-            Cette page se mettra à jour automatiquement.
-          </p>
-          <button
-            onClick={onCancel}
-            className="text-xs text-gray-400 hover:text-gray-600 underline"
-          >
-            Annuler
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Purchase Modal ───────────────────────────────────────────────────────────
-
-function PurchaseModal({
-  event,
-  catalog,
-  cart,
-  onCartChange,
-  shopOnly,
-  onClose,
-  onSuccess,
-}: {
-  event: PublicEvent;
-  catalog?: ShopCatalog;
-  cart: Cart;
-  onCartChange: (cart: Cart) => void;
-  /** Opened from the shop: buy items without tickets */
-  shopOnly: boolean;
-  onClose: () => void;
-  onSuccess: (result: PurchaseResult) => void;
-}) {
-  const [quantities, setQuantities] = useState<Record<string, number>>({});
-  const [fulfillment, setFulfillment] = useState<'PICKUP' | 'DELIVERY'>('PICKUP');
-  const [deliveryAddress, setDeliveryAddress] = useState('');
-  const [deliveryCity, setDeliveryCity] = useState(event.city ?? '');
-  const [deliveryNotes, setDeliveryNotes] = useState('');
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [honeypot, setHoneypot] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'mobile_money' | 'card' | null>(null);
-  const [mmWaiting, setMmWaiting] = useState<{ reference: string; total: number; currency: string } | null>(null);
-
-  const availableTemplates = event.ticketTemplates.filter(t => t.availableCount > 0);
-
-  const setQty = (templateId: string, delta: number) => {
-    setQuantities(prev => {
-      const current = prev[templateId] ?? 0;
-      const tpl = event.ticketTemplates.find(t => t.id === templateId)!;
-      const next = Math.min(Math.max(0, current + delta), Math.min(tpl.availableCount, 20));
-      if (next === 0) { const copy = { ...prev }; delete copy[templateId]; return copy; }
-      return { ...prev, [templateId]: next };
-    });
+  const toggleLike = () => {
+    const favs = readFavorites();
+    const next = favs.includes(event.id) ? favs.filter(f => f !== event.id) : [...favs, event.id];
+    try { localStorage.setItem(FAVORITES_KEY, JSON.stringify(next)); } catch { /* storage blocked */ }
+    setLiked(next.includes(event.id));
+  };
+  const share = async () => {
+    const url = window.location.href.split('?')[0];
+    if (navigator.share) {
+      try { await navigator.share({ title: event.name, url }); } catch { /* dismissed */ }
+      return;
+    }
+    await navigator.clipboard?.writeText(url).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
-  const items = useMemo(
-    () => Object.entries(quantities).filter(([, qty]) => qty > 0).map(([templateId, quantity]) => ({ templateId, quantity })),
-    [quantities],
-  );
-
-  const totalCount = items.reduce((s, i) => s + i.quantity, 0);
-  const totalPrice = items.reduce((s, i) => {
-    const tpl = event.ticketTemplates.find(t => t.id === i.templateId);
-    return s + (tpl ? tpl.price * i.quantity : 0);
-  }, 0);
-
-  // Shop items in the same checkout
-  const lines = cartLines(catalog, cart);
-  const merchCount = lines.reduce((s, l) => s + l.quantity, 0);
-  const merchSubtotal = lines.reduce((s, l) => s + l.product.price * l.quantity, 0);
-  const deliveryFee = merchCount > 0 && fulfillment === 'DELIVERY' ? catalog?.delivery?.fee ?? 0 : 0;
-  const grandTotal = totalPrice + merchSubtotal + deliveryFee;
-  const hasProducts = (catalog?.products.length ?? 0) > 0;
-
-  const currency = event.ticketTemplates[0]?.currency ?? lines[0]?.product.currency ?? 'USD';
-  const totalLabel = grandTotal === 0 ? 'Gratuit' : `${grandTotal.toFixed(2)} ${currency}`;
-  const isPaid = grandTotal > 0;
-
-  const contactOk = name.trim().length >= 2 && email.includes('@');
-  const phoneRequiredForMM = paymentMethod === 'mobile_money' && !phone.trim();
-  const deliveryOk = merchCount === 0 || fulfillment === 'PICKUP' || (deliveryAddress.trim().length > 3 && deliveryCity.trim().length > 1);
-  const canSubmit = (items.length > 0 || merchCount > 0) && contactOk && deliveryOk && (!isPaid || paymentMethod !== null) && !phoneRequiredForMM && !honeypot;
-  const orderLabel = [
-    totalCount > 0 && `${totalCount} billet${totalCount > 1 ? 's' : ''}`,
-    merchCount > 0 && `${merchCount} article${merchCount > 1 ? 's' : ''}`,
-  ].filter(Boolean).join(' + ');
-
-  const mutation = useMutation({
-    mutationFn: () => {
-      if (!isPaid) {
-        return publicApi.purchaseTicket(event.id, {
-          holderName: name.trim(), holderEmail: email.trim(), holderPhone: phone.trim() || undefined, items,
-        });
-      }
-      return publicApi.initiatePayment(event.id, {
-        holderName: name.trim(), holderEmail: email.trim(), holderPhone: phone.trim() || undefined,
-        items,
-        ...(merchCount > 0 && {
-          merch: lines.map(l => ({ variantId: l.variant.id, quantity: l.quantity })),
-          fulfillment,
-          ...(fulfillment === 'DELIVERY' && {
-            deliveryAddress: deliveryAddress.trim(),
-            deliveryCity: deliveryCity.trim(),
-            deliveryNotes: deliveryNotes.trim() || undefined,
-          }),
-        }),
-        paymentMethod: paymentMethod!,
-      });
-    },
-    onSuccess: (res) => {
-      const d = (res.data as any).data ?? res.data;
-      if (!isPaid) {
-        onSuccess(d);
-        return;
-      }
-      if (d.paymentMethod === 'card' && d.redirectUrl) {
-        window.location.href = d.redirectUrl;
-        return;
-      }
-      if (d.paymentMethod === 'mobile_money') {
-        setMmWaiting({ reference: d.reference, total: grandTotal, currency });
-      }
-    },
-  });
-
-  if (mmWaiting) {
-    return (
-      <MobileMoneyWaiting
-        reference={mmWaiting.reference}
-        holderName={name.trim()}
-        holderEmail={email.trim()}
-        total={mmWaiting.total}
-        currency={mmWaiting.currency}
-        eventName={event.name}
-        onSuccess={onSuccess}
-        onCancel={onClose}
-      />
-    );
-  }
-
+  const btn = 'flex h-[30px] w-[30px] items-center justify-center rounded-full bg-black text-white transition-transform hover:scale-110';
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[92vh] flex flex-col">
-
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
-          <div>
-            <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">{shopOnly ? 'Boutique' : 'Inscription'}</p>
-            <h3 className="text-base font-bold text-gray-900 dark:text-white">{event.name}</h3>
-          </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        {/* Scrollable body */}
-        <div className="overflow-y-auto flex-1 p-6 space-y-6">
-
-          {/* Step 1: ticket selection */}
-          {!shopOnly && (
-          <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
-              1 — Choisissez vos billets
-            </p>
-            <div className="space-y-2.5">
-              {availableTemplates.map(t => {
-                const qty = quantities[t.id] ?? 0;
-                const price = t.price === 0 ? 'Gratuit' : `${t.price.toFixed(2)} ${t.currency}`;
-                return (
-                  <div
-                    key={t.id}
-                    className={cn(
-                      'flex items-center gap-3 rounded-xl border p-3.5 transition-all',
-                      qty > 0
-                        ? 'border-indigo-300 dark:border-indigo-700 bg-indigo-50/50 dark:bg-indigo-900/20'
-                        : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50',
-                    )}
-                  >
-                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: t.color }} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{t.name}</p>
-                      <p className={cn('text-xs mt-0.5', t.price === 0 ? 'text-emerald-600' : 'text-indigo-600 dark:text-indigo-400')}>
-                        {price}
-                        <span className="text-gray-400 ml-1.5">&middot; {t.availableCount} dispo.</span>
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <QtyButton onClick={() => setQty(t.id, -1)} disabled={qty === 0}><Minus className="h-3 w-3" /></QtyButton>
-                      <span className="w-5 text-center text-sm font-bold text-gray-900 dark:text-white">{qty}</span>
-                      <QtyButton onClick={() => setQty(t.id, +1)} disabled={qty >= Math.min(t.availableCount, 20)}><Plus className="h-3 w-3" /></QtyButton>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {totalCount > 0 && (
-              <div className="mt-3 flex items-center justify-between bg-indigo-600 text-white rounded-xl px-4 py-2.5">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <ShoppingCart className="h-4 w-4" />
-                  {totalCount} billet{totalCount > 1 ? 's' : ''}
-                </div>
-                <span className="text-sm font-bold">{totalPrice === 0 ? 'Gratuit' : `${totalPrice.toFixed(2)} ${currency}`}</span>
-              </div>
-            )}
-          </div>
-          )}
-
-          {/* Shop items: the cart, plus suggestions when buying tickets */}
-          {(merchCount > 0 || (hasProducts && !shopOnly)) && (
-            <div>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                <ShoppingBag className="h-3.5 w-3.5" />
-                {shopOnly ? 'Vos articles' : 'Ajouter un souvenir ? (facultatif)'}
-              </p>
-              {merchCount > 0 && <CartSummary lines={lines} cart={cart} onCartChange={onCartChange} />}
-              {!shopOnly && hasProducts && (
-                <div className="mt-2.5 space-y-2.5">
-                  {catalog!.products.map(p => (
-                    <ProductCard key={p.id} product={p} cart={cart} onCartChange={onCartChange} compact />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Pickup or delivery */}
-          {merchCount > 0 && (
-            <div>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Retrait de vos articles</p>
-              <div className={cn('grid gap-3', catalog?.delivery ? 'grid-cols-2' : 'grid-cols-1')}>
-                {([
-                  { id: 'PICKUP' as const, icon: <Store className="h-5 w-5" />, label: 'Retrait sur place', sub: catalog?.pickupInfo || "À l'événement" },
-                  ...(catalog?.delivery ? [{
-                    id: 'DELIVERY' as const, icon: <Truck className="h-5 w-5" />, label: 'Livraison',
-                    sub: catalog.delivery.fee > 0 ? `+ ${money(catalog.delivery.fee, currency)}` : 'Gratuite',
-                  }] : []),
-                ]).map(m => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => setFulfillment(m.id)}
-                    className={cn(
-                      'flex flex-col items-center gap-1.5 rounded-xl border-2 p-3 text-center transition-all',
-                      fulfillment === m.id
-                        ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
-                        : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300',
-                    )}
-                  >
-                    {m.icon}
-                    <p className="text-sm font-semibold">{m.label}</p>
-                    <p className="text-xs opacity-70">{m.sub}</p>
-                  </button>
-                ))}
-              </div>
-              {fulfillment === 'DELIVERY' && (
-                <div className="mt-3 space-y-2.5">
-                  <input value={deliveryAddress} onChange={e => setDeliveryAddress(e.target.value)} maxLength={200} placeholder="Adresse de livraison *"
-                    className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                  <input value={deliveryCity} onChange={e => setDeliveryCity(e.target.value)} maxLength={80} placeholder="Ville *"
-                    className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                  <input value={deliveryNotes} onChange={e => setDeliveryNotes(e.target.value)} maxLength={300} placeholder="Précisions (repère, étage…)"
-                    className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Order total */}
-          {merchCount > 0 && (
-            <div className="rounded-xl bg-gray-50 dark:bg-gray-800/60 px-4 py-3 space-y-1 text-sm">
-              {totalCount > 0 && <div className="flex justify-between text-gray-600 dark:text-gray-300"><span>Billets</span><span>{money(totalPrice, currency)}</span></div>}
-              <div className="flex justify-between text-gray-600 dark:text-gray-300"><span>Articles</span><span>{money(merchSubtotal, currency)}</span></div>
-              {fulfillment === 'DELIVERY' && <div className="flex justify-between text-gray-600 dark:text-gray-300"><span>Livraison</span><span>{deliveryFee > 0 ? money(deliveryFee, currency) : 'Gratuite'}</span></div>}
-              <div className="flex justify-between font-bold text-gray-900 dark:text-white pt-1 border-t border-gray-200 dark:border-gray-700"><span>Total</span><span>{money(grandTotal, currency)}</span></div>
-            </div>
-          )}
-
-          {/* Step 2: contact info */}
-          <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
-              2 — Vos coordonnées
-            </p>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Nom complet <span className="text-red-500">*</span>
-                </label>
-                <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Jean Dupont"
-                  className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Adresse email <span className="text-red-500">*</span>
-                </label>
-                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="jean@exemple.com"
-                  className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  <span className="flex items-center gap-1.5">
-                    <Phone className="h-3.5 w-3.5 text-gray-400" />
-                    Téléphone
-                    {paymentMethod === 'mobile_money'
-                      ? <span className="text-red-500">*</span>
-                      : <span className="text-gray-400 font-normal">(facultatif)</span>
-                    }
-                  </span>
-                </label>
-                <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+243 81 234 5678"
-                  className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-              </div>
-              {/* honeypot — hidden from real users, bots fill it and get blocked */}
-              <input
-                type="text"
-                name="website"
-                value={honeypot}
-                onChange={e => setHoneypot(e.target.value)}
-                tabIndex={-1}
-                autoComplete="off"
-                aria-hidden="true"
-                style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }}
-              />
-            </div>
-          </div>
-
-          {/* Step 3: payment method (only for paid tickets) */}
-          {isPaid && (totalCount > 0 || merchCount > 0) && (
-            <div>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
-                3 — Mode de paiement
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                {([
-                  { id: 'mobile_money' as const, icon: <Smartphone className="h-5 w-5" />, label: 'Mobile Money', sub: 'M-Pesa, Airtel, Orange…' },
-                  { id: 'card' as const, icon: <CreditCard className="h-5 w-5" />, label: 'Carte bancaire', sub: 'Visa, Mastercard' },
-                ] as const).map(m => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => setPaymentMethod(m.id)}
-                    className={cn(
-                      'flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-center transition-all',
-                      paymentMethod === m.id
-                        ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
-                        : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600',
-                    )}
-                  >
-                    {m.icon}
-                    <div>
-                      <p className="text-sm font-semibold">{m.label}</p>
-                      <p className="text-xs opacity-70 mt-0.5">{m.sub}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-              {paymentMethod === 'mobile_money' && !phone.trim() && (
-                <p className="mt-2 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                  <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
-                  Veuillez saisir votre numéro de téléphone ci-dessus.
-                </p>
-              )}
-            </div>
-          )}
-
-          {mutation.isError && (
-            <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded-xl p-3">
-              <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-              {(mutation.error as any)?.response?.data?.message ?? 'Une erreur est survenue. Réessayez.'}
-            </div>
-          )}
-
-          <p className="text-xs text-gray-400 leading-relaxed">
-            {shopOnly
-              ? 'La confirmation de votre commande vous sera envoyée par email.'
-              : "Vos billets seront envoyés par email. Présentez le QR code ou le numéro de série à l'entrée."}
-          </p>
-        </div>
-
-        {/* Footer CTA */}
-        <div className="px-6 pb-6 pt-3 border-t border-gray-100 dark:border-gray-800 flex-shrink-0">
-          <button
-            disabled={!canSubmit || mutation.isPending}
-            onClick={() => mutation.mutate()}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-semibold hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md"
-          >
-            {mutation.isPending
-              ? <><Loader2 className="h-4 w-4 animate-spin" /> Traitement…</>
-              : <>
-                  <Ticket className="h-4 w-4" />
-                  {totalCount === 0 && merchCount === 0
-                    ? (shopOnly ? 'Ajoutez des articles' : 'Sélectionnez des billets')
-                    : !deliveryOk
-                      ? "Complétez l'adresse de livraison"
-                      : isPaid && !paymentMethod
-                        ? 'Choisissez un mode de paiement'
-                        : isPaid
-                          ? `Payer ${totalLabel} — ${orderLabel}`
-                          : `Obtenir ${orderLabel} — Gratuit`
-                  }
-                </>
-            }
-          </button>
-        </div>
-      </div>
+    <div className="absolute bottom-3 right-4 flex gap-2">
+      <button type="button" onClick={toggleLike} className={btn} aria-pressed={liked} aria-label={liked ? 'Retirer des favoris' : 'Ajouter aux favoris'}>
+        <Heart className={cn('h-4 w-4', liked && 'fill-white')} />
+      </button>
+      <button type="button" onClick={share} className={btn} aria-label="Partager">
+        {copied ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
+      </button>
     </div>
   );
 }
-
-// ─── Success screen ───────────────────────────────────────────────────────────
-
-function SuccessScreen({
-  result, event, onClose,
-}: {
-  result: PurchaseResult;
-  event: PublicEvent;
-  onClose: () => void;
-}) {
-  const totalLabel = result.total === 0 ? 'Gratuit' : `${result.total.toFixed(2)} ${result.currency}`;
-
-  const eventDate = new Date(event.startDate).toLocaleDateString('fr-FR', {
-    day: 'numeric', month: 'long', year: 'numeric',
-  });
-
-  const ticketDataList: TicketData[] = result.tickets.map((t, i) => ({
-    serialNumber: t.serialNumber,
-    holderName:   result.holderName,
-    holderEmail:  result.holderEmail,
-    eventName:    result.eventName,
-    templateName: t.templateName,
-    price:        t.price,
-    currency:     t.currency,
-    qrCode:       t.qrCode,
-    eventDate,
-    eventVenue:   event.venue,
-    eventCity:    event.city,
-    ticketIndex:  i + 1,
-    totalTickets: result.tickets.length,
-  }));
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[92vh] flex flex-col">
-
-        {/* Header */}
-        <div className="bg-gradient-to-br from-emerald-500 to-teal-600 px-6 py-5 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-              <CheckCircle2 className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-white">
-                {result.tickets.length > 0
-                  ? `${result.tickets.length} billet${result.tickets.length > 1 ? 's' : ''} confirmé${result.tickets.length > 1 ? 's' : ''}`
-                  : 'Commande confirmée'}
-              </h2>
-              <p className="text-emerald-100 text-xs">{result.eventName}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {ticketDataList.length > 0 && <ExportPDFButton tickets={ticketDataList} />}
-            <button onClick={onClose} className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Tickets */}
-        <div className="overflow-y-auto flex-1 p-3 sm:p-5 space-y-4">
-
-          {/* Summary pill */}
-          <div className="flex items-center justify-between text-sm bg-gray-50 dark:bg-gray-800 rounded-xl px-4 py-2.5">
-            <span className="text-gray-600 dark:text-gray-300 font-medium truncate mr-2">{result.holderName} · {result.holderEmail}</span>
-            <span className="font-bold text-indigo-600 dark:text-indigo-400 flex-shrink-0">{totalLabel}</span>
-          </div>
-
-          {/* Ticket cards */}
-          {ticketDataList.map((td) => (
-            <div key={td.serialNumber} className="overflow-x-auto -mx-3 sm:-mx-5 px-3 sm:px-5">
-              <div className="flex justify-center">
-                <TicketVisual data={td} />
-              </div>
-            </div>
-          ))}
-
-          {/* Shop order */}
-          {result.merchOrder && (
-            <div className="rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/60 dark:bg-indigo-900/20 p-4">
-              <p className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
-                <ShoppingBag className="h-4 w-4 text-indigo-600" />
-                Commande boutique <span className="font-mono">{result.merchOrder.code}</span>
-              </p>
-              <ul className="mt-2 space-y-0.5 text-sm text-gray-700 dark:text-gray-300">
-                {result.merchOrder.items.map((i, idx) => (
-                  <li key={idx}>{i.quantity} × {i.productName}{variantLabel(i) ? ` (${variantLabel(i)})` : ''}</li>
-                ))}
-              </ul>
-              <p className="mt-2 flex items-start gap-1.5 text-xs text-gray-500">
-                {result.merchOrder.fulfillment === 'PICKUP'
-                  ? <><Store className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" /> À retirer sur place : présentez le QR code reçu par email ou le code {result.merchOrder.code}.</>
-                  : <><Truck className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" /> Livraison : vous serez prévenu(e) par email de l&apos;expédition.</>}
-              </p>
-            </div>
-          )}
-
-          {/* Email notice */}
-          <div className="flex items-start gap-2 text-xs text-gray-500 bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3">
-            <CheckCircle2 className="h-4 w-4 text-blue-500 flex-shrink-0 mt-0.5" />
-            <span>
-              Un email de confirmation {result.tickets.length > 0 ? 'avec tous vos billets ' : ''}a été envoyé à <strong>{result.holderEmail}</strong>.
-            </span>
-          </div>
-        </div>
-
-        <div className="px-3 sm:px-5 pb-3 sm:pb-5 pt-3 border-t border-gray-100 dark:border-gray-800 flex-shrink-0">
-          <button
-            onClick={onClose}
-            className="w-full py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-          >
-            Fermer
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
-  const [modalOpen, setModalOpen] = useState<false | 'tickets' | 'shop'>(false);
-  const [purchaseResult, setPurchaseResult] = useState<PurchaseResult | null>(null);
+  const [checkout, setCheckout] = useState<false | 'tickets' | 'shop'>(false);
   const [cart, setCart] = useState<Cart>({});
 
   // No `retry: false`: a network hiccup (Mac waking up, Wi-Fi) is retried; 404s never are (QueryProvider)
@@ -751,8 +115,8 @@ export default function EventDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-black" />
       </div>
     );
   }
@@ -761,214 +125,198 @@ export default function EventDetailPage() {
   // the error page is only for an event that never loaded
   if (!event) {
     return (
-      <div className="max-w-xl mx-auto px-4 py-24 text-center space-y-4">
-        <div className="w-16 h-16 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto">
-          <AlertCircle className="h-8 w-8 text-gray-400" />
-        </div>
-        <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-          {isError && !notFound ? 'Connexion impossible' : 'Événement introuvable'}
-        </h2>
-        <p className="text-sm text-gray-500">
+      <div className="mx-auto max-w-xl space-y-4 px-6 py-24 text-center">
+        <h2 className="text-3xl">{isError && !notFound ? 'Connexion impossible' : 'Événement introuvable'}</h2>
+        <p className="text-[#555]">
           {isError && !notFound
             ? "Impossible de charger l'événement. Vérifiez votre connexion internet."
             : "Cet événement n'existe pas ou n'est plus disponible."}
         </p>
-        {isError && !notFound && (
-          <button onClick={() => refetch()} className="text-sm font-medium text-indigo-600 hover:text-indigo-700">
-            Réessayer
-          </button>
-        )}
-        <Link href="/billetterie" className="inline-flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-700">
-          <ArrowLeft className="h-4 w-4" /> Retour à la billetterie
-        </Link>
+        <div className="flex flex-col items-center gap-3 pt-2">
+          {isError && !notFound && (
+            <button onClick={() => refetch()} className="rounded-full bg-black px-6 py-2.5 text-sm uppercase text-white">Réessayer</button>
+          )}
+          <Link href="/billetterie" className="inline-flex items-center gap-2 text-[15px] underline underline-offset-4">
+            <ArrowLeft className="h-4 w-4" /> Retour à la billetterie
+          </Link>
+        </div>
       </div>
     );
   }
 
-  const availableTemplates = event.ticketTemplates.filter(t => t.availableCount > 0);
-  const totalSold = event._count.tickets;
+  const available = event.ticketTemplates.filter(t => t.availableCount > 0);
+  const canBuy = available.length > 0 && new Date(event.endDate).getTime() > Date.now();
+  const organizerName = `${event.organizer.firstName} ${event.organizer.lastName}`.trim();
+  const mapsQuery = [event.venue, event.address, event.city, event.country].filter(Boolean).join(', ');
+  const hasProducts = (catalog?.products.length ?? 0) > 0;
 
   return (
     <>
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+      <div className="mx-auto max-w-[1366px] px-6 pb-10 pt-6 lg:px-[150px] lg:pt-[117px]">
+        <div className="flex flex-col gap-8 lg:flex-row lg:gap-[46px]">
 
-        <Link
-          href="/billetterie"
-          className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" /> Tous les événements
-        </Link>
+          {/* ── Left: poster ── */}
+          <aside className="lg:w-[295px] lg:flex-shrink-0">
+            <div className="relative aspect-square overflow-hidden rounded-[14px] bg-[#eee] lg:aspect-auto lg:h-[291px]">
+              {event.bannerUrl ? (
+                <Image src={resolveMediaUrl(event.bannerUrl)!} alt={event.name} fill priority sizes="(min-width: 1024px) 295px, 100vw" className="object-cover" />
+              ) : (
+                <div className="flex h-full items-center justify-center"><Ticket className="h-16 w-16 text-[#bbb]" strokeWidth={1.4} /></div>
+              )}
+              <PosterActions event={event} />
+            </div>
+            <p className="mt-6 hidden text-base leading-relaxed lg:block">
+              Zaya protège les participants et les organisateurs des arnaques. Vos billets vous sont envoyés par email,
+              chacun avec un QR code unique et sécurisé.
+            </p>
+          </aside>
 
-        {event.bannerUrl && (
-          <div className="rounded-2xl overflow-hidden shadow-md h-64 sm:h-80 relative">
-            <Image src={resolveMediaUrl(event.bannerUrl)!} alt={event.name} fill className="object-cover" />
-          </div>
-        )}
+          {/* ── Right: details ── */}
+          <div className="min-w-0 flex-1 lg:max-w-[690px]">
+            <h1 className="break-words text-[36px] font-normal tracking-normal leading-[1] lg:text-[44px]">{event.name}</h1>
+            {organizerName && <p className="mt-1 text-2xl leading-tight lg:text-[32px]">{organizerName}</p>}
+            <p className="mt-3 text-2xl lg:text-[33px]">{capitalize(formatEventDayTime(event.startDate))}</p>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left — info */}
-          <div className="lg:col-span-2 space-y-6">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white leading-tight">{event.name}</h1>
-              <p className="mt-1 text-sm text-gray-500">Organisé par {event.organizer.firstName} {event.organizer.lastName}</p>
+            <div className="mt-6 flex flex-wrap gap-x-7 gap-y-2 text-lg lg:mt-8 lg:text-[19px]">
+              <span className="flex items-center gap-2"><Tag className="h-7 w-7 -scale-x-100" strokeWidth={1.4} />{EVENT_TYPE_LABELS[event.type ?? 'OTHER'] ?? 'Événement'}</span>
+              <span className="flex items-center gap-2"><MapPin className="h-7 w-7" strokeWidth={1.4} />{event.venue}</span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {[
-                { icon: <Calendar className="h-5 w-5 text-indigo-500" />, label: 'Date de début', value: formatDate(event.startDate), sub: formatTime(event.startDate) },
-                { icon: <MapPin className="h-5 w-5 text-rose-500" />, label: 'Lieu', value: event.venue, sub: `${event.city}, ${event.country}` },
-                { icon: <Clock className="h-5 w-5 text-amber-500" />, label: 'Date de fin', value: formatDate(event.endDate), sub: formatTime(event.endDate) },
-                { icon: <Users className="h-5 w-5 text-emerald-500" />, label: 'Capacité', value: `${event.totalCapacity.toLocaleString('fr-FR')} places`, sub: `${totalSold} billet${totalSold > 1 ? 's' : ''} vendu${totalSold > 1 ? 's' : ''}` },
-              ].map(c => (
-                <div key={c.label} className="flex items-start gap-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-4 shadow-sm">
-                  <div className="w-9 h-9 rounded-lg bg-gray-50 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">{c.icon}</div>
-                  <div>
-                    <p className="text-xs text-gray-400 font-medium">{c.label}</p>
-                    <p className="text-sm font-semibold text-gray-900 dark:text-white mt-0.5">{c.value}</p>
-                    <p className="text-xs text-gray-500">{c.sub}</p>
-                  </div>
+            {/* Price box */}
+            {event.ticketTemplates.length > 0 && (
+              <div className="mt-8 flex flex-col gap-4 rounded-[20px] bg-[#707070] px-6 py-5 text-white sm:flex-row sm:items-center sm:justify-between lg:mt-11 lg:px-[46px]">
+                <div>
+                  <p className="text-[30px] font-light leading-tight lg:text-[37px]">{fromPriceLabel(event)}</p>
+                  <p className="mt-1 text-lg font-light text-white/50">Le prix final. Pas de frais cachés.</p>
                 </div>
-              ))}
-            </div>
-
-            {event.address && (
-              <div className="flex items-start gap-2 text-sm text-gray-500 bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3">
-                <MapPin className="h-4 w-4 text-rose-400 flex-shrink-0 mt-0.5" />
-                {event.address}, {event.city}, {event.country}
-              </div>
-            )}
-
-            {event.description && (
-              <div className="prose prose-sm dark:prose-invert max-w-none text-gray-600 dark:text-gray-400 leading-relaxed">
-                {event.description}
-              </div>
-            )}
-          </div>
-
-          {/* Right — ticket panel */}
-          <div className="space-y-4">
-            <h2 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <Ticket className="h-4 w-4 text-indigo-500" />
-              Billets disponibles
-            </h2>
-
-            {event.soldOut ? (
-              <div className="rounded-2xl border-2 border-dashed border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900/20 p-6 text-center space-y-2">
-                <p className="font-bold text-red-600 dark:text-red-400">Événement complet</p>
-                <p className="text-xs text-red-500">Toutes les places ont été vendues.</p>
-              </div>
-            ) : event.ticketTemplates.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 p-6 text-center">
-                <p className="text-sm text-gray-400">Aucun billet disponible.</p>
-              </div>
-            ) : (
-              <>
-                <div className="space-y-2">
-                  {event.ticketTemplates.map(t => {
-                    const available = t.availableCount > 0;
-                    const price = t.price === 0 ? 'Gratuit' : `${t.price.toFixed(2)} ${t.currency}`;
-                    return (
-                      <div key={t.id} className={cn(
-                        'rounded-xl border p-3.5',
-                        available
-                          ? 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700'
-                          : 'bg-gray-50 dark:bg-gray-800/40 border-dashed border-gray-200 dark:border-gray-700 opacity-55',
-                      )}>
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-0.5" style={{ backgroundColor: t.color }} />
-                            <div>
-                              <p className="text-sm font-bold text-gray-900 dark:text-white">{t.name}</p>
-                              {t.description && <p className="text-xs text-gray-500 mt-0.5">{t.description}</p>}
-                            </div>
-                          </div>
-                          <span className={cn('text-sm font-bold flex-shrink-0', t.price === 0 ? 'text-emerald-600' : 'text-indigo-600 dark:text-indigo-400')}>
-                            {price}
-                          </span>
-                        </div>
-                        <p className={cn('text-xs mt-2', available ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-400')}>
-                          {available ? `${t.availableCount} place${t.availableCount > 1 ? 's' : ''} restante${t.availableCount > 1 ? 's' : ''}` : 'Épuisé'}
-                        </p>
-                        {t.quantity > 0 && (
-                          <div className="mt-2 h-1 w-full rounded-full bg-gray-100 dark:bg-gray-800">
-                            <div
-                              className={cn('h-1 rounded-full', available ? 'bg-indigo-400' : 'bg-red-400')}
-                              style={{ width: `${Math.min(100, ((t.quantity - t.availableCount) / t.quantity) * 100)}%` }}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {availableTemplates.length > 0 && (
-                  <button
-                    onClick={() => setModalOpen('tickets')}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-semibold hover:from-indigo-700 hover:to-purple-700 shadow-md transition-all"
-                  >
-                    <Ticket className="h-4 w-4" />
-                    {availableTemplates.length > 1 ? 'Choisir mes billets' : (availableTemplates[0].price === 0 ? "S'inscrire gratuitement" : 'Acheter un billet')}
+                {canBuy ? (
+                  <button type="button" onClick={() => setCheckout('tickets')}
+                    className="h-[45px] flex-shrink-0 rounded-full bg-white px-9 text-lg font-bold uppercase text-black transition-opacity hover:opacity-90">
+                    Acheter
                   </button>
+                ) : (
+                  <span className="text-lg font-semibold uppercase text-white/70">{event.soldOut ? 'Complet' : 'Ventes terminées'}</span>
                 )}
-              </>
+              </div>
             )}
-          </div>
-        </div>
 
-        {/* Shop: buy souvenirs with or without a ticket */}
-        {(catalog?.products.length ?? 0) > 0 && (
-          <section id="boutique" className="space-y-4">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h2 className="flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-white">
-                  <ShoppingBag className="h-5 w-5 text-indigo-500" /> Boutique
-                </h2>
-                <p className="text-sm text-gray-500">
-                  Souvenirs officiels de l&apos;événement — à retirer sur place{catalog?.delivery ? ' ou en livraison' : ''}.
+            {/* About */}
+            {event.description && (
+              <section className="mt-10">
+                <h2 className="font-normal tracking-normal text-[32px] lg:text-[37px]">À propos</h2>
+                <p className="mt-6 whitespace-pre-line text-lg leading-snug lg:text-[21px]">{event.description}</p>
+              </section>
+            )}
+
+            {/* Shop */}
+            {hasProducts && (
+              <section id="boutique" className="mt-14 border-t border-black pt-10">
+                <div className="flex flex-wrap items-end justify-between gap-4">
+                  <div>
+                    <h2 className="font-normal tracking-normal text-[32px] lg:text-[37px]">Boutique</h2>
+                    <p className="mt-1 text-[15px] text-[#555]">
+                      Souvenirs officiels — à retirer sur place{catalog?.delivery ? ' ou en livraison' : ''}.
+                    </p>
+                  </div>
+                  {cartCount > 0 && (
+                    <button type="button" onClick={() => setCheckout('shop')}
+                      className="inline-flex items-center gap-2 rounded-full bg-black px-5 py-2.5 text-sm font-semibold text-white hover:opacity-85">
+                      <ShoppingCart className="h-4 w-4" />
+                      Commander {cartCount} article{cartCount > 1 ? 's' : ''} — {money(cartTotal, catalog!.products[0].currency)}
+                    </button>
+                  )}
+                </div>
+                <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {catalog!.products.map(p => <ProductCard key={p.id} product={p} cart={cart} onCartChange={setCart} />)}
+                </div>
+                {cartCount > 0 && canBuy && (
+                  <p className="mt-3 text-xs text-[#555]">Vous prenez aussi un billet ? Cliquez sur « Acheter » : vos articles seront dans la même commande.</p>
+                )}
+              </section>
+            )}
+
+            {/* Refunds (CGU, section 5) */}
+            <section className="mt-14 lg:mt-[150px]">
+              <div className="flex items-start gap-5">
+                <CircleDollarSign className="h-9 w-9 flex-shrink-0" strokeWidth={1.4} />
+                <p className="text-lg leading-snug lg:text-[23px]">
+                  Tu peux obtenir un remboursement si :<br />
+                  - Cet événement est annulé<br />
+                  - Cet événement est reporté et tu ne peux pas venir à la nouvelle date
+                  <Link href="/cgu" className="mt-2 block text-[15px] text-[#707070] underline underline-offset-4">Conditions de remboursement</Link>
                 </p>
               </div>
-              {cartCount > 0 && (
-                <button
-                  onClick={() => setModalOpen('shop')}
-                  className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-indigo-700"
-                >
-                  <ShoppingCart className="h-4 w-4" />
-                  Commander {cartCount} article{cartCount > 1 ? 's' : ''} — {money(cartTotal, catalog!.products[0].currency)}
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {catalog!.products.map(p => (
-                <ProductCard key={p.id} product={p} cart={cart} onCartChange={setCart} />
-              ))}
-            </div>
-            {cartCount > 0 && availableTemplates.length > 0 && (
-              <p className="text-xs text-gray-500">
-                Vous prenez aussi un billet ? Cliquez sur « {availableTemplates.length > 1 ? 'Choisir mes billets' : 'Acheter un billet'} » : vos articles seront dans la même commande.
-              </p>
+            </section>
+
+            {/* Organizer */}
+            {organizerName && (
+              <section className="mt-12 border-t border-black pt-8 lg:-mx-[30px] lg:px-[30px]">
+                <h2 className="font-normal tracking-normal text-[28px] lg:text-[33px]">Organisé par :</h2>
+                <div className="mt-8 flex items-center gap-5 lg:gap-7">
+                  <div className="relative h-[60px] w-[60px] flex-shrink-0 overflow-hidden rounded-full bg-[#ddd]">
+                    {event.organizer.avatar ? (
+                      <Image src={resolveMediaUrl(event.organizer.avatar)!} alt="" fill sizes="60px" className="object-cover" />
+                    ) : (
+                      <span className="flex h-full items-center justify-center text-2xl font-semibold text-[#555]">{organizerName.charAt(0).toUpperCase()}</span>
+                    )}
+                  </div>
+                  <p className="text-[28px] lg:text-[35px]">{organizerName}</p>
+                </div>
+              </section>
             )}
-          </section>
-        )}
+
+            {/* Venue */}
+            <section className="mt-12 border-t border-black pt-12 lg:-mx-[30px] lg:mt-24 lg:px-[30px]">
+              <p className="text-[19px] lg:text-[23px]">Salle</p>
+              <p className="mt-4 text-[28px] lg:mt-6 lg:text-[37px]">{event.venue}</p>
+              <p className="mt-4 text-lg leading-snug lg:text-[21px]">
+                {[event.address, event.city, event.country].filter(Boolean).join(', ')}
+              </p>
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapsQuery)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-8 inline-flex h-12 items-center gap-2 rounded-full bg-[#707070] px-7 text-lg font-bold uppercase text-white transition-opacity hover:opacity-85"
+              >
+                <MapIcon className="h-8 w-8" strokeWidth={1.5} /> Ouvrir dans Maps
+              </a>
+            </section>
+
+            {/* App */}
+            <section className="mt-12 border-t border-black pt-12 lg:-mx-[30px] lg:px-[30px]">
+              <div className="flex items-center justify-between gap-4">
+                <h2 className="font-normal tracking-normal text-[26px] lg:text-[37px]">Télécharge l&apos;appli ZAYA</h2>
+                <ZayaLogo className="hidden text-[34px] sm:inline-flex" />
+              </div>
+              <p className="mt-8 max-w-[470px] text-lg leading-snug lg:mt-12 lg:text-[23px]">
+                Plonge dans l&apos;extraordinaire avec Zaya, la plateforme qui transforme chaque événement en une aventure
+                mémorable ! Prépare-toi à vivre une expérience où chaque détail est pensé pour t&apos;émerveiller.
+              </p>
+              <StoreButtons tone="grey" className="mt-12" />
+            </section>
+          </div>
+        </div>
       </div>
 
-      {modalOpen && !purchaseResult && (
-        <PurchaseModal
+      {/* Phones: the buy button stays at hand */}
+      {canBuy && !checkout && (
+        <div className="sticky bottom-0 z-30 border-t border-[#eee] bg-white/95 px-6 py-3 backdrop-blur lg:hidden">
+          <button type="button" onClick={() => setCheckout('tickets')}
+            className="h-12 w-full rounded-full bg-black text-lg font-bold uppercase text-white">
+            Acheter · {fromPriceLabel(event).replace('À partir de ', 'dès ')}
+          </button>
+        </div>
+      )}
+
+      {checkout && (
+        <Checkout
           event={event}
           catalog={catalog}
           cart={cart}
           onCartChange={setCart}
-          shopOnly={modalOpen === 'shop'}
-          onClose={() => setModalOpen(false)}
-          onSuccess={(result) => { setModalOpen(false); setCart({}); setPurchaseResult(result); }}
-        />
-      )}
-
-      {purchaseResult && (
-        <SuccessScreen
-          result={purchaseResult}
-          event={event}
-          onClose={() => { setPurchaseResult(null); router.push('/billetterie'); }}
+          shopOnly={checkout === 'shop'}
+          onClose={() => setCheckout(false)}
+          onDone={() => setCart({})}
         />
       )}
     </>
