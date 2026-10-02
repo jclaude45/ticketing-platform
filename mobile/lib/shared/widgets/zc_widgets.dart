@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:lottie/lottie.dart';
 
 import '../../core/constants/colors.dart';
 
@@ -54,9 +55,9 @@ class ZcWeight {
 TextStyle zcText(double size, {FontWeight weight = ZcWeight.regular, Color? color, double? height}) =>
     TextStyle(fontFamily: zcFont, fontSize: size, fontWeight: weight, color: color ?? AppColors.ink, height: height);
 
-/// Black page with the tribal pattern on top and a rounded sheet over it (intro, login,
-/// event choice). [sheetTop] is the share of the screen height above the sheet; the sheet
-/// rises when the keyboard opens so the fields stay visible.
+/// Animated event drawings (Lottie, assets/animations) behind a rounded sheet (intro,
+/// welcome, login, event choice). [sheetTop] is the share of the screen height above the
+/// sheet; the sheet rises when the keyboard opens so the fields stay visible.
 class ZcPatternScaffold extends StatelessWidget {
   final double sheetTop;
   final Widget child;
@@ -70,18 +71,13 @@ class ZcPatternScaffold extends StatelessWidget {
     final top = keyboard ? media.padding.top + 24 : media.size.height * sheetTop;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent),
+      value: (AppColors.isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
+          .copyWith(statusBarColor: Colors.transparent),
       child: Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: AppColors.page,
         body: Stack(
           children: [
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              height: media.size.height * sheetTop + 48,
-              child: Image.asset('assets/images/pattern.png', fit: BoxFit.cover, alignment: Alignment.topCenter),
-            ),
+            const Positioned.fill(child: ZcAnimatedBackdrop()),
             AnimatedPositioned(
               duration: const Duration(milliseconds: 250),
               curve: Curves.easeOutCubic,
@@ -93,7 +89,8 @@ class ZcPatternScaffold extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: AppColors.page,
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(34)),
-                  boxShadow: const [BoxShadow(color: Color(0x29000000), blurRadius: 6, offset: Offset(0, -3))],
+                  // The backdrop is white too: a softer, wider shadow marks the sheet's edge
+                  boxShadow: const [BoxShadow(color: Color(0x26000000), blurRadius: 24, offset: Offset(0, -4))],
                 ),
                 child: SafeArea(top: false, child: child),
               ),
@@ -102,6 +99,60 @@ class ZcPatternScaffold extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// The looping event drawings (white background, black lines). Inverted in dark mode.
+/// One clock for the whole app: moving from one screen to the next, the drawings carry on
+/// where they were instead of jumping back to the start.
+class ZcAnimatedBackdrop extends StatefulWidget {
+  const ZcAnimatedBackdrop({super.key});
+
+  static final _origin = DateTime.now();
+
+  @override
+  State<ZcAnimatedBackdrop> createState() => _ZcAnimatedBackdropState();
+}
+
+class _ZcAnimatedBackdropState extends State<ZcAnimatedBackdrop> with SingleTickerProviderStateMixin {
+  static const _invert = ColorFilter.matrix(<double>[
+    -1, 0, 0, 0, 255, //
+    0, -1, 0, 0, 255, //
+    0, 0, -1, 0, 255, //
+    0, 0, 0, 1, 0, //
+  ]);
+
+  late final AnimationController _controller = AnimationController(vsync: this);
+
+  void _start(LottieComposition composition) {
+    final total = composition.duration.inMicroseconds;
+    final elapsed = DateTime.now().difference(ZcAnimatedBackdrop._origin).inMicroseconds;
+    _controller
+      ..duration = composition.duration
+      ..value = (elapsed % total) / total
+      ..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final animation = RepaintBoundary(
+      child: Lottie.asset(
+        'assets/animations/fond_evenements.json',
+        controller: _controller,
+        onLoaded: _start,
+        fit: BoxFit.cover,
+        alignment: Alignment.topCenter,
+        // Plain page instead of nothing if the file can't be read
+        errorBuilder: (_, __, ___) => ColoredBox(color: AppColors.page),
+      ),
+    );
+    return AppColors.isDark ? ColorFiltered(colorFilter: _invert, child: animation) : animation;
   }
 }
 
