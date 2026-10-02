@@ -53,7 +53,7 @@ class _DataTabState extends ConsumerState<DataTab> {
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
           children: [
             const SizedBox(height: 56),
-            Text('Rapport contrôle', textAlign: TextAlign.center, style: zcText(ZcSize.h1, color: AppColors.grey)),
+            Text('Rapport contrôle', textAlign: TextAlign.center, style: zcText(ZcSize.h1, weight: ZcWeight.bold, color: AppColors.grey)),
             const SizedBox(height: 40),
             Center(
               child: LayoutBuilder(
