@@ -72,7 +72,6 @@ class _SettingsTabState extends ConsumerState<SettingsTab> {
           ),
           _Row(
             icon: online ? Icons.wifi_rounded : Icons.wifi_off_rounded,
-            iconColor: online ? AppColors.statusOnline : AppColors.statusOffline,
             title: online ? 'En ligne' : 'Hors ligne',
             subtitle: online
                 ? 'Chaque billet est vérifié en temps réel. Si le réseau coupe, le scan continue hors ligne.'

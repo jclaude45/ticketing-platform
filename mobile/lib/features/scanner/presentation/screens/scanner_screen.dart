@@ -362,7 +362,6 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
   Widget _buildTopBar(bool isOnline, int pendingCount, {required bool overCamera}) {
     final fg = overCamera ? Colors.white : AppColors.ink;
     final fgSoft = overCamera ? Colors.white70 : AppColors.grey;
-    final statusColor = isOnline ? AppColors.statusOnline : AppColors.statusOffline;
     return Container(
       padding: EdgeInsets.fromLTRB(8, MediaQuery.of(context).padding.top + 8, 16, 24),
       decoration: overCamera
@@ -402,7 +401,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
               ],
             ),
           ),
-          _Pill(bordered: !overCamera, color: statusColor, icon: isOnline ? Icons.wifi_rounded : Icons.wifi_off_rounded, label: isOnline ? 'En ligne' : 'Hors ligne'),
+          _Pill(bordered: !overCamera, color: const Color(0xFF252427), icon: isOnline ? Icons.wifi_rounded : Icons.wifi_off_rounded, label: isOnline ? 'En ligne' : 'Hors ligne'),
           if (pendingCount > 0) ...[
             const SizedBox(width: 6),
             _Pill(bordered: !overCamera, color: AppColors.fraudOrange, icon: Icons.cloud_upload_outlined, label: '$pendingCount'),
