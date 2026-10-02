@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../../shared/widgets/zc_widgets.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../../../core/constants/colors.dart';
@@ -116,7 +118,7 @@ class QrScannerWidgetState extends State<QrScannerWidget> {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: AppColors.textSecondary,
-                  fontSize: 16,
+                  fontSize: ZcSize.body,
                 ),
               ),
             ],

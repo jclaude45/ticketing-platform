@@ -52,7 +52,7 @@ class ScannerTab extends ConsumerWidget {
                       Text(
                         'Prêt à scanner\nvos billets',
                         textAlign: TextAlign.center,
-                        style: zcText(28, weight: FontWeight.w700, height: 1.2),
+                        style: zcText(ZcSize.h1, weight: FontWeight.w700, height: 1.2),
                       ),
                       const SizedBox(height: 25),
                       Padding(
@@ -107,7 +107,7 @@ class _OfflineLine extends ConsumerWidget {
       children: [
         Icon(online ? Icons.cloud_upload_outlined : Icons.wifi_off_rounded, size: 14, color: AppColors.statusOffline),
         const SizedBox(width: 6),
-        Flexible(child: Text(text, style: zcText(12, color: AppColors.grey))),
+        Flexible(child: Text(text, style: zcText(ZcSize.small, color: AppColors.grey))),
       ],
     );
   }
@@ -124,10 +124,10 @@ class _EventError extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         children: [
-          Text(message, textAlign: TextAlign.center, style: zcText(14, color: AppColors.grey)),
+          Text(message, textAlign: TextAlign.center, style: zcText(ZcSize.body, color: AppColors.grey)),
           TextButton(
             onPressed: () => Navigator.pushNamed(context, '/events'),
-            child: Text("Changer d'événement", style: zcText(14, weight: FontWeight.w500)),
+            child: Text("Changer d'événement", style: zcText(ZcSize.body, weight: FontWeight.w500)),
           ),
         ],
       ),

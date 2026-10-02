@@ -20,23 +20,23 @@ Future<void> confirmLogout(BuildContext context, WidgetRef ref) async {
     builder: (ctx) => AlertDialog(
       backgroundColor: AppColors.page,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: Text('Déconnexion', style: zcText(18, weight: FontWeight.w600)),
+      title: Text('Déconnexion', style: zcText(ZcSize.h3, weight: FontWeight.w700)),
       content: Text(
         pending > 0
             ? "$pending entrée(s) validée(s) hors ligne n'ont pas encore été envoyées au serveur. "
                 "Si vous vous déconnectez maintenant, elles seront perdues. Reconnectez-vous au réseau et attendez l'envoi."
             : 'Voulez-vous vraiment vous déconnecter ?',
-        style: zcText(14, color: pending > 0 ? AppColors.fraudOrange : AppColors.grey),
+        style: zcText(ZcSize.body, color: pending > 0 ? AppColors.fraudOrange : AppColors.grey),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx, false),
-          child: Text('Annuler', style: zcText(14, color: AppColors.grey)),
+          child: Text('Annuler', style: zcText(ZcSize.body, color: AppColors.grey)),
         ),
         TextButton(
           onPressed: () => Navigator.pop(ctx, true),
           child: Text(pending > 0 ? 'Se déconnecter quand même' : 'Se déconnecter',
-              style: zcText(14, weight: FontWeight.w500, color: AppColors.usedRed)),
+              style: zcText(ZcSize.body, weight: FontWeight.w500, color: AppColors.usedRed)),
         ),
       ],
     ),

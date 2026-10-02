@@ -72,7 +72,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       const Spacer(flex: 2),
                       SizedBox(height: 200, child: Center(child: ZcIllustration(page.image, height: page.height))),
                       const SizedBox(height: 54),
-                      Text(page.text, textAlign: TextAlign.center, style: zcText(14, color: AppColors.grey, height: 1.75)),
+                      Text(page.text, textAlign: TextAlign.center, style: zcText(ZcSize.body, color: AppColors.grey, height: 1.75)),
                       const Spacer(flex: 3),
                     ],
                   ),

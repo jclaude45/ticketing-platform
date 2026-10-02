@@ -65,7 +65,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
               children: [
                 const ZcIllustration('logo_z', height: 132),
                 const SizedBox(height: 38),
-                Text('zcontrole', style: zcText(24, weight: FontWeight.w500)),
+                Text('zcontrole', style: zcText(ZcSize.h2, weight: FontWeight.w500)),
               ],
             ),
           ),

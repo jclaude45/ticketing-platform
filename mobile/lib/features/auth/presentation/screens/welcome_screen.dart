@@ -14,13 +14,13 @@ class WelcomeScreen extends StatelessWidget {
       child: ZcFillScroll(
         children: [
           const SizedBox(height: 38),
-          Text('zcontrole', textAlign: TextAlign.center, style: zcText(24, weight: FontWeight.w500)),
+          Text('zcontrole', textAlign: TextAlign.center, style: zcText(ZcSize.h2, weight: FontWeight.w500)),
           const SizedBox(height: 40),
           Text(
             "Découvrez l'excellence en gestion d'événements avec zcontrole ! Des analyses instantanées, "
             'des billets sécurisés, et une expérience inégalée. Transformez vos événements en succès mémorables.',
             textAlign: TextAlign.center,
-            style: zcText(14, color: AppColors.ink, height: 1.75),
+            style: zcText(ZcSize.body, color: AppColors.ink, height: 1.75),
           ),
           const Spacer(),
           const SizedBox(height: 32),

@@ -244,7 +244,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.page,
-        title: Text('Code de la commande', style: zcText(18, weight: FontWeight.w600)),
+        title: Text('Code de la commande', style: zcText(ZcSize.h3, weight: FontWeight.w700)),
         content: ZcTextField(
           controller: controller,
           hint: 'B-XXXXXX',
@@ -252,10 +252,10 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
           onSubmitted: (v) => Navigator.pop(ctx, v),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Annuler', style: zcText(14, color: AppColors.grey))),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Annuler', style: zcText(ZcSize.body, color: AppColors.grey))),
           TextButton(
             onPressed: () => Navigator.pop(ctx, controller.text),
-            child: Text('Rechercher', style: zcText(14, weight: FontWeight.w500)),
+            child: Text('Rechercher', style: zcText(ZcSize.body, weight: FontWeight.w500)),
           ),
         ],
       ),
@@ -299,7 +299,9 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
     final frameColor = _scanMode == ScanMode.tickets && !isOnline ? AppColors.statusOffline : AppColors.eventCard;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent),
+      // Light icons over the camera; dark on the white panels (trigger, permission) in light mode
+      value: (camera || AppColors.isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
+          .copyWith(statusBarColor: Colors.transparent),
       child: Scaffold(
         backgroundColor: Colors.black,
         body: Stack(
@@ -331,7 +333,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
               ),
             ),
 
-            Positioned(top: 0, left: 0, right: 0, child: _buildTopBar(isOnline, ref.watch(syncNotifierProvider).pending)),
+            Positioned(top: 0, left: 0, right: 0, child: _buildTopBar(isOnline, ref.watch(syncNotifierProvider).pending, overCamera: camera)),
 
             if (camera && !isProcessing)
               Center(
@@ -343,7 +345,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
                       ScanMode.badges => 'Scannez le badge du membre',
                       ScanMode.merch => isOnline ? 'Scannez le QR de retrait de la commande' : 'Le retrait boutique nécessite une connexion',
                     },
-                    style: zcText(13, color: Colors.white.withValues(alpha: 0.8)),
+                    style: zcText(ZcSize.body, color: Colors.white.withValues(alpha: 0.8)),
                   ),
                 ),
               ),
@@ -356,22 +358,27 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
   }
 
   /// Back chevron, title and event, network state, entries waiting to be sent.
-  Widget _buildTopBar(bool isOnline, int pendingCount) {
+  /// White on a dark gradient over the camera; charter ink on the white panels.
+  Widget _buildTopBar(bool isOnline, int pendingCount, {required bool overCamera}) {
+    final fg = overCamera ? Colors.white : AppColors.ink;
+    final fgSoft = overCamera ? Colors.white70 : AppColors.grey;
     final statusColor = isOnline ? AppColors.statusOnline : AppColors.statusOffline;
     return Container(
       padding: EdgeInsets.fromLTRB(8, MediaQuery.of(context).padding.top + 8, 16, 24),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xCC000000), Colors.transparent],
-        ),
-      ),
+      decoration: overCamera
+          ? const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xCC000000), Colors.transparent],
+              ),
+            )
+          : null,
       child: Row(
         children: [
           IconButton(
             tooltip: 'Retour',
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 24),
+            icon: Icon(Icons.arrow_back_ios_new_rounded, color: fg, size: 24),
             onPressed: () => Navigator.pop(context),
           ),
           Expanded(
@@ -384,21 +391,21 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
                     ScanMode.badges => 'Scanner les badges',
                     ScanMode.merch => 'Retrait boutique',
                   },
-                  style: zcText(16, weight: FontWeight.w600, color: Colors.white),
+                  style: zcText(ZcSize.title, weight: FontWeight.w700, color: fg),
                 ),
                 Text(
                   ref.watch(eventByIdProvider(widget.eventId))?.name ?? '',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: zcText(12, color: Colors.white70),
+                  style: zcText(ZcSize.small, color: fgSoft),
                 ),
               ],
             ),
           ),
-          _Pill(color: statusColor, icon: isOnline ? Icons.wifi_rounded : Icons.wifi_off_rounded, label: isOnline ? 'En ligne' : 'Hors ligne'),
+          _Pill(bordered: !overCamera, color: statusColor, icon: isOnline ? Icons.wifi_rounded : Icons.wifi_off_rounded, label: isOnline ? 'En ligne' : 'Hors ligne'),
           if (pendingCount > 0) ...[
             const SizedBox(width: 6),
-            _Pill(color: AppColors.fraudOrange, icon: Icons.cloud_upload_outlined, label: '$pendingCount'),
+            _Pill(bordered: !overCamera, color: AppColors.fraudOrange, icon: Icons.cloud_upload_outlined, label: '$pendingCount'),
           ],
         ],
       ),
@@ -490,7 +497,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
                       const SizedBox(width: 6),
                       Text(
                         m.label,
-                        style: zcText(13, weight: FontWeight.w500, color: _scanMode == m.mode ? AppColors.onInk : AppColors.ink),
+                        style: zcText(ZcSize.body, weight: FontWeight.w500, color: _scanMode == m.mode ? AppColors.onInk : AppColors.ink),
                       ),
                     ],
                   ),
@@ -518,19 +525,19 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
         children: [
           Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
           const SizedBox(width: 10),
-          Text('Dernier : $label', style: zcText(13, weight: FontWeight.w500)),
+          Text('Dernier : $label', style: zcText(ZcSize.small, weight: FontWeight.w500)),
           if (result.holderName != null)
             Expanded(
               child: Text(
                 '  ·  ${result.holderName}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: zcText(13, color: AppColors.grey),
+                style: zcText(ZcSize.small, color: AppColors.grey),
               ),
             )
           else
             const Spacer(),
-          Text(AppDateUtils.formatShortTime(result.scannedAt), style: zcText(11, color: AppColors.grey)),
+          Text(AppDateUtils.formatShortTime(result.scannedAt), style: zcText(ZcSize.caption, color: AppColors.grey)),
         ],
       ),
     );
@@ -553,7 +560,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
             Text(
               isProcessing ? 'Vérification…' : 'Appuyez sur\nla gâchette',
               textAlign: TextAlign.center,
-              style: zcText(28, weight: FontWeight.w600, height: 1.2),
+              style: zcText(ZcSize.h1, weight: FontWeight.w700, height: 1.2),
             ),
             const SizedBox(height: 12),
             Text(
@@ -563,7 +570,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
                 ScanMode.merch => 'Visez le QR de retrait de la commande avec le scanner du terminal.',
               },
               textAlign: TextAlign.center,
-              style: zcText(14, color: AppColors.grey, height: 1.6),
+              style: zcText(ZcSize.body, color: AppColors.grey, height: 1.5),
             ),
           ],
         ),
@@ -582,12 +589,12 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
           children: [
             Icon(Icons.no_photography_outlined, size: 84, color: AppColors.ink),
             const SizedBox(height: 24),
-            Text('Accès caméra requis', textAlign: TextAlign.center, style: zcText(24, weight: FontWeight.w600)),
+            Text('Accès caméra requis', textAlign: TextAlign.center, style: zcText(ZcSize.h1, weight: FontWeight.w700)),
             const SizedBox(height: 10),
             Text(
               "Autorisez la caméra pour scanner les billets et badges, ou passez sur la gâchette du terminal.",
               textAlign: TextAlign.center,
-              style: zcText(14, color: AppColors.grey, height: 1.6),
+              style: zcText(ZcSize.body, color: AppColors.grey, height: 1.5),
             ),
             const SizedBox(height: 28),
             ZcButton(label: 'Ouvrir les réglages', onPressed: openAppSettings),
@@ -604,19 +611,26 @@ class _Pill extends StatelessWidget {
   final IconData icon;
   final String label;
 
-  const _Pill({required this.color, required this.icon, required this.label});
+  /// Outlined on a white background (no camera behind)
+  final bool bordered;
+
+  const _Pill({required this.color, required this.icon, required this.label, this.bordered = false});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: bordered ? Border.all(color: const Color(0xFF252427)) : null,
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 13, color: color),
           const SizedBox(width: 5),
-          Text(label, style: zcText(11, weight: FontWeight.w600, color: const Color(0xFF252427))),
+          Text(label, style: zcText(ZcSize.caption, weight: FontWeight.w700, color: const Color(0xFF252427))),
         ],
       ),
     );
@@ -651,7 +665,7 @@ class _ControlButton extends StatelessWidget {
             child: Icon(icon, size: 22, color: isActive ? AppColors.onInk : AppColors.ink),
           ),
           const SizedBox(height: 6),
-          Text(label, style: zcText(11, color: AppColors.navInactive)),
+          Text(label, style: zcText(ZcSize.caption, color: AppColors.navInactive)),
         ],
       ),
     );

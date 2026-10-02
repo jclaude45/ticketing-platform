@@ -50,9 +50,9 @@ class _AccreditationResultScreenState extends State<AccreditationResultScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(r.memberName ?? 'Membre inconnu', style: zcText(18, weight: FontWeight.w600)),
+                Text(r.memberName ?? 'Membre inconnu', style: zcText(ZcSize.h3, weight: FontWeight.w700)),
                 const SizedBox(height: 2),
-                Text((r.role ?? 'Staff').toUpperCase(), style: zcText(12, weight: FontWeight.w500, color: AppColors.grey)),
+                Text((r.role ?? 'Staff').toUpperCase(), style: zcText(ZcSize.small, weight: FontWeight.w500, color: AppColors.grey)),
               ],
             ),
           ),
@@ -84,7 +84,7 @@ class _Avatar extends StatelessWidget {
     return CircleAvatar(
       radius: 32,
       backgroundColor: AppColors.eventCard,
-      child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?', style: zcText(24, weight: FontWeight.w600, color: const Color(0xFF111111))),
+      child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?', style: zcText(ZcSize.h2, weight: FontWeight.w700, color: const Color(0xFF111111))),
     );
   }
 }

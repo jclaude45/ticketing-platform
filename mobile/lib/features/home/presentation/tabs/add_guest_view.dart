@@ -97,7 +97,7 @@ class _AddGuestViewState extends ConsumerState<AddGuestView> {
                     onPressed: widget.onClose,
                   ),
                   const SizedBox(width: 8),
-                  Text('Ajouter invité', style: zcText(14, color: AppColors.grey)),
+                  Text('Ajouter invité', style: zcText(ZcSize.body, color: AppColors.grey)),
                 ],
               ),
               const SizedBox(height: 28),

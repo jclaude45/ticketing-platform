@@ -107,8 +107,13 @@ final eventsNotifierProvider =
 
 final selectedEventProvider = StateProvider<String?>((ref) => null);
 
+/// Rebuilt when the list arrives (watching the notifier alone missed a list loaded later,
+/// e.g. the event name over the camera after a restart straight into the event).
 final eventByIdProvider = Provider.family<EventEntity?, String>((ref, id) {
-  return ref.watch(eventsNotifierProvider.notifier).getEvent(id);
+  for (final e in ref.watch(eventsNotifierProvider).events) {
+    if (e.id == id) return e;
+  }
+  return null;
 });
 
 /// Fresh event detail with the entry counters (`/controller-space/events/:id`).

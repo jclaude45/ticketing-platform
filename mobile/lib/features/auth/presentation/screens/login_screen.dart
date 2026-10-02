@@ -57,7 +57,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             const SizedBox(height: 40),
             ZcBackButton(onPressed: _back),
             const SizedBox(height: 40),
-            Text('Bienvenue', style: zcText(36, weight: FontWeight.w600, height: 1.1)),
+            Text('Bienvenue', style: zcText(ZcSize.display, weight: FontWeight.w700, height: 1.2)),
             const SizedBox(height: 40),
             ZcTextField(
               controller: _email,
@@ -92,7 +92,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
             if (error != null && error.isNotEmpty) ...[
               const SizedBox(height: 16),
-              Text(error, textAlign: TextAlign.center, style: zcText(13, color: AppColors.usedRed)),
+              Text(error, textAlign: TextAlign.center, style: zcText(ZcSize.small, color: AppColors.usedRed)),
             ],
             const SizedBox(height: 33),
             ZcButton(label: 'Connexion', loading: auth.isLoading, onPressed: _login),

@@ -48,18 +48,18 @@ class _GuestsTabState extends ConsumerState<GuestsTab> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(guest.name, textAlign: TextAlign.center, style: zcText(20, weight: FontWeight.w600)),
+              Text(guest.name, textAlign: TextAlign.center, style: zcText(ZcSize.h3, weight: FontWeight.w700)),
               const SizedBox(height: 6),
               Text(
                 [guest.ticketType, guest.serialNumber].whereType<String>().join(' · '),
                 textAlign: TextAlign.center,
-                style: zcText(12, color: AppColors.grey),
+                style: zcText(ZcSize.small, color: AppColors.grey),
               ),
               const SizedBox(height: 24),
               ZcButton(label: "Valider l'entrée", onPressed: () => Navigator.pop(ctx, true)),
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: Text('Annuler', style: zcText(14, color: AppColors.grey)),
+                child: Text('Annuler', style: zcText(ZcSize.body, color: AppColors.grey)),
               ),
             ],
           ),
@@ -104,7 +104,7 @@ class _GuestsTabState extends ConsumerState<GuestsTab> {
                 padding: const EdgeInsets.fromLTRB(0, 12, 14, 8),
                 child: TextButton(
                   onPressed: () => setState(() => _adding = true),
-                  child: Text('Ajouter invité', style: zcText(14, color: AppColors.grey)),
+                  child: Text('Ajouter invité', style: zcText(ZcSize.body, color: AppColors.grey)),
                 ),
               ),
             )
@@ -118,7 +118,7 @@ class _GuestsTabState extends ConsumerState<GuestsTab> {
             child: TextField(
               controller: _search,
               onChanged: (_) => setState(() {}),
-              style: zcText(14),
+              style: zcText(ZcSize.body),
               cursorColor: AppColors.ink,
               decoration: InputDecoration(
                 filled: false,
@@ -128,7 +128,7 @@ class _GuestsTabState extends ConsumerState<GuestsTab> {
                 contentPadding: const EdgeInsets.symmetric(vertical: 12),
                 prefixIcon: Icon(Icons.search_rounded, size: 22, color: AppColors.grey),
                 hintText: 'Rechercher',
-                hintStyle: zcText(14, color: AppColors.hint),
+                hintStyle: zcText(ZcSize.body, color: AppColors.hint),
               ),
             ),
           ),
@@ -190,9 +190,9 @@ class _GuestRow extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(guest.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: zcText(14, color: AppColors.grey)),
+                  Text(guest.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: zcText(ZcSize.body, color: AppColors.grey)),
                   const SizedBox(height: 4),
-                  Text(time, style: zcText(11, color: AppColors.grey.withValues(alpha: 0.48))),
+                  Text(time, style: zcText(ZcSize.caption, color: AppColors.grey.withValues(alpha: 0.48))),
                 ],
               ),
             ),
@@ -215,7 +215,7 @@ class _Message extends StatelessWidget {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(40, 48, 40, 0),
-      children: [Text(text, textAlign: TextAlign.center, style: zcText(14, color: AppColors.grey, height: 1.6))],
+      children: [Text(text, textAlign: TextAlign.center, style: zcText(ZcSize.body, color: AppColors.grey, height: 1.5))],
     );
   }
 }

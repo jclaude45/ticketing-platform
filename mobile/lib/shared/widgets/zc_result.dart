@@ -135,16 +135,15 @@ class _ZcResultViewState extends State<ZcResultView> with SingleTickerProviderSt
                       ),
                     ),
                     const SizedBox(height: 28),
-                    Text(widget.title, textAlign: TextAlign.center, style: zcText(
-                        28,
-                        weight: FontWeight.w600,
-                        height: 1.15,
+                    Text(widget.title, textAlign: TextAlign.center, style: zcText(ZcSize.h1,
+                        weight: FontWeight.w700,
+                        height: 1.2,
                         // A light status colour (yellow) is unreadable as text on white
                         color: widget.color.computeLuminance() > 0.5 ? AppColors.ink : widget.color,
                       )),
                     if (widget.subtitle != null) ...[
                       const SizedBox(height: 8),
-                      Text(widget.subtitle!, textAlign: TextAlign.center, style: zcText(14, color: AppColors.grey, height: 1.5)),
+                      Text(widget.subtitle!, textAlign: TextAlign.center, style: zcText(ZcSize.body, color: AppColors.grey, height: 1.5)),
                     ],
                     if (widget.badge != null) ...[
                       const SizedBox(height: 10),
@@ -155,7 +154,7 @@ class _ZcResultViewState extends State<ZcResultView> with SingleTickerProviderSt
                             color: AppColors.statusOffline.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: Text(widget.badge!, style: zcText(12, weight: FontWeight.w500, color: AppColors.statusOffline)),
+                          child: Text(widget.badge!, style: zcText(ZcSize.small, weight: FontWeight.w500, color: AppColors.statusOffline)),
                         ),
                       ),
                     ],
@@ -171,8 +170,8 @@ class _ZcResultViewState extends State<ZcResultView> with SingleTickerProviderSt
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              SizedBox(width: 110, child: Text(d.label, style: zcText(13, color: AppColors.grey))),
-                              Expanded(child: Text(d.value, style: zcText(14, weight: FontWeight.w500))),
+                              SizedBox(width: 110, child: Text(d.label, style: zcText(ZcSize.small, color: AppColors.grey))),
+                              Expanded(child: Text(d.value, style: zcText(ZcSize.body, weight: FontWeight.w500))),
                             ],
                           ),
                         ),
@@ -185,7 +184,7 @@ class _ZcResultViewState extends State<ZcResultView> with SingleTickerProviderSt
                           color: widget.color.withValues(alpha: 0.10),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Text(widget.notice!, style: zcText(13, color: AppColors.ink, height: 1.5)),
+                        child: Text(widget.notice!, style: zcText(ZcSize.body, color: AppColors.ink, height: 1.5)),
                       ),
                     ],
                     if (widget.footer != null) ...[const SizedBox(height: 16), widget.footer!],

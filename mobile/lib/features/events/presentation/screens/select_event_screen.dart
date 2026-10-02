@@ -60,14 +60,14 @@ class _SelectEventScreenState extends ConsumerState<SelectEventScreen> {
           const SizedBox(height: 40),
           ZcBackButton(onPressed: _back),
           const SizedBox(height: 40),
-          Text('Sélectionner\nun événement', style: zcText(36, weight: FontWeight.w600, height: 1.15)),
+          Text('Sélectionner\nun événement', style: zcText(ZcSize.display, weight: FontWeight.w700, height: 1.2)),
           const SizedBox(height: 32),
           if (state.isLoading && events.isEmpty)
             SizedBox(height: 58, child: Center(child: CircularProgressIndicator(color: AppColors.ink, strokeWidth: 2)))
           else if (events.isEmpty)
             Text(
               state.error ?? "Aucun événement ne vous est encore assigné. Contactez l'organisateur.",
-              style: zcText(14, color: AppColors.grey, height: 1.6),
+              style: zcText(ZcSize.body, color: AppColors.grey, height: 1.5),
             )
           else
             ZcDropdown<String>(

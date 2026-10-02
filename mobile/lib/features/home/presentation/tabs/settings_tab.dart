@@ -56,7 +56,7 @@ class _SettingsTabState extends ConsumerState<SettingsTab> {
         padding: const EdgeInsets.fromLTRB(11, 0, 11, 24),
         children: [
           const SizedBox(height: 56),
-          Text('Paramètres', textAlign: TextAlign.center, style: zcText(28, color: AppColors.grey)),
+          Text('Paramètres', textAlign: TextAlign.center, style: zcText(ZcSize.h1, color: AppColors.grey)),
           const SizedBox(height: 32),
           _Row(
             icon: Icons.person_outline_rounded,
@@ -166,10 +166,10 @@ class _Row extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: zcText(14, weight: FontWeight.w500)),
+                  Text(title, style: zcText(ZcSize.body, weight: FontWeight.w500)),
                   if (subtitle != null) ...[
                     const SizedBox(height: 3),
-                    Text(subtitle!, style: zcText(12, color: AppColors.grey, height: 1.4)),
+                    Text(subtitle!, style: zcText(ZcSize.small, color: AppColors.grey, height: 1.5)),
                   ],
                 ],
               ),

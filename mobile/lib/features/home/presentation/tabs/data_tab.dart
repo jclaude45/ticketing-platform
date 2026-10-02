@@ -34,7 +34,7 @@ class DataTab extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
           children: [
             const SizedBox(height: 56),
-            Text('Rapport contrôle', textAlign: TextAlign.center, style: zcText(28, color: AppColors.grey)),
+            Text('Rapport contrôle', textAlign: TextAlign.center, style: zcText(ZcSize.h1, color: AppColors.grey)),
             const SizedBox(height: 40),
             Center(
               child: LayoutBuilder(
@@ -62,7 +62,7 @@ class DataTab extends ConsumerWidget {
               Text(
                 'Vos scans : ${mine['myScans']} · dont ${mine['myValidScans'] ?? 0} entrée(s) validée(s)',
                 textAlign: TextAlign.center,
-                style: zcText(12, color: AppColors.grey),
+                style: zcText(ZcSize.small, color: AppColors.grey),
               ),
             ],
           ],
@@ -82,7 +82,7 @@ class _LegendRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = zcText(12, color: AppColors.grey);
+    final style = zcText(ZcSize.small, color: AppColors.grey);
     return SizedBox(
       height: 34,
       child: Row(

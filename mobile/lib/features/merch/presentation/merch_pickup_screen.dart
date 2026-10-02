@@ -82,7 +82,7 @@ class _MerchPickupScreenState extends State<MerchPickupScreen> {
       notice: _error ?? refusal,
       footer: canGive
           ? null
-          : Text('${_order.itemCount} article(s)', textAlign: TextAlign.center, style: zcText(12, color: AppColors.grey)),
+          : Text('${_order.itemCount} article(s)', textAlign: TextAlign.center, style: zcText(ZcSize.small, color: AppColors.grey)),
       buttonLabel: canGive ? 'Articles remis au client' : 'Scanner la commande suivante',
       buttonLoading: _busy,
       onButton: canGive ? _handOver : null,

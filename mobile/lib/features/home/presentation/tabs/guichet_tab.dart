@@ -26,7 +26,7 @@ class _GuichetTabState extends State<GuichetTab> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.page,
-        title: Text('Code de la commande', style: zcText(18, weight: FontWeight.w600)),
+        title: Text('Code de la commande', style: zcText(ZcSize.h3, weight: FontWeight.w700)),
         content: ZcTextField(
           controller: controller,
           hint: 'B-XXXXXX',
@@ -34,10 +34,10 @@ class _GuichetTabState extends State<GuichetTab> {
           onSubmitted: (v) => Navigator.pop(ctx, v),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Annuler', style: zcText(14, color: AppColors.grey))),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Annuler', style: zcText(ZcSize.body, color: AppColors.grey))),
           TextButton(
             onPressed: () => Navigator.pop(ctx, controller.text),
-            child: Text('Rechercher', style: zcText(14, weight: FontWeight.w500)),
+            child: Text('Rechercher', style: zcText(ZcSize.body, weight: FontWeight.w500)),
           ),
         ],
       ),
@@ -69,13 +69,13 @@ class _GuichetTabState extends State<GuichetTab> {
           Text(
             'Retrait boutique',
             textAlign: TextAlign.center,
-            style: zcText(28, weight: FontWeight.w700, height: 1.2),
+            style: zcText(ZcSize.h1, weight: FontWeight.w700, height: 1.2),
           ),
           const SizedBox(height: 14),
           Text(
             'Scannez le QR code de la commande, ou saisissez son code, pour remettre les articles achetés en ligne.',
             textAlign: TextAlign.center,
-            style: zcText(14, color: AppColors.grey, height: 1.6),
+            style: zcText(ZcSize.body, color: AppColors.grey, height: 1.5),
           ),
           const SizedBox(height: 28),
           SizedBox(
@@ -90,7 +90,7 @@ class _GuichetTabState extends State<GuichetTab> {
             onPressed: _busy ? null : _typeCode,
             child: _busy
                 ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.ink))
-                : Text('Saisir un code', style: zcText(14, weight: FontWeight.w500)),
+                : Text('Saisir un code', style: zcText(ZcSize.body, weight: FontWeight.w500)),
           ),
           const Spacer(),
           const SizedBox(height: 24),

@@ -8,6 +8,37 @@ import '../../core/constants/colors.dart';
 /// zcontrole's typeface, bundled in assets/fonts (no download, works offline)
 const zcFont = 'Satoshi';
 
+/// Type scale of the mockups: one size per role, nothing in between.
+class ZcSize {
+  ZcSize._();
+
+  /// Form screen titles ("Bienvenue", "Sélectionner un événement")
+  static const double display = 36;
+
+  /// Screen headlines ("Prêt à scanner", result titles, tab titles)
+  static const double h1 = 28;
+
+  /// Brand name ("zcontrole"), large initials
+  static const double h2 = 24;
+
+  /// Dialog / sheet titles, main buttons, a person's name in a card
+  static const double h3 = 18;
+
+  /// Event card, bars over the camera
+  static const double title = 16;
+
+  /// Body text, fields, list rows
+  static const double body = 14;
+
+  /// Secondary text, labels, details
+  static const double small = 12;
+
+  /// Navigation labels, timestamps under a name
+  static const double caption = 11;
+
+  // Line heights: 1.2 for titles, 1.5 for paragraphs (1.75 kept for the intro texts of the mockups)
+}
+
 TextStyle zcText(double size, {FontWeight weight = FontWeight.w400, Color? color, double? height}) =>
     TextStyle(fontFamily: zcFont, fontSize: size, fontWeight: weight, color: color ?? AppColors.ink, height: height);
 
@@ -135,7 +166,7 @@ class ZcButton extends StatelessWidget {
         onPressed: loading ? null : onPressed,
         child: loading
             ? SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.onInk))
-            : Text(label, style: zcText(18, weight: FontWeight.w500, color: AppColors.onInk)),
+            : Text(label, style: zcText(ZcSize.h3, weight: FontWeight.w500, color: AppColors.onInk)),
       ),
     );
   }
@@ -148,7 +179,7 @@ InputDecoration zcInputDecoration(String hint, {Widget? suffixIcon}) {
       );
   return InputDecoration(
     hintText: hint,
-    hintStyle: zcText(14, color: AppColors.hint),
+    hintStyle: zcText(ZcSize.body, color: AppColors.hint),
     filled: false,
     contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 19),
     suffixIcon: suffixIcon,
@@ -158,7 +189,7 @@ InputDecoration zcInputDecoration(String hint, {Widget? suffixIcon}) {
     disabledBorder: border(AppColors.ink.withValues(alpha: 0.4)),
     errorBorder: border(AppColors.usedRed),
     focusedErrorBorder: border(AppColors.usedRed, 1.6),
-    errorStyle: zcText(12, color: AppColors.usedRed),
+    errorStyle: zcText(ZcSize.small, color: AppColors.usedRed),
   );
 }
 
@@ -207,7 +238,7 @@ class ZcTextField extends StatelessWidget {
       textCapitalization: textCapitalization,
       autofillHints: autofillHints,
       cursorColor: AppColors.ink,
-      style: zcText(14),
+      style: zcText(ZcSize.body),
       decoration: zcInputDecoration(hint, suffixIcon: suffixIcon),
     );
   }
@@ -241,10 +272,10 @@ class ZcDropdown<T> extends StatelessWidget {
       isExpanded: true,
       dropdownColor: AppColors.page,
       borderRadius: BorderRadius.circular(9.5),
-      style: zcText(14),
+      style: zcText(ZcSize.body),
       icon: Icon(Icons.keyboard_arrow_down_rounded, size: 28, color: chevronColor ?? AppColors.hint),
       decoration: zcInputDecoration(hint).copyWith(contentPadding: const EdgeInsets.fromLTRB(20, 17, 14, 17)),
-      hint: Text(hint, style: zcText(14, color: AppColors.hint)),
+      hint: Text(hint, style: zcText(ZcSize.body, color: AppColors.hint)),
     );
   }
 }
@@ -297,7 +328,7 @@ class ZcEventCard extends StatelessWidget {
             name,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontFamily: zcFont, fontSize: 16, color: ink),
+            style: const TextStyle(fontFamily: zcFont, fontSize: ZcSize.title, color: ink),
           ),
           const SizedBox(height: 4),
           Text.rich(
@@ -308,7 +339,7 @@ class ZcEventCard extends StatelessWidget {
               ),
               const TextSpan(text: ' vérifié'),
             ]),
-            style: const TextStyle(fontFamily: zcFont, fontSize: 16, color: ink),
+            style: const TextStyle(fontFamily: zcFont, fontSize: ZcSize.title, color: ink),
           ),
         ],
       ),

@@ -33,7 +33,7 @@ class AppTheme {
         iconTheme: IconThemeData(color: AppColors.textPrimary),
         titleTextStyle: TextStyle(
           fontFamily: zcFont,
-          fontSize: 18,
+          fontSize: ZcSize.h3,
           fontWeight: FontWeight.w700,
           color: AppColors.textPrimary,
         ),
@@ -55,7 +55,7 @@ class AppTheme {
         ),
         titleMedium: TextStyle(
           color: AppColors.textPrimary,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w700,
         ),
         bodyLarge: TextStyle(color: AppColors.textPrimary),
         bodyMedium: TextStyle(color: AppColors.textSecondary),
@@ -91,11 +91,11 @@ class AppTheme {
         ),
         hintStyle: TextStyle(
           color: AppColors.textDisabled,
-          fontSize: 14,
+          fontSize: ZcSize.body,
         ),
         labelStyle: TextStyle(color: AppColors.textMuted),
         floatingLabelStyle: TextStyle(color: AppColors.primary),
-        errorStyle: const TextStyle(color: AppColors.usedRed, fontSize: 12),
+        errorStyle: const TextStyle(color: AppColors.usedRed, fontSize: ZcSize.small),
       ),
 
       // Elevated button
@@ -110,8 +110,8 @@ class AppTheme {
           ),
           textStyle: const TextStyle(
             fontFamily: zcFont,
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
+            fontSize: ZcSize.title,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ),
@@ -143,7 +143,7 @@ class AppTheme {
         indicatorColor: AppColors.primary.withOpacity(0.15),
         labelTextStyle: WidgetStateProperty.all(
           const TextStyle(
-              fontFamily: zcFont, fontSize: 11, fontWeight: FontWeight.w600),
+              fontFamily: zcFont, fontSize: ZcSize.caption, fontWeight: FontWeight.w700),
         ),
       ),
 
@@ -153,7 +153,7 @@ class AppTheme {
         contentTextStyle: TextStyle(
           fontFamily: zcFont,
           color: AppColors.textPrimary,
-          fontSize: 14,
+          fontSize: ZcSize.body,
         ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
