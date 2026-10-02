@@ -14,7 +14,10 @@ import '../home_shell.dart';
 class ScannerTab extends ConsumerWidget {
   final String eventId;
 
-  const ScannerTab({super.key, required this.eventId});
+  /// The tab is on screen: the scan drawing only runs while it is
+  final bool active;
+
+  const ScannerTab({super.key, required this.eventId, this.active = true});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -47,7 +50,7 @@ class ScannerTab extends ConsumerWidget {
                       const SizedBox(height: 10),
                       _OfflineLine(eventId: eventId),
                       const Spacer(),
-                      ZcIllustration('illus_qr', height: qrSize),
+                      ZcAnimatedIllustration('scanner_qr_boucle', height: qrSize, active: active, loop: true, keepColors: true),
                       const SizedBox(height: 40),
                       Text(
                         'Prêt à scanner\nvos billets',

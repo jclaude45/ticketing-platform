@@ -63,7 +63,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   @override
   Widget build(BuildContext context) {
     final tabs = [
-      ScannerTab(eventId: widget.eventId),
+      ScannerTab(eventId: widget.eventId, active: _tab == 0),
       GuichetTab(eventId: widget.eventId, active: _tab == 1),
       GuestsTab(eventId: widget.eventId),
       DataTab(eventId: widget.eventId),

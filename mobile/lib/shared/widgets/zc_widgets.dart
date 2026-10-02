@@ -157,13 +157,25 @@ class _ZcAnimatedBackdropState extends State<ZcAnimatedBackdrop> with SingleTick
 }
 
 /// Line drawing that builds itself up (Lottie, assets/animations), in the ink colour
-/// (white in dark mode). Plays once from the start each time [active] turns on.
+/// (white in dark mode). Plays once from the start each time [active] turns on; with
+/// [loop], runs continuously while active.
+/// [keepColors]: drawings with white parts of their own (a halo masking what is under a
+/// scan line) keep their colours, swapped black/white in dark mode, instead of one tint.
 class ZcAnimatedIllustration extends StatefulWidget {
   final String name;
   final double height;
   final bool active;
+  final bool loop;
+  final bool keepColors;
 
-  const ZcAnimatedIllustration(this.name, {super.key, required this.height, this.active = true});
+  const ZcAnimatedIllustration(
+    this.name, {
+    super.key,
+    required this.height,
+    this.active = true,
+    this.loop = false,
+    this.keepColors = false,
+  });
 
   @override
   State<ZcAnimatedIllustration> createState() => _ZcAnimatedIllustrationState();
@@ -175,8 +187,11 @@ class _ZcAnimatedIllustrationState extends State<ZcAnimatedIllustration> with Si
   @override
   void didUpdateWidget(ZcAnimatedIllustration old) {
     super.didUpdateWidget(old);
-    if (widget.active && !old.active && _controller.duration != null) _controller.forward(from: 0);
+    if (_controller.duration == null || widget.active == old.active) return;
+    widget.active ? _play() : (widget.loop ? _controller.stop() : null);
   }
+
+  void _play() => widget.loop ? _controller.repeat() : _controller.forward(from: 0);
 
   @override
   void dispose() {
@@ -186,22 +201,30 @@ class _ZcAnimatedIllustrationState extends State<ZcAnimatedIllustration> with Si
 
   @override
   Widget build(BuildContext context) {
-    return ColorFiltered(
-      colorFilter: ColorFilter.mode(AppColors.ink, BlendMode.srcIn),
-      child: Lottie.asset(
+    final ColorFilter? filter = widget.keepColors
+        ? (AppColors.isDark ? _invertColors : null)
+        : ColorFilter.mode(AppColors.ink, BlendMode.srcIn);
+    final lottie = Lottie.asset(
         'assets/animations/${widget.name}.json',
         controller: _controller,
         height: widget.height,
         onLoaded: (composition) {
           _controller.duration = composition.duration;
-          // Not on screen yet: shown complete if it's never activated, played when it is
-          widget.active ? _controller.forward(from: 0) : _controller.value = 0;
+          // Not on screen yet: shown at its first frame, played when it becomes active
+          widget.active ? _play() : _controller.value = 0;
         },
         errorBuilder: (_, __, ___) => SizedBox(height: widget.height),
-      ),
     );
+    return filter == null ? lottie : ColorFiltered(colorFilter: filter, child: lottie);
   }
 }
+
+const _invertColors = ColorFilter.matrix(<double>[
+  -1, 0, 0, 0, 255, //
+  0, -1, 0, 0, 255, //
+  0, 0, -1, 0, 255, //
+  0, 0, 0, 1, 0, //
+]);
 
 /// Lets a column with [Spacer]s scroll when it does not fit (small phone, keyboard).
 class ZcFillScroll extends StatelessWidget {
