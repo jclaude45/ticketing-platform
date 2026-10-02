@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { CryptoService } from './crypto.service';
+import * as QRCode from 'qrcode';
 
 describe('CryptoService', () => {
   let service: CryptoService;
@@ -85,6 +86,53 @@ describe('CryptoService', () => {
       );
       expect(parsed?.payload).toBe(payload);
       expect(parsed?.signature).toBe('sig');
+    });
+  });
+
+  describe('Accreditation badge QR', () => {
+    const secret = 'test-accreditation-secret-0123456789';
+
+    it('compact QR is short, verifies and identifies the badge by its code', () => {
+      const qr = service.createCompactAccreditationQR('ACC-7K3P-9QXZ', secret);
+      expect(qr).toMatch(/^ACC-7K3P-9QXZ\.[A-Z2-7]{16}$/);
+      expect(qr.length).toBe(30);
+      const result = service.verifyAccreditationQR(qr, secret);
+      expect(result.valid).toBe(true);
+      expect(result.payload).toEqual({ code: 'ACC-7K3P-9QXZ' });
+    });
+
+    it('gives a small QR (version 2, 25 x 25 modules) instead of a dense one', () => {
+      const compact = QRCode.create(service.createCompactAccreditationQR('ACC-7K3P-9QXZ', secret), { errorCorrectionLevel: 'M' });
+      const legacy = QRCode.create(service.createAccreditationQR({
+        accId: '0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0', code: 'ACC-7K3P-9QXZ',
+        eventId: '77987eb2-83a0-4da4-8b26-65a6866c13c2', memberId: '1a2b3c4d-5e6f-7081-92a3-b4c5d6e7f809',
+        role: 'SECURITY', zones: ['VIP', 'BACKSTAGE'],
+      }, secret), { errorCorrectionLevel: 'M' });
+      expect(compact.version).toBe(2);
+      expect(compact.modules.size).toBe(25);
+      expect(legacy.modules.size).toBeGreaterThan(60);
+    });
+
+    it('rejects a forged or altered badge', () => {
+      const qr = service.createCompactAccreditationQR('ACC-7K3P-9QXZ', secret);
+      const otherCode = qr.replace('ACC-7K3P-9QXZ', 'ACC-7K3P-9QXY');
+      expect(service.verifyAccreditationQR(otherCode, secret).valid).toBe(false);
+      expect(service.verifyAccreditationQR(qr, 'another-secret-0123456789abcdef').valid).toBe(false);
+      expect(service.verifyAccreditationQR('ACC-7K3P-9QXZ', secret).valid).toBe(false);
+    });
+
+    it('accepts the scan with spaces / line break added by a terminal', () => {
+      const qr = service.createCompactAccreditationQR('ACC-7K3P-9QXZ', secret);
+      expect(service.verifyAccreditationQR(` ${qr}\n`, secret).valid).toBe(true);
+    });
+
+    it('still accepts badges printed with the former JSON QR', () => {
+      const legacy = service.createAccreditationQR({
+        accId: 'acc-id', code: 'ACC-AAAA-BBBB', eventId: 'evt', memberId: 'mem', role: 'STAFF', zones: [],
+      }, secret);
+      const result = service.verifyAccreditationQR(legacy, secret);
+      expect(result.valid).toBe(true);
+      expect(result.payload.id).toBe('acc-id');
     });
   });
 });

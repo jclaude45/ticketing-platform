@@ -287,12 +287,56 @@ export class CryptoService implements OnModuleInit {
     return JSON.stringify({ ...payload, sig });
   }
 
-  verifyAccreditationQR(qrContent: string, secret: string): {
+  // ── Compact badge QR (current format) ────────────────────────────────────────
+  // "ACC-7K3P-9QXZ.ABCDEFGHIJKLMNOP": the badge code + 80 bits of HMAC in base32.
+  // 30 characters of the QR alphanumeric set → a 25 × 25 module code, easy to scan once
+  // printed small (the old JSON payload made ~73 × 73). Role, zones, validity and
+  // revocation are read from the database at scan time, so the QR only has to prove
+  // which badge it is.
+
+  private static readonly COMPACT_ACC = /^(ACC-[A-Z0-9]{4}-[A-Z0-9]{4})\.([A-Z2-7]{16})$/;
+
+  private accreditationTag(code: string, secret: string): string {
+    const mac = crypto.createHmac('sha256', secret).update(`acc:${code}`).digest().subarray(0, 10);
+    // RFC 4648 base32 (A-Z, 2-7): stays in the QR alphanumeric mode
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    let bits = 0, value = 0, out = '';
+    for (const byte of mac) {
+      value = (value << 8) | byte;
+      bits += 8;
+      while (bits >= 5) {
+        out += alphabet[(value >>> (bits - 5)) & 31];
+        bits -= 5;
+      }
+    }
+    return out;
+  }
+
+  createCompactAccreditationQR(code: string, secret: string): string {
+    return `${code}.${this.accreditationTag(code, secret)}`;
+  }
+
+  /**
+   * Badge QR check. Compact format first; the former signed JSON payload (badges printed
+   * before) is still accepted. `payload.code` (compact) or `payload.id` (JSON) identifies
+   * the accreditation.
+   */
+  verifyAccreditationQR(rawContent: string, secret: string): {
     valid: boolean;
     expired: boolean;
     payload: any;
     error?: string;
   } {
+    const qrContent = rawContent.trim();
+    const compact = CryptoService.COMPACT_ACC.exec(qrContent);
+    if (compact) {
+      const [, code, tag] = compact;
+      const expected = this.accreditationTag(code, secret);
+      const ok = crypto.timingSafeEqual(Buffer.from(tag), Buffer.from(expected));
+      return ok
+        ? { valid: true, expired: false, payload: { code } }
+        : { valid: false, expired: false, payload: null, error: 'Invalid signature' };
+    }
     try {
       const parsed = JSON.parse(qrContent);
       if (parsed.t !== 'acc') return { valid: false, expired: false, payload: null, error: 'Not an accreditation QR' };

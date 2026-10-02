@@ -557,9 +557,10 @@ export class TeamService {
     if (result.expired) {
       return { valid: false, reason: 'Accreditation expired' };
     }
-    // Cross-check payload against DB: make sure it's still active and belongs to this event
+    // Cross-check against the DB: still active, this event, within its validity dates.
+    // Compact badges carry the code, former JSON badges the id.
     const acc = await this.prisma.accreditation.findUnique({
-      where: { id: result.payload.id },
+      where: result.payload.code ? { code: result.payload.code } : { id: result.payload.id },
       include: { teamMember: { select: { name: true, role: true, photoUrl: true } } },
     });
     if (!acc || acc.eventId !== eventId) {
@@ -567,6 +568,13 @@ export class TeamService {
     }
     if (!acc.isActive) {
       return { valid: false, reason: 'Accreditation has been revoked' };
+    }
+    const now = new Date();
+    if (acc.validUntil && acc.validUntil < now) {
+      return { valid: false, reason: 'Accreditation expired' };
+    }
+    if (acc.validFrom && acc.validFrom > now) {
+      return { valid: false, reason: 'Accreditation not yet valid' };
     }
     return {
       valid: true,
@@ -616,20 +624,14 @@ export class TeamService {
       photoBuffer = await fetchImageBuffer(member.photoUrl);
     }
 
-    // QR code — HMAC-SHA256 signed payload (not just plain text)
-    const qrContent = this.crypto.createAccreditationQR({
-      accId: acc.id,
-      code: acc.code,
-      eventId,
-      memberId,
-      role: member.role,
-      zones,
-      validUntil: acc.validUntil?.toISOString() ?? null,
-    }, this.qrSecret);
+    // QR code — badge code + HMAC tag (30 characters: a 25 × 25 code, quick to scan even
+    // printed small). Black on white whatever the badge colours: scanners need contrast,
+    // and a 2-module quiet zone around it.
+    const qrContent = this.crypto.createCompactAccreditationQR(acc.code, this.qrSecret);
 
     const qrBuffer: Buffer = await (QRCode as any).toBuffer(qrContent, {
-      errorCorrectionLevel: 'M', type: 'png', margin: 1, width: 200,
-      color: { dark: cfg.primaryColor, light: cfg.backgroundColor },
+      errorCorrectionLevel: 'M', type: 'png', margin: 2, width: 300,
+      color: { dark: '#000000', light: '#FFFFFF' },
     });
 
     const showLogo = await this.subscriptionService.getShowPoweredBy(organizerId);
