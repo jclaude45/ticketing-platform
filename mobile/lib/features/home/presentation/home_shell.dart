@@ -153,7 +153,7 @@ class ZcBottomNav extends StatelessWidget {
                           softWrap: false,
                           style: TextStyle(
                             fontFamily: zcFont,
-                            fontSize: ZcSize.caption,
+                            fontSize: ZcSize.small,
                             fontWeight: i == index ? ZcWeight.bold : ZcWeight.regular,
                             color: i == index ? AppColors.ink : AppColors.navInactive,
                           ),

@@ -30,10 +30,10 @@ class ZcSize {
   /// Body text, fields, list rows
   static const double body = 14;
 
-  /// Secondary text, labels, details
+  /// Secondary text, labels, details, bottom bar labels
   static const double small = 12;
 
-  /// Navigation labels, timestamps under a name
+  /// Timestamps under a name, status pills
   static const double caption = 11;
 
   // Line heights: 1.2 for titles, 1.5 for paragraphs (1.75 kept for the intro texts of the mockups)

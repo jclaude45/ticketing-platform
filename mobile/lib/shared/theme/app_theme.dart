@@ -143,7 +143,7 @@ class AppTheme {
         indicatorColor: AppColors.primary.withOpacity(0.15),
         labelTextStyle: WidgetStateProperty.all(
           const TextStyle(
-              fontFamily: zcFont, fontSize: ZcSize.caption, fontWeight: ZcWeight.bold),
+              fontFamily: zcFont, fontSize: ZcSize.small, fontWeight: ZcWeight.bold),
         ),
       ),
 
