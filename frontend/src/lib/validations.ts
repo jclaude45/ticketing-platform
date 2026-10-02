@@ -1,52 +1,52 @@
 import { z } from 'zod';
 
 export const loginSchema = z.object({
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(1, 'Password is required'),
+  email: z.string().email('Adresse e-mail invalide'),
+  password: z.string().min(1, 'Le mot de passe est requis'),
   totpCode: z.string().optional(),
 });
 
 export const registerSchema = z
   .object({
-    firstName: z.string().min(2, 'First name must be at least 2 characters'),
-    lastName: z.string().min(2, 'Last name must be at least 2 characters'),
-    email: z.string().email('Invalid email address'),
+    firstName: z.string().min(2, 'Le prénom doit contenir au moins 2 caractères'),
+    lastName: z.string().min(2, 'Le nom doit contenir au moins 2 caractères'),
+    email: z.string().email('Adresse e-mail invalide'),
     password: z
       .string()
-      .min(8, 'Password must be at least 8 characters')
-      .regex(/[A-Z]/, 'Must contain at least one uppercase letter')
-      .regex(/[0-9]/, 'Must contain at least one number')
-      .regex(/[^A-Za-z0-9]/, 'Must contain at least one special character'),
+      .min(8, 'Le mot de passe doit contenir au moins 8 caractères')
+      .regex(/[A-Z]/, 'Doit contenir au moins une majuscule')
+      .regex(/[0-9]/, 'Doit contenir au moins un chiffre')
+      .regex(/[^A-Za-z0-9]/, 'Doit contenir au moins un caractère spécial'),
     confirmPassword: z.string(),
   })
   .refine(data => data.password === data.confirmPassword, {
-    message: 'Passwords do not match',
+    message: 'Les mots de passe ne correspondent pas',
     path: ['confirmPassword'],
   });
 
 export const forgotPasswordSchema = z.object({
-  email: z.string().email('Invalid email address'),
+  email: z.string().email('Adresse e-mail invalide'),
 });
 
 export const resetPasswordSchema = z
   .object({
     password: z
       .string()
-      .min(8, 'Password must be at least 8 characters')
-      .regex(/[A-Z]/, 'Must contain at least one uppercase letter')
-      .regex(/[0-9]/, 'Must contain at least one number'),
+      .min(8, 'Le mot de passe doit contenir au moins 8 caractères')
+      .regex(/[A-Z]/, 'Doit contenir au moins une majuscule')
+      .regex(/[0-9]/, 'Doit contenir au moins un chiffre'),
     confirmPassword: z.string(),
   })
   .refine(data => data.password === data.confirmPassword, {
-    message: 'Passwords do not match',
+    message: 'Les mots de passe ne correspondent pas',
     path: ['confirmPassword'],
   });
 
 export const totpSchema = z.object({
   code: z
     .string()
-    .length(6, 'TOTP code must be 6 digits')
-    .regex(/^\d+$/, 'Must be numeric'),
+    .length(6, 'Le code doit contenir 6 chiffres')
+    .regex(/^\d+$/, 'Uniquement des chiffres'),
 });
 
 export const EVENT_TYPES = [

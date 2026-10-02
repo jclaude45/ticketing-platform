@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
+import { authField, authButton } from '@/components/site/AuthShell';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { motion } from 'framer-motion';
-import { Eye, EyeOff, Loader2, Lock, Mail, ShieldCheck } from 'lucide-react';
+import { Eye, EyeOff, Loader2, ShieldCheck } from 'lucide-react';
 import { loginSchema, type LoginFormData } from '@/lib/validations';
 import { useLogin } from '@/hooks/useAuth';
 import { useAuthStore } from '@/store/auth.store';
@@ -40,60 +41,58 @@ export function LoginForm() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
       onSubmit={handleSubmit(onSubmit)}
-      className="space-y-5"
+      className="space-y-8"
     >
       {!requires2FA ? (
         <>
           <div>
-            <label className="block text-sm font-medium text-white/80 mb-1.5">
+            <label className="block text-sm text-[#707070]">
               Adresse e-mail
             </label>
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
               <input
                 {...register('email')}
                 type="email"
                 autoComplete="email"
                 placeholder="you@example.com"
                 suppressHydrationWarning
-                className="w-full pl-10 pr-4 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all"
+                className={`${authField}`}
               />
             </div>
             {errors.email && (
-              <p className="mt-1 text-sm text-red-300">{errors.email.message}</p>
+              <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
             )}
           </div>
 
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-sm font-medium text-white/80">Mot de passe</label>
+              <label className="block text-sm text-[#707070]">Mot de passe</label>
               <a
                 href="/auth/forgot-password"
-                className="text-xs text-indigo-300 hover:text-white transition-colors"
+                className="text-xs text-[#707070] underline underline-offset-2 hover:text-black"
               >
                 Mot de passe oublié ?
               </a>
             </div>
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
               <input
                 {...register('password')}
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="current-password"
                 placeholder="••••••••"
                 suppressHydrationWarning
-                className="w-full pl-10 pr-12 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all"
+                className={`${authField} pr-10`}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 transition-colors"
+                className="absolute right-1 top-1/2 -translate-y-1/2 text-[#9a9a9a] hover:text-black transition-colors" aria-label="Afficher ou masquer le mot de passe"
               >
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
             {errors.password && (
-              <p className="mt-1 text-sm text-red-300">{errors.password.message}</p>
+              <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
             )}
           </div>
         </>
@@ -104,9 +103,9 @@ export function LoginForm() {
           className="space-y-4"
         >
           <div className="text-center">
-            <ShieldCheck className="h-12 w-12 text-indigo-300 mx-auto mb-3" />
-            <p className="text-white font-semibold">Authentification à deux facteurs</p>
-            <p className="text-white/60 text-sm mt-1">Entrez le code à 6 chiffres de votre application d&apos;authentification</p>
+            <ShieldCheck className="h-12 w-12 text-black mx-auto mb-3" strokeWidth={1.5} />
+            <p className="text-black font-semibold">Authentification à deux facteurs</p>
+            <p className="text-[#555] text-sm mt-1">Entrez le code à 6 chiffres de votre application d&apos;authentification</p>
           </div>
           <div>
             <input
@@ -115,10 +114,10 @@ export function LoginForm() {
               inputMode="numeric"
               maxLength={6}
               placeholder="000000"
-              className="w-full text-center text-2xl tracking-widest py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all"
+              className="w-full rounded-2xl border border-[#9a9a9a] py-3 text-center text-2xl tracking-[0.4em] text-black placeholder:text-[#c4c4c4] focus:border-black focus:outline-none focus:ring-0"
             />
             {errors.totpCode && (
-              <p className="mt-1 text-sm text-red-300 text-center">{errors.totpCode.message}</p>
+              <p className="mt-1 text-sm text-red-600 text-center">{errors.totpCode.message}</p>
             )}
           </div>
         </motion.div>
@@ -127,7 +126,7 @@ export function LoginForm() {
       <button
         type="submit"
         disabled={login.isPending}
-        className="w-full py-3 px-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold rounded-lg shadow-lg hover:from-indigo-600 hover:to-purple-700 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 focus:ring-offset-transparent disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        className={`${authButton} mt-4`}
       >
         {login.isPending ? (
           <>

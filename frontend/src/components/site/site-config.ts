@@ -2,6 +2,9 @@
 
 export const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.zaya.live';
 
+/** Public site (landing, billetterie), linked from the app's login pages */
+export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://zaya.live';
+
 /** Store pages of the ZAYA app; null until published (the buttons then go to #telecharger) */
 export const STORE_LINKS: { ios: string | null; android: string | null } = {
   ios: null,
