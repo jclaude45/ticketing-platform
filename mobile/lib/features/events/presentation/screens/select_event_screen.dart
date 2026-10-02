@@ -60,7 +60,7 @@ class _SelectEventScreenState extends ConsumerState<SelectEventScreen> {
           const SizedBox(height: 40),
           ZcBackButton(onPressed: _back),
           const SizedBox(height: 40),
-          Text('Sélectionner\nun événement', style: zcText(ZcSize.display, weight: FontWeight.w700, height: 1.2)),
+          Text('Sélectionner\nun événement', style: zcText(ZcSize.display, weight: ZcWeight.bold, height: 1.2)),
           const SizedBox(height: 32),
           if (state.isLoading && events.isEmpty)
             SizedBox(height: 58, child: Center(child: CircularProgressIndicator(color: AppColors.ink, strokeWidth: 2)))

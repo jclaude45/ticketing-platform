@@ -244,7 +244,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.page,
-        title: Text('Code de la commande', style: zcText(ZcSize.h3, weight: FontWeight.w700)),
+        title: Text('Code de la commande', style: zcText(ZcSize.h3, weight: ZcWeight.bold)),
         content: ZcTextField(
           controller: controller,
           hint: 'B-XXXXXX',
@@ -255,7 +255,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
           TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Annuler', style: zcText(ZcSize.body, color: AppColors.grey))),
           TextButton(
             onPressed: () => Navigator.pop(ctx, controller.text),
-            child: Text('Rechercher', style: zcText(ZcSize.body, weight: FontWeight.w500)),
+            child: Text('Rechercher', style: zcText(ZcSize.body, weight: ZcWeight.medium)),
           ),
         ],
       ),
@@ -391,7 +391,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
                     ScanMode.badges => 'Scanner les badges',
                     ScanMode.merch => 'Retrait boutique',
                   },
-                  style: zcText(ZcSize.title, weight: FontWeight.w700, color: fg),
+                  style: zcText(ZcSize.title, weight: ZcWeight.bold, color: fg),
                 ),
                 Text(
                   ref.watch(eventByIdProvider(widget.eventId))?.name ?? '',
@@ -497,7 +497,11 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
                       const SizedBox(width: 6),
                       Text(
                         m.label,
-                        style: zcText(ZcSize.body, weight: FontWeight.w500, color: _scanMode == m.mode ? AppColors.onInk : AppColors.ink),
+                        style: zcText(
+                          ZcSize.body,
+                          weight: _scanMode == m.mode ? ZcWeight.bold : ZcWeight.medium,
+                          color: _scanMode == m.mode ? AppColors.onInk : AppColors.ink,
+                        ),
                       ),
                     ],
                   ),
@@ -525,7 +529,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
         children: [
           Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
           const SizedBox(width: 10),
-          Text('Dernier : $label', style: zcText(ZcSize.small, weight: FontWeight.w500)),
+          Text('Dernier : $label', style: zcText(ZcSize.small, weight: ZcWeight.medium)),
           if (result.holderName != null)
             Expanded(
               child: Text(
@@ -560,7 +564,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
             Text(
               isProcessing ? 'Vérification…' : 'Appuyez sur\nla gâchette',
               textAlign: TextAlign.center,
-              style: zcText(ZcSize.h1, weight: FontWeight.w700, height: 1.2),
+              style: zcText(ZcSize.h1, weight: ZcWeight.bold, height: 1.2),
             ),
             const SizedBox(height: 12),
             Text(
@@ -589,7 +593,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen>
           children: [
             Icon(Icons.no_photography_outlined, size: 84, color: AppColors.ink),
             const SizedBox(height: 24),
-            Text('Accès caméra requis', textAlign: TextAlign.center, style: zcText(ZcSize.h1, weight: FontWeight.w700)),
+            Text('Accès caméra requis', textAlign: TextAlign.center, style: zcText(ZcSize.h1, weight: ZcWeight.bold)),
             const SizedBox(height: 10),
             Text(
               "Autorisez la caméra pour scanner les billets et badges, ou passez sur la gâchette du terminal.",
@@ -630,7 +634,7 @@ class _Pill extends StatelessWidget {
         children: [
           Icon(icon, size: 13, color: color),
           const SizedBox(width: 5),
-          Text(label, style: zcText(ZcSize.caption, weight: FontWeight.w700, color: const Color(0xFF252427))),
+          Text(label, style: zcText(ZcSize.caption, weight: ZcWeight.medium, color: const Color(0xFF252427))),
         ],
       ),
     );

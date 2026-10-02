@@ -39,7 +39,19 @@ class ZcSize {
   // Line heights: 1.2 for titles, 1.5 for paragraphs (1.75 kept for the intro texts of the mockups)
 }
 
-TextStyle zcText(double size, {FontWeight weight = FontWeight.w400, Color? color, double? height}) =>
+/// Three weights, one job each (Satoshi has no semibold):
+/// - bold: titles, people's names, key figures, the active choice;
+/// - medium: buttons, links, values, labels;
+/// - regular: body and secondary text.
+class ZcWeight {
+  ZcWeight._();
+
+  static const regular = FontWeight.w400;
+  static const medium = FontWeight.w500;
+  static const bold = FontWeight.w700;
+}
+
+TextStyle zcText(double size, {FontWeight weight = ZcWeight.regular, Color? color, double? height}) =>
     TextStyle(fontFamily: zcFont, fontSize: size, fontWeight: weight, color: color ?? AppColors.ink, height: height);
 
 /// Black page with the tribal pattern on top and a rounded sheet over it (intro, login,
@@ -166,7 +178,7 @@ class ZcButton extends StatelessWidget {
         onPressed: loading ? null : onPressed,
         child: loading
             ? SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.onInk))
-            : Text(label, style: zcText(ZcSize.h3, weight: FontWeight.w500, color: AppColors.onInk)),
+            : Text(label, style: zcText(ZcSize.h3, weight: ZcWeight.medium, color: AppColors.onInk)),
       ),
     );
   }
@@ -335,7 +347,7 @@ class ZcEventCard extends StatelessWidget {
             TextSpan(children: [
               TextSpan(
                 text: total == null ? '$checkedIn' : '$checkedIn/$total',
-                style: const TextStyle(fontWeight: FontWeight.w700),
+                style: const TextStyle(fontWeight: ZcWeight.bold),
               ),
               const TextSpan(text: ' vérifié'),
             ]),

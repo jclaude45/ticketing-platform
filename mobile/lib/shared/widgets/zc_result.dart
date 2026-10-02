@@ -136,7 +136,7 @@ class _ZcResultViewState extends State<ZcResultView> with SingleTickerProviderSt
                     ),
                     const SizedBox(height: 28),
                     Text(widget.title, textAlign: TextAlign.center, style: zcText(ZcSize.h1,
-                        weight: FontWeight.w700,
+                        weight: ZcWeight.bold,
                         height: 1.2,
                         // A light status colour (yellow) is unreadable as text on white
                         color: widget.color.computeLuminance() > 0.5 ? AppColors.ink : widget.color,
@@ -154,7 +154,7 @@ class _ZcResultViewState extends State<ZcResultView> with SingleTickerProviderSt
                             color: AppColors.statusOffline.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: Text(widget.badge!, style: zcText(ZcSize.small, weight: FontWeight.w500, color: AppColors.statusOffline)),
+                          child: Text(widget.badge!, style: zcText(ZcSize.small, weight: ZcWeight.medium, color: AppColors.statusOffline)),
                         ),
                       ),
                     ],
@@ -171,7 +171,7 @@ class _ZcResultViewState extends State<ZcResultView> with SingleTickerProviderSt
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               SizedBox(width: 110, child: Text(d.label, style: zcText(ZcSize.small, color: AppColors.grey))),
-                              Expanded(child: Text(d.value, style: zcText(ZcSize.body, weight: FontWeight.w500))),
+                              Expanded(child: Text(d.value, style: zcText(ZcSize.body, weight: ZcWeight.medium))),
                             ],
                           ),
                         ),

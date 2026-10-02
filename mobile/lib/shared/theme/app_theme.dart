@@ -34,7 +34,7 @@ class AppTheme {
         titleTextStyle: TextStyle(
           fontFamily: zcFont,
           fontSize: ZcSize.h3,
-          fontWeight: FontWeight.w700,
+          fontWeight: ZcWeight.bold,
           color: AppColors.textPrimary,
         ),
       ),
@@ -43,19 +43,19 @@ class AppTheme {
       textTheme: TextTheme(
         headlineLarge: TextStyle(
           color: AppColors.textPrimary,
-          fontWeight: FontWeight.w800,
+          fontWeight: ZcWeight.bold,
         ),
         headlineMedium: TextStyle(
           color: AppColors.textPrimary,
-          fontWeight: FontWeight.w700,
+          fontWeight: ZcWeight.bold,
         ),
         titleLarge: TextStyle(
           color: AppColors.textPrimary,
-          fontWeight: FontWeight.w700,
+          fontWeight: ZcWeight.bold,
         ),
         titleMedium: TextStyle(
           color: AppColors.textPrimary,
-          fontWeight: FontWeight.w700,
+          fontWeight: ZcWeight.bold,
         ),
         bodyLarge: TextStyle(color: AppColors.textPrimary),
         bodyMedium: TextStyle(color: AppColors.textSecondary),
@@ -111,7 +111,7 @@ class AppTheme {
           textStyle: const TextStyle(
             fontFamily: zcFont,
             fontSize: ZcSize.title,
-            fontWeight: FontWeight.w700,
+            fontWeight: ZcWeight.bold,
           ),
         ),
       ),
@@ -143,7 +143,7 @@ class AppTheme {
         indicatorColor: AppColors.primary.withOpacity(0.15),
         labelTextStyle: WidgetStateProperty.all(
           const TextStyle(
-              fontFamily: zcFont, fontSize: ZcSize.caption, fontWeight: FontWeight.w700),
+              fontFamily: zcFont, fontSize: ZcSize.caption, fontWeight: ZcWeight.bold),
         ),
       ),
 

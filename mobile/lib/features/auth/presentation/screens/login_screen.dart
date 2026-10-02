@@ -57,7 +57,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             const SizedBox(height: 40),
             ZcBackButton(onPressed: _back),
             const SizedBox(height: 40),
-            Text('Bienvenue', style: zcText(ZcSize.display, weight: FontWeight.w700, height: 1.2)),
+            Text('Bienvenue', style: zcText(ZcSize.display, weight: ZcWeight.bold, height: 1.2)),
             const SizedBox(height: 40),
             ZcTextField(
               controller: _email,

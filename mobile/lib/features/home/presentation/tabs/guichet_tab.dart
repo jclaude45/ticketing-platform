@@ -26,7 +26,7 @@ class _GuichetTabState extends State<GuichetTab> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.page,
-        title: Text('Code de la commande', style: zcText(ZcSize.h3, weight: FontWeight.w700)),
+        title: Text('Code de la commande', style: zcText(ZcSize.h3, weight: ZcWeight.bold)),
         content: ZcTextField(
           controller: controller,
           hint: 'B-XXXXXX',
@@ -37,7 +37,7 @@ class _GuichetTabState extends State<GuichetTab> {
           TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Annuler', style: zcText(ZcSize.body, color: AppColors.grey))),
           TextButton(
             onPressed: () => Navigator.pop(ctx, controller.text),
-            child: Text('Rechercher', style: zcText(ZcSize.body, weight: FontWeight.w500)),
+            child: Text('Rechercher', style: zcText(ZcSize.body, weight: ZcWeight.medium)),
           ),
         ],
       ),
@@ -69,7 +69,7 @@ class _GuichetTabState extends State<GuichetTab> {
           Text(
             'Retrait boutique',
             textAlign: TextAlign.center,
-            style: zcText(ZcSize.h1, weight: FontWeight.w700, height: 1.2),
+            style: zcText(ZcSize.h1, weight: ZcWeight.bold, height: 1.2),
           ),
           const SizedBox(height: 14),
           Text(
@@ -90,7 +90,7 @@ class _GuichetTabState extends State<GuichetTab> {
             onPressed: _busy ? null : _typeCode,
             child: _busy
                 ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.ink))
-                : Text('Saisir un code', style: zcText(ZcSize.body, weight: FontWeight.w500)),
+                : Text('Saisir un code', style: zcText(ZcSize.body, weight: ZcWeight.medium)),
           ),
           const Spacer(),
           const SizedBox(height: 24),

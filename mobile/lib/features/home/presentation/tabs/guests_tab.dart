@@ -48,7 +48,7 @@ class _GuestsTabState extends ConsumerState<GuestsTab> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(guest.name, textAlign: TextAlign.center, style: zcText(ZcSize.h3, weight: FontWeight.w700)),
+              Text(guest.name, textAlign: TextAlign.center, style: zcText(ZcSize.h3, weight: ZcWeight.bold)),
               const SizedBox(height: 6),
               Text(
                 [guest.ticketType, guest.serialNumber].whereType<String>().join(' · '),

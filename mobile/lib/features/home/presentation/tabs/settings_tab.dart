@@ -166,7 +166,7 @@ class _Row extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: zcText(ZcSize.body, weight: FontWeight.w500)),
+                  Text(title, style: zcText(ZcSize.body, weight: ZcWeight.medium)),
                   if (subtitle != null) ...[
                     const SizedBox(height: 3),
                     Text(subtitle!, style: zcText(ZcSize.small, color: AppColors.grey, height: 1.5)),

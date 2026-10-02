@@ -52,7 +52,7 @@ class ScannerTab extends ConsumerWidget {
                       Text(
                         'Prêt à scanner\nvos billets',
                         textAlign: TextAlign.center,
-                        style: zcText(ZcSize.h1, weight: FontWeight.w700, height: 1.2),
+                        style: zcText(ZcSize.h1, weight: ZcWeight.bold, height: 1.2),
                       ),
                       const SizedBox(height: 25),
                       Padding(
@@ -127,7 +127,7 @@ class _EventError extends StatelessWidget {
           Text(message, textAlign: TextAlign.center, style: zcText(ZcSize.body, color: AppColors.grey)),
           TextButton(
             onPressed: () => Navigator.pushNamed(context, '/events'),
-            child: Text("Changer d'événement", style: zcText(ZcSize.body, weight: FontWeight.w500)),
+            child: Text("Changer d'événement", style: zcText(ZcSize.body, weight: ZcWeight.medium)),
           ),
         ],
       ),

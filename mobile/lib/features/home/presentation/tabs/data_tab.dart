@@ -42,7 +42,18 @@ class DataTab extends ConsumerWidget {
                   final size = math.min(272.0, constraints.maxWidth - 40);
                   return SizedBox.square(
                     dimension: size,
-                    child: CustomPaint(painter: _DonutPainter(share: share, rest: AppColors.chartRest)),
+                    child: CustomPaint(
+                      painter: _DonutPainter(share: share, rest: AppColors.chartRest),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('$donePct %', style: zcText(ZcSize.h1, weight: ZcWeight.bold, height: 1.2)),
+                            Text('contrôlé', style: zcText(ZcSize.small, color: AppColors.grey)),
+                          ],
+                        ),
+                      ),
+                    ),
                   );
                 },
               ),
@@ -53,7 +64,7 @@ class DataTab extends ConsumerWidget {
                 children: [
                   _LegendRow(color: AppColors.chartDone, label: 'Contrôlé', percent: '$donePct%', count: done),
                   _LegendRow(color: AppColors.chartRest, label: 'À contrôler', percent: total == 0 ? '0%' : '${100 - donePct}%', count: rest),
-                  _LegendRow(label: 'Total', count: total),
+                  _LegendRow(label: 'Total', count: total, emphasis: true),
                 ],
               ),
             ),
@@ -78,11 +89,14 @@ class _LegendRow extends StatelessWidget {
   final String? percent;
   final int count;
 
-  const _LegendRow({this.color, required this.label, this.percent, required this.count});
+  /// The total line: its label in medium ink
+  final bool emphasis;
+
+  const _LegendRow({this.color, required this.label, this.percent, required this.count, this.emphasis = false});
 
   @override
   Widget build(BuildContext context) {
-    final style = zcText(ZcSize.small, color: AppColors.grey);
+    final labelStyle = emphasis ? zcText(ZcSize.small, weight: ZcWeight.medium) : zcText(ZcSize.small, color: AppColors.grey);
     return SizedBox(
       height: 34,
       child: Row(
@@ -95,9 +109,9 @@ class _LegendRow extends StatelessWidget {
                 : Container(width: 23, height: 23, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
           ),
           const SizedBox(width: 12),
-          SizedBox(width: 90, child: Text(label, style: style)),
-          SizedBox(width: 70, child: Text(percent ?? '', style: style)),
-          SizedBox(width: 50, child: Text('$count', textAlign: TextAlign.right, style: style)),
+          SizedBox(width: 90, child: Text(label, style: labelStyle)),
+          SizedBox(width: 70, child: Text(percent ?? '', style: zcText(ZcSize.small, weight: ZcWeight.medium))),
+          SizedBox(width: 50, child: Text('$count', textAlign: TextAlign.right, style: zcText(ZcSize.small, weight: ZcWeight.bold))),
         ],
       ),
     );
