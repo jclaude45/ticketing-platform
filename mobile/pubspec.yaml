@@ -26,7 +26,6 @@ dependencies:
 
   # Biometrics
   # UI
-  google_fonts: ^6.1.0
   shimmer: ^3.0.0
   cached_network_image: ^3.3.1
   permission_handler: ^11.3.0
@@ -47,3 +46,30 @@ flutter:
   assets:
     - assets/sounds/
     - assets/images/
+  fonts:
+    # Satoshi (Indian Type Foundry, Fontshare free licence): zcontrole's typeface
+    - family: Satoshi
+      fonts:
+        - asset: assets/fonts/Satoshi-Light.otf
+          weight: 300
+        - asset: assets/fonts/Satoshi-LightItalic.otf
+          weight: 300
+          style: italic
+        - asset: assets/fonts/Satoshi-Regular.otf
+        - asset: assets/fonts/Satoshi-Italic.otf
+          style: italic
+        - asset: assets/fonts/Satoshi-Medium.otf
+          weight: 500
+        - asset: assets/fonts/Satoshi-MediumItalic.otf
+          weight: 500
+          style: italic
+        - asset: assets/fonts/Satoshi-Bold.otf
+          weight: 700
+        - asset: assets/fonts/Satoshi-BoldItalic.otf
+          weight: 700
+          style: italic
+        - asset: assets/fonts/Satoshi-Black.otf
+          weight: 900
+        - asset: assets/fonts/Satoshi-BlackItalic.otf
+          weight: 900
+          style: italic

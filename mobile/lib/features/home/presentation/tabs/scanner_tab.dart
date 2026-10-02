@@ -2,7 +2,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../../../core/network/network_info.dart';
@@ -53,7 +52,7 @@ class ScannerTab extends ConsumerWidget {
                       Text(
                         'Prêt à scanner\nvos billets',
                         textAlign: TextAlign.center,
-                        style: GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.w700, color: AppColors.ink, height: 1.2),
+                        style: zcText(28, weight: FontWeight.w700, height: 1.2),
                       ),
                       const SizedBox(height: 25),
                       Padding(

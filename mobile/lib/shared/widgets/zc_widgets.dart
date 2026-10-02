@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/constants/colors.dart';
 
 /// Building blocks of the zcontrole screens (mockups drawn on a 428 × 926 phone).
 
+/// zcontrole's typeface, bundled in assets/fonts (no download, works offline)
+const zcFont = 'Satoshi';
+
 TextStyle zcText(double size, {FontWeight weight = FontWeight.w400, Color? color, double? height}) =>
-    GoogleFonts.poppins(fontSize: size, fontWeight: weight, color: color ?? AppColors.ink, height: height);
+    TextStyle(fontFamily: zcFont, fontSize: size, fontWeight: weight, color: color ?? AppColors.ink, height: height);
 
 /// Black page with the tribal pattern on top and a rounded sheet over it (intro, login,
 /// event choice). [sheetTop] is the share of the screen height above the sheet; the sheet
@@ -295,7 +297,7 @@ class ZcEventCard extends StatelessWidget {
             name,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.inter(fontSize: 16, color: ink),
+            style: const TextStyle(fontFamily: zcFont, fontSize: 16, color: ink),
           ),
           const SizedBox(height: 4),
           Text.rich(
@@ -306,7 +308,7 @@ class ZcEventCard extends StatelessWidget {
               ),
               const TextSpan(text: ' vérifié'),
             ]),
-            style: GoogleFonts.inter(fontSize: 16, color: ink),
+            style: const TextStyle(fontFamily: zcFont, fontSize: 16, color: ink),
           ),
         ],
       ),

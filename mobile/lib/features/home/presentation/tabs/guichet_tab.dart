@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/constants/colors.dart';
 import '../../../../core/di/injection_container.dart';
@@ -70,7 +69,7 @@ class _GuichetTabState extends State<GuichetTab> {
           Text(
             'Retrait boutique',
             textAlign: TextAlign.center,
-            style: GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.w700, color: AppColors.ink, height: 1.2),
+            style: zcText(28, weight: FontWeight.w700, height: 1.2),
           ),
           const SizedBox(height: 14),
           Text(

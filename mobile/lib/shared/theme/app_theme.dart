@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/constants/colors.dart';
+import '../widgets/zc_widgets.dart';
 
 class AppTheme {
   AppTheme._();
@@ -10,6 +10,7 @@ class AppTheme {
   static ThemeData get current {
     return ThemeData(
       useMaterial3: true,
+      fontFamily: zcFont,
       brightness: AppColors.isDark ? Brightness.dark : Brightness.light,
       scaffoldBackgroundColor: AppColors.backgroundDark,
       colorScheme: ColorScheme(
@@ -30,7 +31,8 @@ class AppTheme {
         elevation: 0,
         centerTitle: false,
         iconTheme: IconThemeData(color: AppColors.textPrimary),
-        titleTextStyle: GoogleFonts.inter(
+        titleTextStyle: TextStyle(
+          fontFamily: zcFont,
           fontSize: 18,
           fontWeight: FontWeight.w700,
           color: AppColors.textPrimary,
@@ -38,28 +40,26 @@ class AppTheme {
       ),
 
       // Text
-      textTheme: GoogleFonts.poppinsTextTheme(
-        TextTheme(
-          headlineLarge: TextStyle(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w800,
-          ),
-          headlineMedium: TextStyle(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w700,
-          ),
-          titleLarge: TextStyle(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w700,
-          ),
-          titleMedium: TextStyle(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w600,
-          ),
-          bodyLarge: TextStyle(color: AppColors.textPrimary),
-          bodyMedium: TextStyle(color: AppColors.textSecondary),
-          bodySmall: TextStyle(color: AppColors.textMuted),
+      textTheme: TextTheme(
+        headlineLarge: TextStyle(
+          color: AppColors.textPrimary,
+          fontWeight: FontWeight.w800,
         ),
+        headlineMedium: TextStyle(
+          color: AppColors.textPrimary,
+          fontWeight: FontWeight.w700,
+        ),
+        titleLarge: TextStyle(
+          color: AppColors.textPrimary,
+          fontWeight: FontWeight.w700,
+        ),
+        titleMedium: TextStyle(
+          color: AppColors.textPrimary,
+          fontWeight: FontWeight.w600,
+        ),
+        bodyLarge: TextStyle(color: AppColors.textPrimary),
+        bodyMedium: TextStyle(color: AppColors.textSecondary),
+        bodySmall: TextStyle(color: AppColors.textMuted),
       ),
 
       // Input
@@ -86,7 +86,8 @@ class AppTheme {
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.borderError, width: 1.5),
+          borderSide:
+              const BorderSide(color: AppColors.borderError, width: 1.5),
         ),
         hintStyle: TextStyle(
           color: AppColors.textDisabled,
@@ -103,12 +104,12 @@ class AppTheme {
           backgroundColor: AppColors.brand,
           foregroundColor: AppColors.onBrand,
           elevation: 0,
-          padding:
-              const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
-          textStyle: GoogleFonts.inter(
+          textStyle: const TextStyle(
+            fontFamily: zcFont,
             fontSize: 15,
             fontWeight: FontWeight.w600,
           ),
@@ -141,14 +142,16 @@ class AppTheme {
         backgroundColor: AppColors.backgroundCard,
         indicatorColor: AppColors.primary.withOpacity(0.15),
         labelTextStyle: WidgetStateProperty.all(
-          GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600),
+          const TextStyle(
+              fontFamily: zcFont, fontSize: 11, fontWeight: FontWeight.w600),
         ),
       ),
 
       // Snackbar
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.backgroundSurface,
-        contentTextStyle: GoogleFonts.poppins(
+        contentTextStyle: TextStyle(
+          fontFamily: zcFont,
           color: AppColors.textPrimary,
           fontSize: 14,
         ),

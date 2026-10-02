@@ -3,10 +3,10 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/constants/colors.dart';
 import '../../../core/scanner/hardware_scanner.dart';
+import '../../../shared/widgets/zc_widgets.dart';
 import '../../events/domain/entities/event_entity.dart';
 import '../../events/presentation/providers/events_provider.dart';
 import '../../guests/data/guests_repository.dart';
@@ -151,7 +151,8 @@ class ZcBottomNav extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.fade,
                           softWrap: false,
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
+                            fontFamily: zcFont,
                             fontSize: 11,
                             fontWeight: i == index ? FontWeight.w600 : FontWeight.w400,
                             color: i == index ? AppColors.ink : AppColors.navInactive,
