@@ -42,6 +42,10 @@ export class EventsService {
         endDate: new Date(dto.endDate),
         totalCapacity: dto.totalCapacity,
         status: dto.status || EventStatus.DRAFT,
+        // The type and currency chosen in the form (both were ignored: every event
+        // was saved as OTHER / USD)
+        ...(dto.type && { type: dto.type }),
+        ...(dto.currency && { currency: dto.currency }),
         bannerUrl: dto.bannerUrl,
         organizerId,
       },
@@ -179,6 +183,8 @@ export class EventsService {
         ...(dto.endDate && { endDate: new Date(dto.endDate) }),
         ...(dto.totalCapacity && { totalCapacity: dto.totalCapacity }),
         ...(dto.status && { status: dto.status }),
+        ...(dto.type && { type: dto.type }),
+        ...(dto.currency && { currency: dto.currency }),
         ...(dto.bannerUrl !== undefined && { bannerUrl: dto.bannerUrl }),
       },
       include: {

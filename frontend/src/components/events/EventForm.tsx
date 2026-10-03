@@ -1,18 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Loader2, Plus, Trash2, Ticket, ImageIcon } from 'lucide-react';
+import { ChevronDown, Loader2, Plus, Trash2, Ticket, ImageIcon } from 'lucide-react';
 import { createEventSchema, type CreateEventFormData, EVENT_TYPES, EVENT_CURRENCIES } from '@/lib/validations';
 import { eventsApi, ticketsApi } from '@/lib/api';
 import { FileUpload } from '@/components/common/FileUpload';
 import { UpgradePlanModal } from '@/components/subscription/UpgradePlanModal';
 import type { Event } from '@/types';
 import { cn } from '@/lib/utils';
+import { SearchSelect, type SearchOption } from '@/components/common/SearchSelect';
+import { CountryFlag } from '@/components/common/CountryFlag';
+import { useCountries, useCities, countryCodeOf, FREQUENT_COUNTRIES } from '@/hooks/useGeo';
 import toast from 'react-hot-toast';
 
 interface TariffInput {
@@ -63,12 +66,17 @@ function Section({ n, title, desc, children }: { n: string; title: string; desc:
 const inputClass =
   'w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-[15px] text-black placeholder:text-gray-400 transition-colors focus:border-black focus:outline-none focus:ring-1 focus:ring-black dark:border-gray-700 dark:bg-gray-800 dark:text-white dark:focus:border-white dark:focus:ring-white';
 
-const chipClass = (active: boolean) => cn(
-  'rounded-full border px-4 py-2 text-sm font-medium transition-colors',
-  active
-    ? 'border-black bg-black text-white dark:border-white dark:bg-white dark:text-black'
-    : 'border-gray-200 bg-white text-gray-700 hover:border-black dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-white',
-);
+/** Native drop-down in the same style as the fields */
+function SelectField({ value, onChange, children }: { value: string; onChange: (v: string) => void; children: React.ReactNode }) {
+  return (
+    <div className="relative">
+      <select value={value} onChange={e => onChange(e.target.value)} className={cn(inputClass, 'appearance-none pr-10')}>
+        {children}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+    </div>
+  );
+}
 
 function toISOString(local: string): string {
   if (!local) return '';
@@ -112,17 +120,18 @@ export function EventForm({ event, isEdit }: EventFormProps) {
     defaultValues: event
       ? {
           name: event.name,
-          description: event.description,
+          // null from the API for empty fields: the schema expects text
+          description: event.description ?? '',
           type: event.type ?? 'OTHER',
           currency: (event as any).currency ?? 'USD',
           venue: event.venue,
-          address: event.address,
+          address: event.address ?? '',
           city: event.city,
           country: event.country,
           startDate: toLocalDateTime(event.startDate),
           endDate: toLocalDateTime(event.endDate),
           totalCapacity: event.totalCapacity,
-          bannerUrl: event.bannerUrl,
+          bannerUrl: event.bannerUrl ?? '',
         }
       : { totalCapacity: 100, type: 'OTHER', currency: 'USD' },
   });
@@ -130,6 +139,23 @@ export function EventForm({ event, isEdit }: EventFormProps) {
   const bannerUrl = watch('bannerUrl');
   const eventType = watch('type');
   const currency = watch('currency') ?? 'USD';
+
+  // Country → its cities, both as drop-down lists
+  const countryValue = watch('country') ?? '';
+  const cityValue = watch('city') ?? '';
+  const { data: countries, isLoading: countriesLoading } = useCountries();
+  const countryCode = countryCodeOf(countryValue, countries);
+  const { data: cities, isFetching: citiesLoading } = useCities(countryCode);
+  const countryOptions = useMemo<SearchOption[]>(() => {
+    if (!countries) return [];
+    const opt = (c: { code: string; name: string }, group: string): SearchOption =>
+      ({ value: c.name, label: c.name, prefix: <CountryFlag code={c.code} />, group });
+    const frequent = FREQUENT_COUNTRIES.map(code => countries.find(c => c.code === code)).filter(Boolean) as typeof countries;
+    return [...frequent.map(c => opt(c, 'Fréquents')), ...countries.filter(c => !FREQUENT_COUNTRIES.includes(c.code)).map(c => opt(c, 'Tous les pays'))];
+  }, [countries]);
+  const cityOptions = useMemo<SearchOption[]>(() => (cities ?? []).map(n => ({ value: n, label: n })), [cities]);
+  // The stored country may be a name the list does not know (older events): keep it selectable
+  const countrySelectValue = countryCode ? (countries?.find(c => c.code === countryCode)?.name ?? countryValue) : countryValue;
   const previewName = watch('name');
   const previewStart = watch('startDate');
   const previewVenue = watch('venue');
@@ -209,13 +235,9 @@ export function EventForm({ event, isEdit }: EventFormProps) {
             </Field>
 
             <Field label="Type d'événement" error={errors.type?.message} required>
-              <div className="flex flex-wrap gap-2">
-                {EVENT_TYPES.map(t => (
-                  <button key={t.value} type="button" onClick={() => setValue('type', t.value as any, { shouldValidate: true })} className={chipClass(eventType === t.value)}>
-                    {t.label}
-                  </button>
-                ))}
-              </div>
+              <SelectField value={eventType ?? 'OTHER'} onChange={v => setValue('type', v as any, { shouldValidate: true })}>
+                {EVENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </SelectField>
               <input type="hidden" {...register('type')} />
             </Field>
 
@@ -240,24 +262,48 @@ export function EventForm({ event, isEdit }: EventFormProps) {
               <input {...register('address')} placeholder="Ex : 12 avenue de la Justice" className={inputClass} />
             </Field>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Ville" error={errors.city?.message} required>
-                <input {...register('city')} placeholder="Kinshasa" className={inputClass} />
-              </Field>
               <Field label="Pays" error={errors.country?.message} required>
-                <input {...register('country')} placeholder="RD Congo" className={inputClass} />
+                <SearchSelect
+                  options={countryOptions}
+                  value={countrySelectValue}
+                  loading={countriesLoading}
+                  placeholder="Choisir un pays"
+                  searchPlaceholder="Rechercher un pays…"
+                  onChange={v => {
+                    if (v !== countrySelectValue) setValue('city', '', { shouldValidate: false });
+                    setValue('country', v, { shouldValidate: true });
+                  }}
+                />
+                <input type="hidden" {...register('country')} />
+              </Field>
+              <Field
+                label="Ville"
+                error={errors.city?.message}
+                required
+                hint={countryCode && !citiesLoading && cityOptions.length === 0 ? 'Aucune ville connue : tapez son nom dans la recherche.' : undefined}
+              >
+                <SearchSelect
+                  options={cityOptions}
+                  value={cityValue}
+                  disabled={!countryValue}
+                  loading={citiesLoading}
+                  allowCustom
+                  placeholder={countryValue ? 'Choisir une ville' : "Choisissez d'abord le pays"}
+                  searchPlaceholder="Rechercher une ville…"
+                  emptyText="Tapez le nom de la ville"
+                  onChange={v => setValue('city', v, { shouldValidate: true })}
+                />
+                <input type="hidden" {...register('city')} />
               </Field>
             </div>
+            <p className="-mt-2 text-[11px] text-gray-400">Villes et pays : GeoNames (CC BY 4.0).</p>
           </Section>
 
           <Section n="03" title="Billetterie" desc="Devise, capacité et tarifs proposés au public.">
-            <Field label="Devise" error={(errors as any).currency?.message} required hint={EVENT_CURRENCIES.find(c => c.value === currency)?.label}>
-              <div className="flex flex-wrap gap-2">
-                {EVENT_CURRENCIES.map(c => (
-                  <button key={c.value} type="button" onClick={() => setValue('currency' as any, c.value, { shouldValidate: true })} className={cn(chipClass(currency === c.value), 'min-w-[64px] font-bold')}>
-                    {c.value}
-                  </button>
-                ))}
-              </div>
+            <Field label="Devise" error={(errors as any).currency?.message} required>
+              <SelectField value={currency} onChange={v => setValue('currency' as any, v, { shouldValidate: true })}>
+                {EVENT_CURRENCIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+              </SelectField>
               <input type="hidden" {...register('currency' as any)} />
             </Field>
 

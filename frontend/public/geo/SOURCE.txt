@@ -1,0 +1,3 @@
+Villes et pays : GeoNames (https://www.geonames.org), licence Creative Commons Attribution 4.0
+(https://creativecommons.org/licenses/by/4.0/). Extrait de cities5000 et countryInfo,
+réduit aux noms de localités par pays, triés par population.
