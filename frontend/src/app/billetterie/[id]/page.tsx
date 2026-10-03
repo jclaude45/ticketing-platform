@@ -176,6 +176,10 @@ export default function EventDetailPage() {
             <h1 className="break-words text-[36px] font-normal tracking-normal leading-[1] lg:text-[44px]">{event.name}</h1>
             {organizerName && <p className="mt-1 text-2xl leading-tight lg:text-[32px]">{organizerName}</p>}
             <p className="mt-3 text-2xl lg:text-[33px]">{capitalize(formatEventDayTime(event.startDate))}</p>
+            {/* Description right under the date */}
+            {event.description && (
+              <p className="mt-4 whitespace-pre-line text-lg leading-snug text-[#333] lg:text-[21px]">{event.description}</p>
+            )}
 
             <div className="mt-6 flex flex-wrap gap-x-7 gap-y-2 text-lg lg:mt-8 lg:text-[19px]">
               <span className="flex items-center gap-2"><Tag className="h-7 w-7 -scale-x-100" strokeWidth={1.4} />{EVENT_TYPE_LABELS[event.type ?? 'OTHER'] ?? 'Événement'}</span>
@@ -198,14 +202,6 @@ export default function EventDetailPage() {
                   <span className="text-lg font-semibold uppercase text-white/70">{event.soldOut ? 'Complet' : 'Ventes terminées'}</span>
                 )}
               </div>
-            )}
-
-            {/* About */}
-            {event.description && (
-              <section className="mt-10">
-                <h2 className="font-normal tracking-normal text-[32px] lg:text-[37px]">À propos</h2>
-                <p className="mt-6 whitespace-pre-line text-lg leading-snug lg:text-[21px]">{event.description}</p>
-              </section>
             )}
 
             {/* Shop */}
