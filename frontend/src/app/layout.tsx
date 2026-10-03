@@ -36,6 +36,14 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr" translate="no" suppressHydrationWarning>
+      <head>
+        {/* Dashboard theme chosen in the header, applied before the first paint */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: "try{if(location.pathname.indexOf('/dashboard')===0&&localStorage.getItem('zaya_theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}",
+          }}
+        />
+      </head>
       <body className={`${inter.variable} font-sans antialiased`} suppressHydrationWarning>
         <QueryProvider>
           <AuthProvider>

@@ -28,7 +28,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900">
         <div className="flex flex-col items-center gap-4">
           <ZayaLogo className="animate-pulse text-[34px] dark:text-white" />
           <p className="text-gray-500 dark:text-gray-400 text-sm">Chargement...</p>
@@ -40,7 +40,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (!isAuthenticated || isController) return null;
 
   return (
-    <div className="flex h-screen bg-white dark:bg-gray-950 overflow-hidden">
+    <div className="flex h-screen bg-white dark:bg-gray-900 overflow-hidden">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div

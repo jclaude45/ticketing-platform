@@ -1,4 +1,5 @@
 import type { Config } from 'tailwindcss';
+import colors from 'tailwindcss/colors';
 
 const config: Config = {
   darkMode: ['class'],
@@ -49,6 +50,8 @@ const config: Config = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
+        // Neutral greys (no blue tint), like the black and white of the brand
+        gray: colors.neutral,
         // ZAYA design (black / greys, like zaya.live): the former indigo / purple / violet
         // accents of the dashboard now resolve to the --indigo-*, --purple-*, --violet-*
         // greys of globals.css (lighter in dark mode)

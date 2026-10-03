@@ -134,6 +134,11 @@
   }
 }
 
+@layer base {
+  /* Native controls (date pickers, scrollbars) follow the theme */
+  .dark { color-scheme: dark; }
+}
+
 @layer components {
   .gradient-primary {
     @apply bg-gradient-to-r from-indigo-600 to-purple-600;
@@ -164,7 +169,7 @@
     @apply flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-primary {
-    @apply inline-flex items-center justify-center rounded-full bg-black px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center rounded-full bg-black px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-white dark:text-black dark:focus-visible:ring-white;
   }
   .badge {
     @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
@@ -212,3 +217,75 @@
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
+
+/*
+ * Dark mode for the classes written without a dark: variant. Outside the Tailwind
+ * layers (so @apply never merges them) and under :where(.dark): as weak as the light
+ * class they replace, so every explicit dark: utility still wins.
+ * Text on the brand yellow and on translucent white buttons stays black.
+ */
+:where(.dark) .bg-white { background-color: #171717; }
+:where(.dark) .bg-gray-50 { background-color: #1c1c1c; }
+:where(.dark) .bg-gray-100 { background-color: #262626; }
+:where(.dark) .hover\:bg-gray-50:hover,
+:where(.dark) .hover\:bg-gray-100:hover { background-color: #262626; }
+:where(.dark) .hover\:bg-gray-200:hover { background-color: #333333; }
+:where(.dark) .text-gray-900,
+:where(.dark) .text-gray-800 { color: #f5f5f5; }
+:where(.dark) .text-gray-700 { color: #d4d4d4; }
+:where(.dark) .text-gray-600 { color: #a3a3a3; }
+:where(.dark) .text-black:where(:not([class*="FFDD00"]):not([class*="bg-white/"])) { color: #fafafa; }
+:where(.dark) .hover\:text-black:where(:not([class*="FFDD00"])):hover { color: #ffffff; }
+:where(.dark) .border-gray-100,
+:where(.dark) .border-gray-200,
+:where(.dark) .border-gray-300 { border-color: #2e2e2e; }
+:where(.dark) .border-black { border-color: #e5e5e5; }
+:where(.dark) .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
+:where(.dark) .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: #2e2e2e; }
+:where(.dark) .placeholder\:text-gray-400::placeholder { color: #737373; }
+
+:where(.dark) .bg-gray-200 { background-color: #333333; }
+:where(.dark) .border-gray-50 { border-color: #262626; }
+:where(.dark) .divide-gray-50 > :not([hidden]) ~ :not([hidden]) { border-color: #262626; }
+:where(.dark) .text-gray-500 { color: #a3a3a3; }
+
+/* Tinted status pills and notices (bg-*-50/100, text-*-700/800, border-*-100/200) */
+:where(.dark) .bg-green-50, :where(.dark) .bg-green-100 { background-color: rgb(34 197 94 / 0.14); }
+:where(.dark) .text-green-600, :where(.dark) .text-green-700, :where(.dark) .text-green-800, :where(.dark) .text-green-900 { color: #4ade80; }
+:where(.dark) .border-green-100, :where(.dark) .border-green-200, :where(.dark) .border-green-300 { border-color: rgb(34 197 94 / 0.35); }
+:where(.dark) .bg-emerald-50, :where(.dark) .bg-emerald-100 { background-color: rgb(16 185 129 / 0.14); }
+:where(.dark) .text-emerald-600, :where(.dark) .text-emerald-700, :where(.dark) .text-emerald-800, :where(.dark) .text-emerald-900 { color: #34d399; }
+:where(.dark) .border-emerald-100, :where(.dark) .border-emerald-200, :where(.dark) .border-emerald-300 { border-color: rgb(16 185 129 / 0.35); }
+:where(.dark) .bg-red-50, :where(.dark) .bg-red-100 { background-color: rgb(239 68 68 / 0.14); }
+:where(.dark) .text-red-600, :where(.dark) .text-red-700, :where(.dark) .text-red-800, :where(.dark) .text-red-900 { color: #f87171; }
+:where(.dark) .border-red-100, :where(.dark) .border-red-200, :where(.dark) .border-red-300 { border-color: rgb(239 68 68 / 0.35); }
+:where(.dark) .bg-amber-50, :where(.dark) .bg-amber-100 { background-color: rgb(245 158 11 / 0.14); }
+:where(.dark) .text-amber-600, :where(.dark) .text-amber-700, :where(.dark) .text-amber-800, :where(.dark) .text-amber-900 { color: #fbbf24; }
+:where(.dark) .border-amber-100, :where(.dark) .border-amber-200, :where(.dark) .border-amber-300 { border-color: rgb(245 158 11 / 0.35); }
+:where(.dark) .bg-yellow-50, :where(.dark) .bg-yellow-100 { background-color: rgb(234 179 8 / 0.14); }
+:where(.dark) .text-yellow-600, :where(.dark) .text-yellow-700, :where(.dark) .text-yellow-800, :where(.dark) .text-yellow-900 { color: #facc15; }
+:where(.dark) .border-yellow-100, :where(.dark) .border-yellow-200, :where(.dark) .border-yellow-300 { border-color: rgb(234 179 8 / 0.35); }
+:where(.dark) .bg-blue-50, :where(.dark) .bg-blue-100 { background-color: rgb(59 130 246 / 0.14); }
+:where(.dark) .text-blue-600, :where(.dark) .text-blue-700, :where(.dark) .text-blue-800, :where(.dark) .text-blue-900 { color: #60a5fa; }
+:where(.dark) .border-blue-100, :where(.dark) .border-blue-200, :where(.dark) .border-blue-300 { border-color: rgb(59 130 246 / 0.35); }
+:where(.dark) .bg-sky-50, :where(.dark) .bg-sky-100 { background-color: rgb(14 165 233 / 0.14); }
+:where(.dark) .text-sky-600, :where(.dark) .text-sky-700, :where(.dark) .text-sky-800, :where(.dark) .text-sky-900 { color: #38bdf8; }
+:where(.dark) .border-sky-100, :where(.dark) .border-sky-200, :where(.dark) .border-sky-300 { border-color: rgb(14 165 233 / 0.35); }
+:where(.dark) .bg-orange-50, :where(.dark) .bg-orange-100 { background-color: rgb(249 115 22 / 0.14); }
+:where(.dark) .text-orange-600, :where(.dark) .text-orange-700, :where(.dark) .text-orange-800, :where(.dark) .text-orange-900 { color: #fb923c; }
+:where(.dark) .border-orange-100, :where(.dark) .border-orange-200, :where(.dark) .border-orange-300 { border-color: rgb(249 115 22 / 0.35); }
+:where(.dark) .bg-rose-50, :where(.dark) .bg-rose-100 { background-color: rgb(244 63 94 / 0.14); }
+:where(.dark) .text-rose-600, :where(.dark) .text-rose-700, :where(.dark) .text-rose-800, :where(.dark) .text-rose-900 { color: #fb7185; }
+:where(.dark) .border-rose-100, :where(.dark) .border-rose-200, :where(.dark) .border-rose-300 { border-color: rgb(244 63 94 / 0.35); }
+:where(.dark) .bg-teal-50, :where(.dark) .bg-teal-100 { background-color: rgb(20 184 166 / 0.14); }
+:where(.dark) .text-teal-600, :where(.dark) .text-teal-700, :where(.dark) .text-teal-800, :where(.dark) .text-teal-900 { color: #2dd4bf; }
+:where(.dark) .border-teal-100, :where(.dark) .border-teal-200, :where(.dark) .border-teal-300 { border-color: rgb(20 184 166 / 0.35); }
+:where(.dark) .bg-cyan-50, :where(.dark) .bg-cyan-100 { background-color: rgb(6 182 212 / 0.14); }
+:where(.dark) .text-cyan-600, :where(.dark) .text-cyan-700, :where(.dark) .text-cyan-800, :where(.dark) .text-cyan-900 { color: #22d3ee; }
+:where(.dark) .border-cyan-100, :where(.dark) .border-cyan-200, :where(.dark) .border-cyan-300 { border-color: rgb(6 182 212 / 0.35); }
+:where(.dark) .bg-pink-50, :where(.dark) .bg-pink-100 { background-color: rgb(236 72 153 / 0.14); }
+:where(.dark) .text-pink-600, :where(.dark) .text-pink-700, :where(.dark) .text-pink-800, :where(.dark) .text-pink-900 { color: #f472b6; }
+:where(.dark) .border-pink-100, :where(.dark) .border-pink-200, :where(.dark) .border-pink-300 { border-color: rgb(236 72 153 / 0.35); }
+:where(.dark) .bg-lime-50, :where(.dark) .bg-lime-100 { background-color: rgb(132 204 22 / 0.14); }
+:where(.dark) .text-lime-600, :where(.dark) .text-lime-700, :where(.dark) .text-lime-800, :where(.dark) .text-lime-900 { color: #a3e635; }
+:where(.dark) .border-lime-100, :where(.dark) .border-lime-200, :where(.dark) .border-lime-300 { border-color: rgb(132 204 22 / 0.35); }

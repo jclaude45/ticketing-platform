@@ -100,9 +100,16 @@ export function Header() {
 
   const pageTitle = getPageTitle(pathname);
 
+  // Theme remembered on this browser (applied before paint by the root layout)
+  useEffect(() => {
+    setDarkMode(document.documentElement.classList.contains('dark'));
+  }, []);
+
   const toggleDark = () => {
-    setDarkMode((v) => !v);
-    document.documentElement.classList.toggle('dark');
+    const next = !document.documentElement.classList.contains('dark');
+    document.documentElement.classList.toggle('dark', next);
+    setDarkMode(next);
+    try { localStorage.setItem('zaya_theme', next ? 'dark' : 'light'); } catch { /* storage blocked */ }
   };
 
   const handleNotifClick = (n: AppNotification) => {
@@ -148,6 +155,8 @@ export function Header() {
         {/* Dark mode toggle */}
         <button
           onClick={toggleDark}
+          title={darkMode ? 'Mode clair' : 'Mode sombre'}
+          aria-label={darkMode ? 'Passer en mode clair' : 'Passer en mode sombre'}
           className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
         >
           {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
