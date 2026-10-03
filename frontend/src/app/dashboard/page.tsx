@@ -213,10 +213,6 @@ export default function DashboardPage() {
                   <span className={cn('badge text-xs', getStatusColor(event.status))}>
                     {EVENT_STATUS_LABELS[event.status] ?? event.status}
                   </span>
-                  <div className="text-right hidden sm:block">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">{event.ticketsScanned}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">scannés</p>
-                  </div>
                 </div>
               </Link>
             ))}
