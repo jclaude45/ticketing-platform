@@ -15,14 +15,14 @@ export class AnalyticsService {
   async getEventAnalytics(eventId: string, organizerId: string, organizerRole: Role) {
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
-      select: { id: true, organizerId: true },
+      select: { id: true, organizerId: true, currency: true },
     });
     if (!event) throw new ForbiddenException('Event not found');
     if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && event.organizerId !== organizerId) {
       throw new ForbiddenException('Access denied');
     }
 
-    const [totalTickets, scannedTickets, scanValidations] = await Promise.all([
+    const [totalTickets, scannedTickets, scanValidations, salesByCurrency] = await Promise.all([
       this.prisma.ticket.count({ where: { eventId } }),
       this.prisma.ticket.count({ where: { eventId, status: 'USED' } }),
       this.prisma.scanValidation.findMany({
@@ -34,7 +34,27 @@ export class AnalyticsService {
         orderBy: { scannedAt: 'desc' },
         take: 500,
       }),
+      // Sales: tickets kept (valid or already scanned), same rule as getRevenueStats;
+      // invitations are issued at 0 and cancelled / fraudulent tickets are left out
+      this.prisma.ticket.groupBy({
+        by: ['currency'],
+        where: { eventId, status: { in: ['VALID', 'USED'] }, price: { gt: 0 } },
+        _sum: { price: true },
+        _count: { _all: true },
+      }),
     ]);
+
+    const eventCurrency = event.currency || 'USD';
+    const inEventCurrency = salesByCurrency.find((g) => g.currency === eventCurrency);
+    const sales = {
+      currency: eventCurrency,
+      amount: Number(inEventCurrency?._sum.price ?? 0),
+      paidTickets: salesByCurrency.reduce((n, g) => n + g._count._all, 0),
+      // Amounts never added across currencies: other ones are listed apart
+      otherCurrencies: salesByCurrency
+        .filter((g) => g.currency !== eventCurrency)
+        .map((g) => ({ currency: g.currency, amount: Number(g._sum.price ?? 0) })),
+    };
 
     // Scans grouped by hour (last 24 h buckets)
     const hourMap: Record<string, number> = {};
@@ -75,6 +95,7 @@ export class AnalyticsService {
       totalTickets,
       scannedTickets,
       occupancyRate: totalTickets > 0 ? scannedTickets / totalTickets : 0,
+      sales,
       scansByHour,
       scansByController,
       recentScans,

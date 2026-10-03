@@ -8,7 +8,7 @@ import {
   CreditCard, Plus, Pencil, Trash2, RefreshCw, UserCheck,
   Ticket, Users, CheckCircle2, XCircle, Clock, Zap, Infinity,
   ChevronDown, ChevronUp, RotateCcw, ShieldCheck, Calendar,
-  Package, Download, Euro, Mail,
+  Package, Download, Euro, Mail, X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -263,7 +263,7 @@ function Toast({ msg, type, onDone }: { msg: string; type: 'success' | 'error'; 
     )}>
       {type === 'success' ? <CheckCircle2 className="h-4 w-4 flex-shrink-0" /> : <XCircle className="h-4 w-4 flex-shrink-0" />}
       <span className="flex-1">{msg}</span>
-      <button onClick={onDone} className="opacity-70 hover:opacity-100 ml-2">✕</button>
+      <button onClick={onDone} className="opacity-70 hover:opacity-100 ml-2" aria-label="Fermer"><X className="h-4 w-4" /></button>
     </div>
   );
 }

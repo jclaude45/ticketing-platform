@@ -105,3 +105,32 @@ export function buildQueryString(params: Record<string, unknown>): string {
     .join('&');
   return query ? `?${query}` : '';
 }
+
+/** "1 250,50 $", "45 000 FC"… in the event's currency (French formatting) */
+export function formatMoney(amount: number, currency = 'USD'): string {
+  try {
+    return new Intl.NumberFormat('fr-FR', {
+      style: 'currency',
+      currency,
+      currencyDisplay: 'narrowSymbol',
+      maximumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+    }).format(amount);
+  } catch {
+    return `${amount.toLocaleString('fr-FR')} ${currency}`;
+  }
+}
+
+/** Sales of an event as returned by GET /analytics/events/:id */
+export interface EventSales {
+  currency: string;
+  amount: number;
+  paidTickets: number;
+  otherCurrencies: { currency: string; amount: number }[];
+}
+
+export function salesDescription(sales?: EventSales): string | undefined {
+  if (!sales) return undefined;
+  const parts = [`${sales.paidTickets} billet${sales.paidTickets > 1 ? 's' : ''} payant${sales.paidTickets > 1 ? 's' : ''}`];
+  for (const o of sales.otherCurrencies) parts.push(`+ ${formatMoney(o.amount, o.currency)}`);
+  return parts.join(' · ');
+}

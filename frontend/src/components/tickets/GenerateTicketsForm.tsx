@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Ticket, Loader2, Plus, Trash2,
-  Users, Hash, CheckCircle2, Sparkles, AlertTriangle, Upload, Download,
+  Users, Hash, CheckCircle2, Sparkles, AlertTriangle, Upload, Download, Check
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { apiClient } from '@/lib/api';
@@ -266,7 +266,7 @@ export function GenerateTicketsForm({ eventId }: Props) {
               'flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold transition-colors',
               step >= s.n ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-400',
             )}>
-              {step > s.n ? '✓' : s.n}
+              {step > s.n ? <Check className="h-3.5 w-3.5" /> : s.n}
             </div>
             <span className={cn('text-sm font-medium', step >= s.n ? 'text-gray-900' : 'text-gray-400')}>
               {s.label}

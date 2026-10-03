@@ -284,7 +284,7 @@ export default function SubscriptionPage() {
                       >
                         {plan.allowBulkExport ? <Check size={14} /> : <X size={14} />}
                       </span>
-                      Export en lot {plan.allowBulkExport ? '✓' : '✗'}
+                      Export en lot
                     </li>
                     <li className="flex items-center gap-2">
                       <span className={cn(plan.allowCommunication ? 'text-green-500' : 'text-red-400')}>

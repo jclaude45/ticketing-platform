@@ -10,10 +10,10 @@ import { StatsCard } from '@/components/analytics/StatsCard';
 import { ScanChart } from '@/components/analytics/ScanChart';
 import { OccupancyChart } from '@/components/analytics/OccupancyChart';
 import {
-  ArrowLeft, Ticket, Users, Activity, BarChart3,
-  RefreshCw, Trophy, Clock, TrendingUp,
+  ArrowLeft, Ticket, Users, Activity, BarChart3, Wallet,
+  RefreshCw, Trophy, Clock, TrendingUp, Medal
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatMoney, salesDescription } from '@/lib/utils';
 import { AudienceSection } from '@/components/analytics/AudienceSection';
 
 export default function EventAnalyticsPage() {
@@ -81,7 +81,14 @@ export default function EventAnalyticsPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-x-8 md:grid-cols-3 xl:grid-cols-5">
+        <StatsCard
+          title="Solde des ventes"
+          value={formatMoney(analytics?.sales?.amount ?? 0, analytics?.sales?.currency ?? event?.currency ?? 'USD')}
+          icon={<Wallet className="h-5 w-5" />}
+          description={salesDescription(analytics?.sales)}
+          isLoading={isLoading}
+        />
         <StatsCard
           title="Billets générés"
           value={analytics?.totalTickets ?? 0}
@@ -184,11 +191,14 @@ export default function EventAnalyticsPage() {
                 .map((ctrl: any, i: number) => {
                   const maxCount = analytics.scansByController[0]?.count ?? 1;
                   const pct = Math.round((ctrl.count / maxCount) * 100);
-                  const medals = ['🥇', '🥈', '🥉'];
+                  // Gold, silver, bronze medal for the first three
+                  const medalColors = ['text-[#E8B400]', 'text-gray-400', 'text-[#B5651D]'];
                   return (
                     <li key={ctrl.controllerId} className="flex items-center gap-3">
-                      <span className="text-base w-6 text-center flex-shrink-0">
-                        {medals[i] ?? <span className="text-xs text-gray-400 font-bold">#{i + 1}</span>}
+                      <span className="flex w-6 flex-shrink-0 justify-center">
+                        {i < 3
+                          ? <Medal className={cn('h-5 w-5', medalColors[i])} aria-label={`${i + 1}e`} />
+                          : <span className="text-xs text-gray-400 font-bold">#{i + 1}</span>}
                       </span>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1">

@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   AlertTriangle, ArrowRight, BarChart3, ChevronRight, Calendar, CheckCircle2, Edit, ExternalLink, FolderKanban, Globe, MapPin,
-  MoreHorizontal, Palette, Play, Ticket, Trash2, Users, X,
+  MoreHorizontal, Palette, Play, Ticket, Trash2, Users, Wallet, X,
 } from 'lucide-react';
 import { useDeleteEvent, usePublishEvent, useCancelEvent } from '@/hooks/useEvents';
 import { useEventAccess, EVENT_STATUS_LABELS, EVENT_STATUS_STYLES } from '@/hooks/useEventAccess';
@@ -13,9 +13,10 @@ import { PageLoader } from '@/components/common/LoadingSpinner';
 import { StatsCard } from '@/components/analytics/StatsCard';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { ZayaLogo } from '@/components/site/ZayaLogo';
-import { formatDate, formatNumber } from '@/lib/utils';
+import { formatDate, formatNumber, formatMoney, salesDescription, type EventSales } from '@/lib/utils';
+import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
-import { resolveMediaUrl } from '@/lib/api';
+import { analyticsApi, resolveMediaUrl } from '@/lib/api';
 
 /** "…" menu of the rare, destructive actions */
 function MoreMenu({ items }: { items: { label: string; icon: React.ReactNode; onClick: () => void; danger?: boolean }[] }) {
@@ -67,6 +68,14 @@ export default function EventDetailPage() {
   const cancelEvent = useCancelEvent();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+
+  // Sales in the event's currency (same query as the analytics tab)
+  const { data: sales } = useQuery({
+    queryKey: ['analytics', 'event', id],
+    queryFn: () => analyticsApi.getEventAnalytics(id).then(r => (r.data as any)?.data ?? r.data),
+    enabled: !!id && !isContributor,
+    select: (a: any) => a?.sales as EventSales | undefined,
+  });
 
   if (isLoading) return <PageLoader text="Chargement de l'événement..." />;
   if (!event) return <div className="py-12 text-center text-gray-500">Événement introuvable</div>;
@@ -197,7 +206,12 @@ export default function EventDetailPage() {
       <div className="grid grid-cols-2 gap-x-8 md:grid-cols-4">
         <StatsCard title="Billets émis" value={formatNumber(ticketsIssued)} icon={<Ticket className="h-5 w-5" />} color="indigo" />
         <StatsCard title="Occupation" value={`${occupancy}%`} icon={<CheckCircle2 className="h-5 w-5" />} color="green" />
-        <StatsCard title="Capacité" value={formatNumber(event.totalCapacity)} icon={<Users className="h-5 w-5" />} color="purple" />
+        <StatsCard
+          title="Solde des ventes"
+          value={formatMoney(sales?.amount ?? 0, sales?.currency ?? (event as any).currency ?? 'USD')}
+          icon={<Wallet className="h-5 w-5" />}
+          description={salesDescription(sales)}
+        />
         <StatsCard
           title="Disponible"
           value={formatNumber(event.totalCapacity - ticketsIssued)}

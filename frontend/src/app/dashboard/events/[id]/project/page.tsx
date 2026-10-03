@@ -990,7 +990,7 @@ function AddExpenseModal({ eventId, lineId, lines, onClose }: AddExpenseModalPro
       if (alert?.level === 'OVER') {
         toast.error(`Budget dépassé sur "${alert.label}" : ${formatCurrency(alert.spent)} pour ${formatCurrency(alert.planned)} prévus`);
       } else if (alert?.level === 'WARNING') {
-        toast(`Attention : "${alert.label}" a atteint ${Math.round((alert.spent / alert.planned) * 100)}% du budget prévu`, { icon: '⚠️' });
+        toast(`Attention : "${alert.label}" a atteint ${Math.round((alert.spent / alert.planned) * 100)}% du budget prévu`, { icon: <AlertTriangle className="h-5 w-5 text-amber-500" /> });
       } else {
         toast.success('Dépense enregistrée');
       }

@@ -62,7 +62,7 @@ export default function AudienceMap({ places }: { places: AudiencePlace[] }) {
           key={`${p.lat},${p.lng}`}
           center={[p.lat, p.lng]}
           radius={6 + 18 * Math.sqrt(p.visitors / max)}
-          pathOptions={{ color: '#5C37FF', fillColor: '#5C37FF', fillOpacity: 0.45, weight: 1 }}
+          pathOptions={{ color: '#181818', fillColor: '#FFDD00', fillOpacity: 0.75, weight: 1.5 }}
         >
           <Tooltip>
             <strong>{p.city || countryName(p.country) || 'Lieu inconnu'}</strong>

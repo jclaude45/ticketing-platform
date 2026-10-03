@@ -27,7 +27,7 @@ import {
   Sparkles,
   X,
   Lock,
-  Crown,
+  Crown, AlarmClock
 } from 'lucide-react';
 import { communicationApi, subscriptionApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -846,22 +846,22 @@ function ReminderTab({
             campaign: r7,
             label: 'Rappel J-7',
             desc: '7 jours avant l\'événement',
-            icon: '📅',
+            icon: CalendarClock,
           },
           {
             type: 'REMINDER_1D' as const,
             campaign: r1,
             label: 'Rappel J-1',
             desc: 'La veille de l\'événement',
-            icon: '⏰',
+            icon: AlarmClock,
           },
-        ].map(({ type, campaign, label, desc, icon }) => (
+        ].map(({ type, campaign, label, desc, icon: Icon }) => (
           <div
             key={type}
             className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 py-5"
           >
             <div className="flex items-center gap-3 mb-3">
-              <span className="text-2xl">{icon}</span>
+              <Icon className="h-6 w-6 flex-shrink-0 text-black dark:text-white" />
               <div>
                 <h4 className="font-semibold text-gray-900 dark:text-white">{label}</h4>
                 <p className="text-xs text-gray-500 dark:text-gray-400">{desc}</p>
@@ -912,14 +912,14 @@ function ReminderTab({
         <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Calendrier des envois</h3>
         <div className="space-y-3">
           {[
-            { icon: '📧', label: 'Invitation initiale', desc: 'À la création / publication de l\'événement', when: 'Maintenant' },
-            { icon: '✅', label: 'Confirmation d\'inscription', desc: 'À chaque achat / génération de billet', when: 'Automatique' },
-            { icon: '📅', label: 'Rappel J-7', desc: 'Rappel avec billet joint', when: '7 jours avant', active: !!r7 },
-            { icon: '⏰', label: 'Rappel J-1', desc: 'Rappel de dernière minute', when: 'La veille', active: !!r1 },
+            { icon: Mail, label: 'Invitation initiale', desc: 'À la création / publication de l\'événement', when: 'Maintenant' },
+            { icon: CheckCircle2, label: 'Confirmation d\'inscription', desc: 'À chaque achat / génération de billet', when: 'Automatique' },
+            { icon: CalendarClock, label: 'Rappel J-7', desc: 'Rappel avec billet joint', when: '7 jours avant', active: !!r7 },
+            { icon: AlarmClock, label: 'Rappel J-1', desc: 'Rappel de dernière minute', when: 'La veille', active: !!r1 },
           ].map((item, i) => (
             <div key={i} className="flex items-center gap-4">
               <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-sm flex-shrink-0">
-                {item.icon}
+                <item.icon className="h-4 w-4 text-black dark:text-white" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 dark:text-white">{item.label}</p>
@@ -1023,7 +1023,7 @@ function NewCampaignModal({
       <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-800">
           <h2 className="font-bold text-gray-900 dark:text-white">Nouvelle campagne</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1">✕</button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1" aria-label="Fermer"><X className="h-5 w-5" /></button>
         </div>
 
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
@@ -1047,9 +1047,9 @@ function NewCampaignModal({
                 onChange={e => setForm(f => ({ ...f, channel: e.target.value as Channel, templateId: '' }))}
                 className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
               >
-                <option value="EMAIL">📧 Email {channelStatus?.email ? '' : '(configuré)'}</option>
-                <option value="SMS" disabled={!channelStatus?.sms}>📱 SMS {!channelStatus?.sms ? '(non configuré)' : ''}</option>
-                <option value="WHATSAPP" disabled={!channelStatus?.whatsapp}>💬 WhatsApp {!channelStatus?.whatsapp ? '(non configuré)' : ''}</option>
+                <option value="EMAIL">Email {channelStatus?.email ? '' : '(configuré)'}</option>
+                <option value="SMS" disabled={!channelStatus?.sms}>SMS {!channelStatus?.sms ? '(non configuré)' : ''}</option>
+                <option value="WHATSAPP" disabled={!channelStatus?.whatsapp}>WhatsApp {!channelStatus?.whatsapp ? '(non configuré)' : ''}</option>
               </select>
             </div>
             <div>
@@ -1221,7 +1221,7 @@ function NewTemplateModal({ onClose, onCreated }: { onClose: () => void; onCreat
       <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-lg">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-800">
           <h2 className="font-bold text-gray-900 dark:text-white">Nouveau modèle</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">✕</button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1" aria-label="Fermer"><X className="h-5 w-5" /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
@@ -1312,7 +1312,7 @@ function CampaignStatsModal({
       <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-800">
           <h2 className="font-bold text-gray-900 dark:text-white">Statistiques</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">✕</button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1" aria-label="Fermer"><X className="h-5 w-5" /></button>
         </div>
         <div className="p-6 space-y-4">
           <div>

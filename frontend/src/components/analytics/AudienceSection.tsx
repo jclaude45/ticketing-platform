@@ -8,6 +8,7 @@ import { Eye, Users, Globe2, MapPin, Loader2, Monitor, Smartphone, Tablet, Info 
 import { apiClient } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import type { AudiencePlace } from './AudienceMap';
+import { CountryFlag } from '@/components/common/CountryFlag';
 
 // Leaflet touches `window`: load the map in the browser only
 const AudienceMap = dynamic(() => import('./AudienceMap'), {
@@ -40,9 +41,6 @@ const countryName = (code: string | null) => {
   }
 };
 
-const flag = (code: string | null) =>
-  code && /^[A-Z]{2}$/.test(code) ? String.fromCodePoint(0x1f1a5 + code.charCodeAt(0), 0x1f1a5 + code.charCodeAt(1)) : '🌐';
-
 const sourceLabel = (name: string) => (name === 'Direct' ? 'Accès direct / lien partagé' : name.startsWith('utm:') ? `Campagne « ${name.slice(4)} »` : name);
 
 const DEVICE_ICONS: Record<string, typeof Monitor> = { desktop: Monitor, mobile: Smartphone, tablet: Tablet };
@@ -63,7 +61,8 @@ export function AudienceSection({ eventId }: { eventId?: string }) {
     },
   });
 
-  const card = 'rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900';
+  // Flat block with a hairline below, like the rest of the dashboard
+  const card = 'border-b border-gray-200 bg-white py-4 dark:border-gray-800 dark:bg-gray-900';
 
   return (
     <section className="flex flex-col gap-4">
@@ -132,8 +131,8 @@ export function AudienceSection({ eventId }: { eventId?: string }) {
                       labelFormatter={(d: string) => new Date(d).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
                       formatter={(value: number, name: string) => [value, name === 'visitors' ? 'Personnes' : 'Vues']}
                     />
-                    <Area type="monotone" dataKey="views" stroke="#a5b4fc" fill="#e0e7ff" strokeWidth={1.5} />
-                    <Area type="monotone" dataKey="visitors" stroke="#5C37FF" fill="#5C37FF" fillOpacity={0.25} strokeWidth={2} />
+                    <Area type="monotone" dataKey="views" stroke="#bdbdbd" fill="#eeeeee" strokeWidth={1.5} />
+                    <Area type="monotone" dataKey="visitors" stroke="#181818" fill="#FFDD00" fillOpacity={0.35} strokeWidth={2} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -157,7 +156,7 @@ export function AudienceSection({ eventId }: { eventId?: string }) {
                       {data.countries.length === 0 && <li className="text-xs text-gray-400">Aucune donnée pour le moment.</li>}
                       {data.countries.slice(0, 6).map((c) => (
                         <li key={c.country ?? 'unknown'} className="flex items-center justify-between text-sm">
-                          <span className="truncate text-gray-700 dark:text-gray-300">{flag(c.country)} {countryName(c.country)}</span>
+                          <span className="flex min-w-0 items-center gap-2 text-gray-700 dark:text-gray-300"><CountryFlag code={c.country} /><span className="truncate">{countryName(c.country)}</span></span>
                           <span className="font-medium text-gray-900 dark:text-white">{c.visitors}</span>
                         </li>
                       ))}
