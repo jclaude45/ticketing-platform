@@ -208,6 +208,9 @@ export default function DashboardPage() {
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
                     {formatDate(event.startDate)} • {event.city}
                   </p>
+                  {event.description && (
+                    <p className="mt-1 line-clamp-2 text-sm text-gray-600 dark:text-gray-300">{event.description}</p>
+                  )}
                 </div>
                 <div className="flex items-center gap-3">
                   <span className={cn('badge text-xs', getStatusColor(event.status))}>
