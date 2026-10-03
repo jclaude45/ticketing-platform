@@ -1,11 +1,11 @@
 'use client';
 
-import { motion } from 'framer-motion';
-import { AlertCircle, Calendar, Filter, Plus, RefreshCw, Search } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { AlertCircle, Calendar, ChevronDown, LayoutGrid, List, Plus, RefreshCw, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useEvents } from '@/hooks/useEvents';
 import { useEventsStore } from '@/store/events.store';
-import { EventCard } from '@/components/events/EventCard';
+import { EventCard, EventListHeader, EventRow } from '@/components/events/EventCard';
 import { PageHeader } from '@/components/common/PageHeader';
 import { EmptyState } from '@/components/common/EmptyState';
 import { PageLoader } from '@/components/common/LoadingSpinner';
@@ -20,8 +20,23 @@ const STATUS_OPTIONS = [
   { value: 'COMPLETED', label: 'Terminé' },
 ];
 
+type View = 'grid' | 'list';
+const VIEW_KEY = 'zaya_events_view';
+
+const fieldClass =
+  'h-11 rounded-full border border-gray-200 bg-white px-4 text-sm text-black transition-colors focus:border-black focus:outline-none focus:ring-1 focus:ring-black dark:border-gray-700 dark:bg-gray-900 dark:text-white';
+
 export default function EventsPage() {
   const { data, isLoading, isError, isFetching, refetch } = useEvents();
+  // Icons or list, remembered on this browser
+  const [view, setView] = useState<View>('grid');
+  useEffect(() => {
+    try { if (localStorage.getItem(VIEW_KEY) === 'list') setView('list'); } catch { /* storage blocked */ }
+  }, []);
+  const chooseView = (v: View) => {
+    setView(v);
+    try { localStorage.setItem(VIEW_KEY, v); } catch { /* storage blocked */ }
+  };
   const { filters, setFilters, currentPage, pageSize, setCurrentPage, setPageSize } = useEventsStore();
 
   const handleSearch = debounce((value: unknown) => {
@@ -41,7 +56,7 @@ export default function EventsPage() {
         </div>
         <button
           onClick={() => refetch()}
-          className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
+          className="btn-primary gap-2"
         >
           <RefreshCw className="h-4 w-4" />
           Réessayer
@@ -59,7 +74,7 @@ export default function EventsPage() {
           <div className="flex items-center gap-2">
             {isFetching && (
               <span title="Actualisation…">
-                <RefreshCw className="h-4 w-4 animate-spin text-indigo-400" />
+                <RefreshCw className="h-4 w-4 animate-spin text-gray-400" />
               </span>
             )}
             <Link
@@ -73,51 +88,72 @@ export default function EventsPage() {
         }
       />
 
-      {/* Filters */}
+      {/* Filters + view */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[200px] max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <div className="relative min-w-[200px] max-w-xs flex-1">
+          <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
             defaultValue={filters.search}
             onChange={(e) => handleSearch(e.target.value)}
-            placeholder="Rechercher des événements..."
-            className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+            placeholder="Rechercher un événement…"
+            className={cn(fieldClass, 'w-full pl-10 placeholder:text-gray-400')}
           />
         </div>
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-gray-400" />
+        <div className="relative">
           <select
             value={filters.status}
             onChange={(e) => setFilters({ status: e.target.value })}
-            className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+            className={cn(fieldClass, 'appearance-none pr-10')}
+            aria-label="Statut"
           >
             {STATUS_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
+          <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
         </div>
         <input
           type="date"
           value={filters.dateFrom}
           onChange={(e) => setFilters({ dateFrom: e.target.value })}
-          className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+          className={fieldClass}
+          aria-label="À partir du"
         />
+
+        <div className="ml-auto flex rounded-full border border-gray-200 p-1 dark:border-gray-700" role="group" aria-label="Affichage">
+          {([['grid', LayoutGrid, 'Icônes'], ['list', List, 'Liste']] as const).map(([v, Icon, label]) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => chooseView(v)}
+              aria-pressed={view === v}
+              title={label}
+              className={cn(
+                'flex h-9 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium transition-colors',
+                view === v ? 'bg-black text-white dark:bg-white dark:text-black' : 'text-gray-500 hover:text-black dark:hover:text-white',
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              <span className="hidden sm:inline">{label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Grid */}
       {data?.data && data.data.length > 0 ? (
         <>
-          <motion.div
-            className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ staggerChildren: 0.08 }}
-          >
-            {data.data.map((event) => (
-              <EventCard key={event.id} event={event} />
-            ))}
-          </motion.div>
+          {view === 'grid' ? (
+            <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:gap-x-6 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+              {data.data.map((event) => <EventCard key={event.id} event={event} />)}
+            </div>
+          ) : (
+            <div>
+              <EventListHeader />
+              {data.data.map((event) => <EventRow key={event.id} event={event} />)}
+            </div>
+          )}
 
           {/* Pagination */}
           {data.totalPages > 1 && (
@@ -129,14 +165,14 @@ export default function EventsPage() {
                 <button
                   onClick={() => setCurrentPage(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  className="px-4 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   Précédent
                 </button>
                 <button
                   onClick={() => setCurrentPage(currentPage + 1)}
                   disabled={currentPage === data.totalPages}
-                  className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  className="px-4 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   Suivant
                 </button>
