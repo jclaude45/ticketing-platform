@@ -112,6 +112,10 @@ export default function EventDetailPage() {
             <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4" />{event.venue}, {event.city}</span>
             <span className="flex items-center gap-1.5"><Users className="h-4 w-4" />{formatNumber(event.totalCapacity)} places</span>
           </div>
+          {/* Description right under the date line */}
+          {event.description && (
+            <p className="mt-3 line-clamp-3 max-w-2xl whitespace-pre-line text-[15px] leading-relaxed text-white/85">{event.description}</p>
+          )}
         </div>
         {actions && <div className="flex flex-shrink-0 flex-wrap items-center gap-2">{actions}</div>}
       </div>
@@ -178,10 +182,6 @@ export default function EventDetailPage() {
   return (
     <div className="space-y-6">
       {hero(actions)}
-
-      {event.description && (
-        <p className="max-w-3xl whitespace-pre-line text-[15px] leading-relaxed text-gray-600 dark:text-gray-300">{event.description}</p>
-      )}
 
       {/* Draft: what is missing before publishing */}
       {event.status === 'DRAFT' && (
