@@ -37,6 +37,14 @@ const ACTION_CONFIG: Record<string, {
   },
 };
 
+const SOURCE_LABELS: Record<string, string> = {
+  GENERATION: 'Génération', ONLINE: 'Vente en ligne', INVITATION: 'Invitation',
+};
+const RESULT_LABELS: Record<string, string> = {
+  VALID: 'Accepté', ALREADY_USED: 'Déjà utilisé', INVALID: 'Invalide', FRAUDULENT: 'Fraude', EXPIRED: 'Expiré',
+  CANCELLED: 'Annulé',
+};
+
 interface LogEntry {
   id: string;
   action: string;
@@ -243,18 +251,26 @@ export default function HistoriquePage() {
 
                       {/* Détails */}
                       <td className="px-4 py-3">
-                        {status && (
-                          <span className={cn(
-                            'inline-flex items-center gap-1 text-xs font-medium',
-                            status === 'VALID' || status === 'valid' ? 'text-emerald-600' : 'text-red-500',
-                          )}>
-                            {status === 'VALID' || status === 'valid'
-                              ? <CheckCircle2 className="h-3 w-3" />
-                              : <XCircle className="h-3 w-3" />}
-                            {status}
-                          </span>
+                        {log.action === 'ticket.generate' ? (
+                          <div className="text-xs">
+                            <p className="font-medium text-gray-800">{SOURCE_LABELS[log.newValues?.source] ?? 'Génération'}</p>
+                            {log.newValues?.templateName && <p className="text-gray-400">Tarif {log.newValues.templateName}</p>}
+                          </div>
+                        ) : status ? (
+                          <div className="text-xs">
+                            <span className={cn(
+                              'inline-flex items-center gap-1 font-medium',
+                              status === 'VALID' ? 'text-emerald-600' : 'text-red-500',
+                            )}>
+                              {status === 'VALID' ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                              {RESULT_LABELS[status] ?? status}
+                            </span>
+                            {log.newValues?.controllerName && <p className="text-gray-400">par {log.newValues.controllerName}</p>}
+                            {!log.newValues?.controllerName && log.user && <p className="text-gray-400">par {log.user.firstName} {log.user.lastName}</p>}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
                         )}
-                        {!status && <span className="text-xs text-gray-400">—</span>}
                       </td>
 
                       {/* Date */}

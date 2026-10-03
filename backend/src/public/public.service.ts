@@ -183,6 +183,7 @@ export class PublicService {
           templateId: item.templateId,
           holders: Array.from({ length: item.quantity }, () => holder),
         },
+        { source: 'ONLINE' },
       );
       allTicketIds.push(...result.tickets.map((t: any) => t.id));
     }

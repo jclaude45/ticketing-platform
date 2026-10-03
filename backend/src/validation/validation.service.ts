@@ -5,6 +5,7 @@ import { QrcodeService } from '../qrcode/qrcode.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { ScanTicketDto, OfflineScanDto } from './dto/scan-ticket.dto';
 import { ScanResult, TicketStatus, Role } from '@prisma/client';
+import { logTicketAction } from '../audit/ticket-history';
 
 @Injectable()
 export class ValidationService {
@@ -351,7 +352,7 @@ export class ValidationService {
     ipAddress?: string,
   ) {
     // H4: ticketId is nullable — do not store 'unknown' which breaks FK integrity
-    return this.prisma.scanValidation.create({
+    const scan = await this.prisma.scanValidation.create({
       data: {
         ...(ticketId ? { ticketId } : {}),
         controllerId,
@@ -363,6 +364,30 @@ export class ValidationService {
         isSynced: true,
       },
     });
+
+    // Ticket history: every scan of a known ticket (an unreadable QR has no event)
+    if (ticketId) {
+      const info = await this.prisma.ticket.findUnique({
+        where: { id: ticketId },
+        select: { serialNumber: true, holderName: true, eventId: true, event: { select: { name: true } } },
+      });
+      const controller = await this.prisma.controller.findUnique({ where: { id: controllerId }, select: { name: true } });
+      if (info) {
+        await logTicketAction(this.prisma, {
+          action: 'ticket.scan',
+          eventId: info.eventId,
+          values: {
+            eventName: info.event.name,
+            serialNumber: info.serialNumber,
+            holderName: info.holderName,
+            result,
+            controllerName: controller?.name,
+          },
+        });
+      }
+    }
+
+    return scan;
   }
 
   private async broadcastScanResult(

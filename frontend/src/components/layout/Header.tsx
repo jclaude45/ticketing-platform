@@ -47,7 +47,7 @@ function getPageTitle(pathname: string): string {
   if (last === 'generate') return 'Générer des billets';
   if (last === 'analytics') return 'Analytique';
   if (last === 'controllers') return 'Contrôleurs';
-  if (last === 'audit') return "Journaux d'audit";
+  if (last === 'audit') return 'Historique';
   if (last === 'settings') return 'Paramètres';
   return last.charAt(0).toUpperCase() + last.slice(1);
 }

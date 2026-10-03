@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nest
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { TicketStatus, Role } from '@prisma/client';
+import { logTicketAction } from '../audit/ticket-history';
 
 @Injectable()
 export class TicketsService {
@@ -166,7 +167,7 @@ export class TicketsService {
       try {
         const ticket = await this.prisma.ticket.findUnique({
           where: { id: ticketId },
-          include: { event: { select: { organizerId: true } } },
+          include: { event: { select: { organizerId: true, name: true } } },
         });
 
         if (!ticket) {
@@ -189,6 +190,14 @@ export class TicketsService {
             ...(status === TicketStatus.USED && { checkedInAt: new Date() }),
           },
         });
+        if (status === TicketStatus.CANCELLED && ticket.status !== TicketStatus.CANCELLED) {
+          await logTicketAction(this.prisma, {
+            action: 'ticket.cancel',
+            eventId: ticket.eventId,
+            userId: requesterId,
+            values: { eventName: ticket.event.name, serialNumber: ticket.serialNumber, holderName: ticket.holderName, status: 'CANCELLED' },
+          });
+        }
         results.updated++;
       } catch (err) {
         results.failed++;

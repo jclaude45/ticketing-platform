@@ -12,6 +12,7 @@ import { QrcodeService } from '../qrcode/qrcode.service';
 import { GenerateTicketsDto } from './dto/generate-tickets.dto';
 import { Prisma, Role, TicketStatus } from '@prisma/client';
 import { SubscriptionService } from '../subscription/subscription.service';
+import { logTicketAction, type TicketSource } from '../audit/ticket-history';
 
 @Injectable()
 export class TicketGenerationService {
@@ -30,7 +31,12 @@ export class TicketGenerationService {
     organizerId: string,
     organizerRole: Role,
     dto: GenerateTicketsDto,
-    options?: { price?: number; metadata?: Prisma.InputJsonValue },
+    options?: {
+      price?: number;
+      metadata?: Prisma.InputJsonValue;
+      /** For the ticket history: where the batch comes from (default: the organizer) */
+      source?: TicketSource;
+    },
   ) {
     // Validate event
     const event = await this.prisma.event.findUnique({
@@ -194,6 +200,23 @@ export class TicketGenerationService {
 
     this.logger.log(`Generated ${count} tickets for event ${eventId}`);
 
+    const source: TicketSource = options?.source ?? 'GENERATION';
+    await logTicketAction(this.prisma, {
+      action: 'ticket.generate',
+      eventId,
+      // A buyer on the public site is not a user: organizerId is then only the event owner
+      userId: source === 'ONLINE' ? null : organizerId,
+      values: {
+        eventName: event.name,
+        templateName: template.name,
+        count,
+        source,
+        serialNumber: ticketsWithQR[0]?.serialNumber,
+        serialNumbers: ticketsWithQR.slice(0, 20).map((t) => t.serialNumber),
+        ...(holders[0]?.holderName && { holderName: holders[0].holderName }),
+      },
+    });
+
     return {
       message: `Successfully generated ${count} tickets`,
       count,
@@ -210,7 +233,7 @@ export class TicketGenerationService {
   async cancelTicket(ticketId: string, organizerId: string, organizerRole: Role) {
     const ticket = await this.prisma.ticket.findUnique({
       where: { id: ticketId },
-      include: { event: { select: { organizerId: true } } },
+      include: { event: { select: { organizerId: true, name: true } } },
     });
 
     if (!ticket) throw new NotFoundException('Ticket not found');
@@ -239,6 +262,13 @@ export class TicketGenerationService {
         data: { availableCount: { increment: 1 } },
       });
     }
+
+    await logTicketAction(this.prisma, {
+      action: 'ticket.cancel',
+      eventId: ticket.eventId,
+      userId: organizerId,
+      values: { eventName: ticket.event.name, serialNumber: ticket.serialNumber, holderName: ticket.holderName, status: 'CANCELLED' },
+    });
 
     return updated;
   }

@@ -117,7 +117,7 @@ export class InvitationsService {
       userId,
       role,
       { templateId, holders: valid.map((g) => ({ holderName: g.name, holderEmail: g.email })) },
-      { price: 0, metadata: metadata as unknown as Prisma.InputJsonValue },
+      { price: 0, metadata: metadata as unknown as Prisma.InputJsonValue, source: 'INVITATION' },
     );
 
     const tickets = await this.prisma.ticket.findMany({
@@ -212,7 +212,7 @@ export class InvitationsService {
           holderEmail: email,
         })),
       },
-      { price: 0, metadata: metadata as unknown as Prisma.InputJsonValue },
+      { price: 0, metadata: metadata as unknown as Prisma.InputJsonValue, source: 'INVITATION' },
     );
 
     const tickets = await this.prisma.ticket.findMany({

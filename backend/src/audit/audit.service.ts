@@ -19,12 +19,20 @@ export class AuditService {
     fromDate?: string,
     toDate?: string,
   ) {
+    // Query strings: make sure they are numbers
+    page = Math.max(1, Number(page) || 1);
+    limit = Math.min(200, Math.max(1, Number(limit) || 50));
     const skip = (page - 1) * limit;
 
-    // Non-admins can only see their own audit logs
     const where: any = {};
     if (requesterRole !== Role.ADMIN && requesterRole !== Role.SUPER_ADMIN) {
-      where.userId = requesterId;
+      // Own actions, plus the ticket history of the events they organize (online sales,
+      // scans by their controllers, invitations…), which is attached to the event
+      const events = await this.prisma.event.findMany({ where: { organizerId: requesterId }, select: { id: true } });
+      where.OR = [
+        { userId: requesterId },
+        { entity: 'event', entityId: { in: events.map((e) => e.id) } },
+      ];
     } else if (userId) {
       where.userId = userId;
     }

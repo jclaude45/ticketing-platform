@@ -357,6 +357,7 @@ export class PaymentService {
       const result = await this.ticketGeneration.generateTickets(
         payment.eventId, event.organizerId, Role.ORGANIZER,
         { templateId: item.templateId, holders: Array.from({ length: item.quantity }, () => holder) },
+        { source: 'ONLINE' },
       );
       allTicketIds.push(...result.tickets.map((t: any) => t.id));
     }
