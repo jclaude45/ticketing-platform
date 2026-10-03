@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { AlertCircle, Calendar, ChevronDown, LayoutGrid, List, Plus, RefreshCw, Search } from 'lucide-react';
+import { AlertCircle, Calendar, ChevronDown, Plus, RefreshCw, Search } from 'lucide-react';
+import { ViewToggle, useViewMode } from '@/components/common/ViewToggle';
 import Link from 'next/link';
 import { useEvents } from '@/hooks/useEvents';
 import { useEventsStore } from '@/store/events.store';
@@ -20,23 +20,13 @@ const STATUS_OPTIONS = [
   { value: 'COMPLETED', label: 'Terminé' },
 ];
 
-type View = 'grid' | 'list';
-const VIEW_KEY = 'zaya_events_view';
-
 const fieldClass =
   'h-11 rounded-full border border-gray-200 bg-white px-4 text-sm text-black transition-colors focus:border-black focus:outline-none focus:ring-1 focus:ring-black dark:border-gray-700 dark:bg-gray-900 dark:text-white';
 
 export default function EventsPage() {
   const { data, isLoading, isError, isFetching, refetch } = useEvents();
   // Icons or list, remembered on this browser
-  const [view, setView] = useState<View>('grid');
-  useEffect(() => {
-    try { if (localStorage.getItem(VIEW_KEY) === 'list') setView('list'); } catch { /* storage blocked */ }
-  }, []);
-  const chooseView = (v: View) => {
-    setView(v);
-    try { localStorage.setItem(VIEW_KEY, v); } catch { /* storage blocked */ }
-  };
+  const [view, chooseView] = useViewMode('zaya_events_view');
   const { filters, setFilters, currentPage, pageSize, setCurrentPage, setPageSize } = useEventsStore();
 
   const handleSearch = debounce((value: unknown) => {
@@ -121,24 +111,7 @@ export default function EventsPage() {
           aria-label="À partir du"
         />
 
-        <div className="ml-auto flex rounded-full border border-gray-200 p-1 dark:border-gray-700" role="group" aria-label="Affichage">
-          {([['grid', LayoutGrid, 'Icônes'], ['list', List, 'Liste']] as const).map(([v, Icon, label]) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => chooseView(v)}
-              aria-pressed={view === v}
-              title={label}
-              className={cn(
-                'flex h-9 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium transition-colors',
-                view === v ? 'bg-black text-white dark:bg-white dark:text-black' : 'text-gray-500 hover:text-black dark:hover:text-white',
-              )}
-            >
-              <Icon className="h-4 w-4" />
-              <span className="hidden sm:inline">{label}</span>
-            </button>
-          ))}
-        </div>
+        <ViewToggle value={view} onChange={chooseView} className="ml-auto" />
       </div>
 
       {/* Grid */}
