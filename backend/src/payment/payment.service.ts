@@ -36,7 +36,7 @@ export class PaymentService {
     this.FLEXPAY_MERCHANT = this.config.get<string>('FLEXPAY_MERCHANT') || '';
   }
 
-  async initiatePayment(eventId: string, dto: InitiatePaymentDto) {
+  async initiatePayment(eventId: string, dto: InitiatePaymentDto, ip?: string) {
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
       select: { id: true, name: true, organizerId: true, status: true, startDate: true, endDate: true, city: true, venue: true, feePayer: true },
@@ -104,8 +104,14 @@ export class PaymentService {
         holderEmail: dto.holderEmail,
         holderPhone: dto.holderPhone,
         items: ticketItems,
-      });
+      }, ip);
     }
+
+    // Free categories in a paid order count toward the daily limit as well
+    const freeCount = ticketItems
+      .filter(item => Number(templates.find(t => t.id === item.templateId)!.price) === 0)
+      .reduce((n, item) => n + item.quantity, 0);
+    await this.publicService.reserveFreeTickets({ email: dto.holderEmail, phone: holderPhone, ip }, freeCount);
 
     const reference = `ZAYA-${crypto.randomBytes(16).toString('hex').toUpperCase()}`;
     const apiBase = this.config.get<string>('frontend.publicUrl') || 'https://zaya.live';

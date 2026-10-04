@@ -6,6 +6,7 @@ import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { PublicService } from './public.service';
 import { PurchaseTicketDto } from './dto/purchase-ticket.dto';
 import { ContactDto } from './dto/contact.dto';
+import { clientIp } from '../common/client-ip';
 
 @ApiTags('Public Ticketing')
 @Controller('public')
@@ -38,10 +39,7 @@ export class PublicController {
   @Post('contact')
   @ApiOperation({ summary: 'Landing page contact form' })
   contact(@Body() dto: ContactDto, @Req() req: Request) {
-    const ip = (req.headers['x-real-ip'] as string)
-      || (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
-      || req.ip;
-    return this.service.sendContact(dto, ip);
+    return this.service.sendContact(dto, clientIp(req));
   }
 
   @Get('events/cities')
@@ -58,7 +56,7 @@ export class PublicController {
 
   @Post('events/:id/register')
   @ApiOperation({ summary: 'Purchase / register for a ticket' })
-  purchaseTicket(@Param('id') eventId: string, @Body() dto: PurchaseTicketDto) {
-    return this.service.purchaseTicket(eventId, dto);
+  purchaseTicket(@Param('id') eventId: string, @Body() dto: PurchaseTicketDto, @Req() req: Request) {
+    return this.service.purchaseTicket(eventId, dto, clientIp(req));
   }
 }

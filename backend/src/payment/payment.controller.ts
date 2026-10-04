@@ -1,5 +1,6 @@
-import { Controller, Post, Get, Body, Param, Res, NotFoundException, UseGuards, Logger } from '@nestjs/common';
-import { Response } from 'express';
+import { Controller, Post, Get, Body, Param, Req, Res, NotFoundException, UseGuards, Logger } from '@nestjs/common';
+import { Request, Response } from 'express';
+import { clientIp } from '../common/client-ip';
 import { PaymentService } from './payment.service';
 import { InitiatePaymentDto } from './dto/initiate-payment.dto';
 import { FlexPayWebhookGuard } from './flexpay-webhook.guard';
@@ -10,8 +11,8 @@ export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
 
   @Post('events/:eventId/initiate-payment')
-  initiatePayment(@Param('eventId') eventId: string, @Body() dto: InitiatePaymentDto) {
-    return this.paymentService.initiatePayment(eventId, dto);
+  initiatePayment(@Param('eventId') eventId: string, @Body() dto: InitiatePaymentDto, @Req() req: Request) {
+    return this.paymentService.initiatePayment(eventId, dto, clientIp(req));
   }
 
   @Post('payments/callback')

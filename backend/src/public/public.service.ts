@@ -5,6 +5,7 @@ import {
   Injectable, NotFoundException, BadRequestException, Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
 import { TicketGenerationService } from '../tickets/ticket-generation.service';
 import { Role, EventType } from '@prisma/client';
 import { PurchaseTicketDto } from './dto/purchase-ticket.dto';
@@ -26,6 +27,9 @@ const ZAYA_LOGO_Z_PATH =
   'L298.41 600.361H492.824L249.334 355.788L249.089 355.542L249.234 355.227L298.319 248.291L298.453 248' +
   'H751.755L751.532 248.66Z';
 
+/** Free tickets one person can take over 24 hours */
+export const FREE_TICKETS_PER_DAY = 5;
+
 @Injectable()
 export class PublicService {
   private readonly logger = new Logger(PublicService.name);
@@ -35,6 +39,7 @@ export class PublicService {
     private readonly prisma: PrismaService,
     private readonly ticketGeneration: TicketGenerationService,
     private readonly config: ConfigService,
+    private readonly redis: RedisService,
   ) {
     const host = this.config.get<string>('email.host');
     const user = this.config.get<string>('email.user');
@@ -131,7 +136,35 @@ export class PublicService {
 
   // ─── Purchase ticket ────────────────────────────────────────────────────────
 
-  async purchaseTicket(eventId: string, dto: PurchaseTicketDto) {
+  /**
+   * At most FREE_TICKETS_PER_DAY free tickets per person over 24 h, all events together. A person
+   * is the same e-mail, the same phone or the same IP: changing one of them is not enough.
+   * Takes the quantity from the IP counter when it passes.
+   */
+  async reserveFreeTickets(who: { email: string; phone: string; ip?: string }, quantity: number) {
+    if (quantity <= 0) return;
+    const since = new Date(Date.now() - 24 * 3600 * 1000);
+    const byContact = await this.prisma.ticket.count({
+      where: {
+        source: 'ONLINE', price: 0, createdAt: { gte: since },
+        OR: [{ holderEmail: { equals: who.email.trim(), mode: 'insensitive' } }, { holderPhone: who.phone }],
+      },
+    });
+    const ipKey = who.ip ? `free-tickets:ip:${who.ip}` : null;
+    const byIp = ipKey ? Number(await this.redis.get(ipKey)) || 0 : 0;
+    const left = FREE_TICKETS_PER_DAY - Math.max(byContact, byIp);
+    if (quantity > left) {
+      throw new BadRequestException(left <= 0
+        ? `Vous avez déjà pris ${FREE_TICKETS_PER_DAY} billets gratuits ces dernières 24 heures. Réessayez plus tard.`
+        : `${FREE_TICKETS_PER_DAY} billets gratuits maximum par personne et par jour : il vous en reste ${left}.`);
+    }
+    if (ipKey) {
+      const n = await this.redis.incrBy(ipKey, quantity);
+      if (n === quantity) await this.redis.expire(ipKey, 24 * 3600);
+    }
+  }
+
+  async purchaseTicket(eventId: string, dto: PurchaseTicketDto, ip?: string) {
     if (!dto.items?.length) throw new BadRequestException('Veuillez sélectionner au moins un billet');
 
     const event = await this.prisma.event.findUnique({
@@ -175,6 +208,10 @@ export class PublicService {
     if (templates.some(t => Number(t.price) > 0)) {
       throw new BadRequestException('Ces billets sont payants : utilisez le paiement en ligne');
     }
+    await this.reserveFreeTickets(
+      { email: dto.holderEmail, phone: holderPhone, ip },
+      dto.items.reduce((n, i) => n + i.quantity, 0),
+    );
 
     // Generate tickets for each item sequentially (each call decrements availableCount)
     const holder = { holderName: dto.holderName, holderEmail: dto.holderEmail, holderPhone };

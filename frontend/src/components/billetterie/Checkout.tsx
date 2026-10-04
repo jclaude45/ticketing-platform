@@ -43,6 +43,8 @@ type Step = 'billet' | 'paiement' | 'application';
 type Method = 'mobile_money' | 'card';
 
 const MAX_PER_TYPE = 20;
+/** Free tickets one person can take per day (checked again by the server) */
+const MAX_FREE_PER_DAY = 5;
 const underline = 'w-full border-0 border-b border-[#9a9a9a] bg-transparent px-0.5 pb-1.5 pt-1 text-[17px] text-black placeholder:text-[#9a9a9a] focus:border-black focus:outline-none focus:ring-0';
 
 // ─── Small pieces ─────────────────────────────────────────────────────────────
@@ -220,9 +222,17 @@ export function Checkout({
     return () => { document.body.style.overflow = ''; window.removeEventListener('keydown', onKey); };
   }, [onClose, waiting]);
 
+  const isFree = (id: string) => Number(event.ticketTemplates.find(t => t.id === id)?.price ?? 0) === 0;
+  /** Most of this category the order can hold: stock, 20 per category, 5 free tickets overall */
+  const maxFor = (id: string) => {
+    const tpl = event.ticketTemplates.find(t => t.id === id);
+    if (!tpl) return 0;
+    const otherFree = Object.entries(quantities).filter(([k]) => k !== id && isFree(k)).reduce((n, [, q]) => n + q, 0);
+    return Math.min(tpl.availableCount, MAX_PER_TYPE, isFree(id) ? Math.max(0, MAX_FREE_PER_DAY - otherFree) : Infinity);
+  };
+
   const setQty = (id: string, value: number) => {
-    const tpl = event.ticketTemplates.find(t => t.id === id)!;
-    const next = Math.max(0, Math.min(value, tpl.availableCount, MAX_PER_TYPE));
+    const next = Math.max(0, Math.min(value, maxFor(id)));
     setQuantities(q => {
       const copy = { ...q };
       if (next === 0) delete copy[id]; else copy[id] = next;
@@ -381,9 +391,12 @@ export function Checkout({
                 {!shopOnly && openTemplate && (
                   <Stepper
                     value={quantities[openTemplate] ?? 0}
-                    max={Math.min(available.find(t => t.id === openTemplate)?.availableCount ?? 0, MAX_PER_TYPE)}
+                    max={maxFor(openTemplate)}
                     onChange={v => setQty(openTemplate, v)}
                   />
+                )}
+                {!shopOnly && openTemplate && isFree(openTemplate) && (quantities[openTemplate] ?? 0) >= maxFor(openTemplate) && maxFor(openTemplate) < Math.min(available.find(t => t.id === openTemplate)?.availableCount ?? 0, MAX_PER_TYPE) && (
+                  <p className="text-center text-xs text-[#707070]">{MAX_FREE_PER_DAY} billets gratuits maximum par personne et par jour.</p>
                 )}
                 {(ticketCount > 0 || merchCount > 0) && (
                   <p className="text-center text-sm text-[#555]">

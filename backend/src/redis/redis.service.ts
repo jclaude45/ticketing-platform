@@ -111,6 +111,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     return this.client.incr(key);
   }
 
+  async incrBy(key: string, n: number): Promise<number> {
+    return this.client.incrby(key, n);
+  }
+
   async hset(key: string, field: string, value: string): Promise<void> {
     await this.client.hset(key, field, value);
   }
