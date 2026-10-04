@@ -227,6 +227,35 @@ export const eventsApi = {
     apiClient.post<ApiResponse<Event>>(`/events/${id}/cancel`),
 };
 
+// --- Event drafts: the creation form saved before the event exists ---
+export interface EventDraftSummary {
+  id: string;
+  name: string | null;
+  startDate: string | null;
+  venue: string | null;
+  city: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EventDraftData {
+  values: Record<string, any>;
+  tariffs: { name: string; price: number; quantity: number; color: string; validDays: string[] }[];
+}
+
+const unwrap = <T,>(res: { data: any }): T => (res.data?.data ?? res.data) as T;
+
+export const eventDraftsApi = {
+  list: async () => unwrap<EventDraftSummary[]>(await apiClient.get('/event-drafts')),
+  get: async (id: string) =>
+    unwrap<{ id: string; data: EventDraftData; updatedAt: string }>(await apiClient.get(`/event-drafts/${id}`)),
+  create: async (data: EventDraftData) =>
+    unwrap<{ id: string; updatedAt: string }>(await apiClient.post('/event-drafts', { data })),
+  update: async (id: string, data: EventDraftData) =>
+    unwrap<{ id: string; updatedAt: string }>(await apiClient.put(`/event-drafts/${id}`, { data })),
+  remove: (id: string) => apiClient.delete(`/event-drafts/${id}`),
+};
+
 // --- Ticket template payload (design + tarif metadata) ---
 export interface TemplateMeta {
   name: string;

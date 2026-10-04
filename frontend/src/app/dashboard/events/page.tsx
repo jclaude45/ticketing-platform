@@ -7,6 +7,7 @@ import { useEvents } from '@/hooks/useEvents';
 import { useEventsStore } from '@/store/events.store';
 import { EventCard, EventListHeader, EventRow } from '@/components/events/EventCard';
 import { PageHeader } from '@/components/common/PageHeader';
+import { EventDrafts } from '@/components/events/EventDrafts';
 import { EmptyState } from '@/components/common/EmptyState';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import { debounce } from '@/lib/utils';
@@ -77,6 +78,8 @@ export default function EventsPage() {
           </div>
         }
       />
+
+      <EventDrafts />
 
       {/* Filters + view */}
       <div className="flex flex-wrap items-center gap-3">

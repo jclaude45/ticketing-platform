@@ -1,14 +1,14 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { ChevronDown, Loader2, Plus, Trash2, Ticket, ImageIcon } from 'lucide-react';
+import { Check, ChevronDown, Save, Loader2, Plus, Trash2, Ticket, ImageIcon } from 'lucide-react';
 import { createEventSchema, type CreateEventFormData, EVENT_TYPES, EVENT_CURRENCIES } from '@/lib/validations';
-import { eventsApi, ticketsApi } from '@/lib/api';
+import { eventsApi, ticketsApi, eventDraftsApi, type EventDraftData } from '@/lib/api';
 import { FileUpload } from '@/components/common/FileUpload';
 import { UpgradePlanModal } from '@/components/subscription/UpgradePlanModal';
 import type { Event } from '@/types';
@@ -33,7 +33,12 @@ interface TariffInput {
 interface EventFormProps {
   event?: Event;
   isEdit?: boolean;
+  /** Draft being resumed (creation only) */
+  draft?: { id: string; data: EventDraftData };
 }
+
+/** Autosave delay after the last keystroke */
+const DRAFT_DELAY_MS = 2500;
 
 function Field({ label, error, children, required, hint }: {
   label: string; error?: string; children: React.ReactNode; required?: boolean; hint?: string;
@@ -97,7 +102,7 @@ function newTariff(): TariffInput {
   return { _key: crypto.randomUUID(), name: '', price: 0, quantity: 100, color: '#181818', validDays: [] };
 }
 
-export function EventForm({ event, isEdit }: EventFormProps) {
+export function EventForm({ event, isEdit, draft }: EventFormProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [upgradeOpen, setUpgradeOpen] = useState(false);
@@ -116,10 +121,13 @@ export function EventForm({ event, isEdit }: EventFormProps) {
         validDays: t.validDays ?? [],
       }));
     }
+    if (draft?.data?.tariffs?.length) {
+      return draft.data.tariffs.map(t => ({ ...newTariff(), ...t, validDays: t.validDays ?? [] }));
+    }
     return [newTariff()];
   });
 
-  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<CreateEventFormData>({
+  const { register, handleSubmit, setValue, watch, getValues, formState: { errors } } = useForm<CreateEventFormData>({
     resolver: zodResolver(createEventSchema),
     defaultValues: event
       ? {
@@ -137,8 +145,81 @@ export function EventForm({ event, isEdit }: EventFormProps) {
           totalCapacity: event.totalCapacity,
           bannerUrl: event.bannerUrl ?? '',
         }
-      : { totalCapacity: 100, type: 'OTHER', currency: 'USD' },
+      : { totalCapacity: 100, type: 'OTHER', currency: 'USD', ...(draft?.data?.values ?? {}) },
   });
+
+  // ── Draft (creation only): saved on the server a moment after each change ──
+  const draftIdRef = useRef<string | undefined>(draft?.id);
+  const tariffsRef = useRef(tariffs);
+  tariffsRef.current = tariffs;
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chainRef = useRef<Promise<unknown>>(Promise.resolve());
+  // Set once the event is created (or the draft deleted): nothing more to save
+  const doneRef = useRef(false);
+  const [draftState, setDraftState] = useState<'idle' | 'saving' | 'saved' | 'error'>(draft ? 'saved' : 'idle');
+  const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
+
+  const saveDraft = useCallback(() => {
+    if (isEdit || doneRef.current) return Promise.resolve();
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    const data: EventDraftData = {
+      values: getValues() as Record<string, any>,
+      tariffs: tariffsRef.current.map(({ _key, id, ...t }) => t),
+    };
+    setDraftState('saving');
+    // One save at a time: the first one creates the draft, the next ones update it
+    const run = chainRef.current.then(async () => {
+      if (doneRef.current) return;
+      try {
+        if (draftIdRef.current) {
+          await eventDraftsApi.update(draftIdRef.current, data);
+        } else {
+          const created = await eventDraftsApi.create(data);
+          draftIdRef.current = created.id;
+          // A reload of the page resumes this draft
+          window.history.replaceState(window.history.state, '', `/dashboard/events/new?draft=${created.id}`);
+        }
+        setDraftSavedAt(new Date());
+        setDraftState('saved');
+      } catch (err: any) {
+        setDraftState('error');
+        throw err;
+      }
+    });
+    chainRef.current = run.catch(() => {});
+    return run;
+  }, [isEdit, getValues]);
+
+  const scheduleDraft = useCallback(() => {
+    if (isEdit || doneRef.current) return;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => { saveDraft().catch(() => {}); }, DRAFT_DELAY_MS);
+  }, [isEdit, saveDraft]);
+
+  // Any change of a field or of the tariffs (not the first render)
+  useEffect(() => {
+    if (isEdit) return;
+    const sub = watch(() => scheduleDraft());
+    return () => sub.unsubscribe();
+  }, [isEdit, watch, scheduleDraft]);
+  const firstTariffs = useRef(true);
+  useEffect(() => {
+    if (firstTariffs.current) { firstTariffs.current = false; return; }
+    scheduleDraft();
+  }, [tariffs, scheduleDraft]);
+  // Leaving the page with a change not yet saved: save it now
+  useEffect(() => () => { if (timerRef.current) saveDraft().catch(() => {}); }, [saveDraft]);
+
+  const saveDraftAndLeave = async () => {
+    try {
+      await saveDraft();
+      queryClient.invalidateQueries({ queryKey: ['event-drafts'] });
+      toast.success('Brouillon enregistré. Reprenez-le depuis la page Événements.');
+      router.push('/dashboard/events');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? "Le brouillon n'a pas pu être enregistré");
+    }
+  };
 
   const bannerUrl = watch('bannerUrl');
   const eventType = watch('type');
@@ -218,9 +299,15 @@ export function EventForm({ event, isEdit }: EventFormProps) {
         queryClient.invalidateQueries({ queryKey: ['ticket-templates', event.id] });
         toast.success('Événement mis à jour !');
       } else {
+        if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
         const res = await eventsApi.create(payload);
         const created = (res.data as any)?.data ?? res.data;
         const eventId = created.id;
+        // The event exists: its draft is no longer needed
+        doneRef.current = true;
+        await chainRef.current;
+        if (draftIdRef.current) await eventDraftsApi.remove(draftIdRef.current).catch(() => {});
+        queryClient.invalidateQueries({ queryKey: ['event-drafts'] });
         await syncTariffs(eventId);
         queryClient.invalidateQueries({ queryKey: ['events'], refetchType: 'all' });
         queryClient.invalidateQueries({ queryKey: ['ticket-templates', eventId] });
@@ -477,7 +564,31 @@ export function EventForm({ event, isEdit }: EventFormProps) {
             Annuler
           </a>
           {!isEdit && (
-            <p className="text-center text-xs text-gray-500">L&apos;événement est créé en brouillon : vous le publierez quand tout sera prêt.</p>
+            <>
+              <button
+                type="button"
+                onClick={saveDraftAndLeave}
+                disabled={saving || draftState === 'saving'}
+                className="flex w-full items-center justify-center gap-2 rounded-full border border-black py-3 text-sm font-medium text-black transition-colors hover:bg-black hover:text-white disabled:opacity-50 dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"
+              >
+                <Save className="h-4 w-4" />
+                Enregistrer le brouillon et quitter
+              </button>
+              <p className="flex items-center justify-center gap-1.5 text-center text-xs text-gray-500" aria-live="polite">
+                {draftState === 'saving' ? (
+                  <><Loader2 className="h-3 w-3 animate-spin" />Enregistrement du brouillon…</>
+                ) : draftState === 'saved' ? (
+                  <><Check className="h-3 w-3" />{draftSavedAt
+                    ? `Brouillon enregistré à ${draftSavedAt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`
+                    : 'Brouillon repris'}</>
+                ) : draftState === 'error' ? (
+                  <span className="text-red-600">Brouillon non enregistré : vérifiez votre connexion.</span>
+                ) : (
+                  'Vos saisies sont enregistrées en brouillon au fur et à mesure.'
+                )}
+              </p>
+              <p className="text-center text-xs text-gray-500">L&apos;événement est créé en brouillon : vous le publierez quand tout sera prêt.</p>
+            </>
           )}
         </aside>
       </motion.form>

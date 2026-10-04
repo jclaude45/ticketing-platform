@@ -127,6 +127,7 @@ model User {
   accountCollaborators  AccountMember[] @relation("AccountOwner")
   accountMemberships    AccountMember[] @relation("AccountMemberships")
   accessZones           AccessZone[]
+  eventDrafts           EventDraft[]
 }
 
 model Event {
@@ -701,4 +702,17 @@ model MerchOrderItem {
   color       String?
   unitPrice   Decimal        @db.Decimal(10, 2)
   quantity    Int
+}
+
+/// Event form saved before the event is created, to finish it later
+model EventDraft {
+  id        String   @id @default(uuid())
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  /// Form values and tariffs, as typed
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
 }
