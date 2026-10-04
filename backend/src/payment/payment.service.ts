@@ -9,6 +9,7 @@ import * as crypto from 'crypto';
 
 import { InitiatePaymentDto } from './dto/initiate-payment.dto';
 import { ShopService } from '../shop/shop.service';
+import { tariffLabel } from '../tickets/event-days';
 
 export type PaymentMethod = 'mobile_money' | 'card';
 
@@ -364,12 +365,12 @@ export class PaymentService {
 
     const tickets = await this.prisma.ticket.findMany({
       where: { id: { in: allTicketIds } },
-      select: { id: true, serialNumber: true, holderName: true, holderEmail: true, qrCode: true, template: { select: { id: true, name: true, price: true, currency: true } } },
+      select: { id: true, serialNumber: true, holderName: true, holderEmail: true, qrCode: true, template: { select: { id: true, name: true, price: true, currency: true, validDays: true } } },
     });
 
     const ticketRows = tickets.map(t => ({
       ticketId: t.id, serialNumber: t.serialNumber,
-      templateName: t.template.name, price: Number(t.template.price),
+      templateName: tariffLabel(t.template.name, t.template.validDays), price: Number(t.template.price),
       currency: t.template.currency, qrCode: t.qrCode,
     }));
 

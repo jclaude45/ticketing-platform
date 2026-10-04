@@ -6,6 +6,7 @@ import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { ScanTicketDto, OfflineScanDto } from './dto/scan-ticket.dto';
 import { ScanResult, TicketStatus, Role } from '@prisma/client';
 import { logTicketAction } from '../audit/ticket-history';
+import { formatDaysFr, kinshasaDay, kinshasaDayBounds } from '../tickets/event-days';
 
 @Injectable()
 export class ValidationService {
@@ -117,7 +118,7 @@ export class ValidationService {
         event: {
           select: { id: true, name: true, status: true, endDate: true, organizerId: true },
         },
-        template: { select: { name: true, color: true } },
+        template: { select: { name: true, color: true, validDays: true } },
       },
     });
 
@@ -164,8 +165,12 @@ export class ValidationService {
       }
     }
 
-    // Check ticket status
-    if (ticket.status === TicketStatus.USED) {
+    // Validity days of the tariff: several days = a pass, one entry per day
+    const validDays = ticket.template.validDays ?? [];
+    const isPass = validDays.length > 1;
+
+    // Check ticket status (a pass already used another day can come back)
+    if (ticket.status === TicketStatus.USED && !isPass) {
       const scanRecord = await this.recordScan(controllerId, ticket.id, ScanResult.ALREADY_USED, dto, ipAddress);
       await this.broadcastScanResult(eventId, ScanResult.ALREADY_USED, ticket, scanRecord.id);
       return {
@@ -194,7 +199,7 @@ export class ValidationService {
       };
     }
 
-    if (ticket.status !== TicketStatus.VALID && ticket.status !== TicketStatus.PENDING) {
+    if (ticket.status !== TicketStatus.VALID && ticket.status !== TicketStatus.PENDING && !(isPass && ticket.status === TicketStatus.USED)) {
       const scanRecord = await this.recordScan(controllerId, ticket.id, ScanResult.INVALID, dto, ipAddress);
       return {
         result: ScanResult.INVALID,
@@ -205,12 +210,69 @@ export class ValidationService {
 
     // Check for event expiry (at the time of the scan, not of an offline sync)
     const now = scannedAt ?? new Date();
+
+    // Wrong day for this tariff (French message, shown as is by the scanner app)
+    const today = kinshasaDay(now);
+    if (validDays.length > 0 && !validDays.includes(today)) {
+      const past = today > validDays[validDays.length - 1];
+      const scanRecord = await this.recordScan(controllerId, ticket.id, ScanResult.EXPIRED, dto, ipAddress);
+      return {
+        result: ScanResult.EXPIRED,
+        // "oct." already ends with a dot
+        message: `Ce billet ${past ? 'était' : 'est'} valable ${formatDaysFr(validDays)}`.replace(/\.?$/, '.'),
+        scanId: scanRecord.id,
+      };
+    }
     if (ticket.event.endDate && now > ticket.event.endDate) {
       const scanRecord = await this.recordScan(controllerId, ticket.id, ScanResult.EXPIRED, dto, ipAddress);
       return {
         result: ScanResult.EXPIRED,
         message: 'Event has ended',
         scanId: scanRecord.id,
+      };
+    }
+
+    // A pass enters once a day: refused only if it already entered today
+    if (isPass) {
+      const { start, end } = kinshasaDayBounds(today);
+      const enteredToday = await this.prisma.scanValidation.findFirst({
+        where: {
+          ticketId: ticket.id,
+          result: ScanResult.VALID,
+          OR: [
+            { offlineScannedAt: { gte: start, lt: end } },
+            { offlineScannedAt: null, scannedAt: { gte: start, lt: end } },
+          ],
+        },
+        orderBy: { scannedAt: 'asc' },
+      });
+      if (enteredToday) {
+        const scanRecord = await this.recordScan(controllerId, ticket.id, ScanResult.ALREADY_USED, dto, ipAddress);
+        await this.broadcastScanResult(eventId, ScanResult.ALREADY_USED, ticket, scanRecord.id);
+        return {
+          result: ScanResult.ALREADY_USED,
+          message: "Ce pass est déjà entré aujourd'hui.",
+          scanId: scanRecord.id,
+          checkedInAt: enteredToday.offlineScannedAt ?? enteredToday.scannedAt,
+        };
+      }
+      // Entry of the day: the ticket shows as used, with the latest entry time
+      const entryAt = scannedAt ?? new Date();
+      await this.prisma.ticket.update({ where: { id: ticket.id }, data: { status: TicketStatus.USED, checkedInAt: entryAt } });
+      const scanRecord = await this.recordScan(controllerId, ticket.id, ScanResult.VALID, dto, ipAddress);
+      await this.broadcastScanResult(eventId, ScanResult.VALID, ticket, scanRecord.id);
+      return {
+        result: ScanResult.VALID,
+        message: 'Ticket is valid - access granted',
+        scanId: scanRecord.id,
+        ticket: {
+          id: ticket.id,
+          serialNumber: ticket.serialNumber,
+          holderName: ticket.holderName,
+          ...(isPrivileged && { holderEmail: ticket.holderEmail }),
+          templateName: ticket.template.name,
+          checkedInAt: entryAt,
+        },
       };
     }
 

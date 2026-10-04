@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { CreateTicketTemplateDto } from './dto/create-ticket-template.dto';
 import { Role } from '@prisma/client';
+import { assertCapacityPerDay, eventDays, normalizeValidDays } from './event-days';
 
 @Injectable()
 export class TicketTemplateService {
@@ -28,17 +29,14 @@ export class TicketTemplateService {
       throw new ForbiddenException('You can only add templates to your own events');
     }
 
-    // Check if total template capacity exceeds event capacity
+    // Seats are counted per day of the event (tariffs of different days don't add up)
+    const days = eventDays(event.startDate, event.endDate);
+    const validDays = normalizeValidDays(dto.validDays, days);
     const existingTemplates = await this.prisma.ticketTemplate.findMany({
       where: { eventId },
-      select: { quantity: true },
+      select: { quantity: true, validDays: true },
     });
-    const existingTotal = existingTemplates.reduce((sum, t) => sum + t.quantity, 0);
-    if (existingTotal + dto.quantity > event.totalCapacity) {
-      throw new BadRequestException(
-        `Total ticket quantity (${existingTotal + dto.quantity}) would exceed event capacity (${event.totalCapacity})`,
-      );
-    }
+    assertCapacityPerDay([...existingTemplates, { quantity: dto.quantity, validDays }], days, event.totalCapacity);
 
     const template = await this.prisma.ticketTemplate.create({
       data: {
@@ -52,6 +50,7 @@ export class TicketTemplateService {
         logoUrl: dto.logoUrl,
         backgroundUrl: dto.backgroundUrl,
         customFields: dto.customFields,
+        validDays,
         eventId,
       },
     });
@@ -103,7 +102,7 @@ export class TicketTemplateService {
   ) {
     const template = await this.prisma.ticketTemplate.findUnique({
       where: { id: templateId },
-      include: { event: { select: { organizerId: true, totalCapacity: true } } },
+      include: { event: { select: { organizerId: true, totalCapacity: true, startDate: true, endDate: true } } },
     });
 
     if (!template) throw new NotFoundException('Template not found');
@@ -112,18 +111,26 @@ export class TicketTemplateService {
       throw new ForbiddenException('Access denied');
     }
 
-    // Check capacity if quantity is being changed
-    if (dto.quantity && dto.quantity !== template.quantity) {
-      const existingTemplates = await this.prisma.ticketTemplate.findMany({
+    const days = eventDays(template.event.startDate, template.event.endDate);
+    const validDays = dto.validDays !== undefined ? normalizeValidDays(dto.validDays, days) : template.validDays;
+    const daysChanged = dto.validDays !== undefined && validDays.join() !== template.validDays.join();
+
+    // Check capacity (per day) if the quantity or the days change
+    if ((dto.quantity && dto.quantity !== template.quantity) || daysChanged) {
+      const others = await this.prisma.ticketTemplate.findMany({
         where: { eventId: template.eventId, NOT: { id: templateId } },
-        select: { quantity: true },
+        select: { quantity: true, validDays: true },
       });
-      const otherTotal = existingTemplates.reduce((sum, t) => sum + t.quantity, 0);
-      if (otherTotal + dto.quantity > template.event.totalCapacity) {
-        throw new BadRequestException(
-          `Total ticket quantity would exceed event capacity (${template.event.totalCapacity})`,
-        );
-      }
+      assertCapacityPerDay([...others, { quantity: dto.quantity || template.quantity, validDays }], days, template.event.totalCapacity);
+    }
+
+    // Phones keep an offline list of tickets refreshed by date of change: touch the
+    // tickets of this tariff so their new days reach the scanners
+    if (daysChanged) {
+      await this.prisma.ticket.updateMany({ where: { templateId }, data: { updatedAt: new Date() } });
+    }
+
+    if (dto.quantity && dto.quantity !== template.quantity) {
 
       // Update available count proportionally
       const generatedCount = template.quantity - template.availableCount;
@@ -146,6 +153,7 @@ export class TicketTemplateService {
         ...(dto.logoUrl !== undefined && { logoUrl: dto.logoUrl }),
         ...(dto.backgroundUrl !== undefined && { backgroundUrl: dto.backgroundUrl }),
         ...(dto.customFields !== undefined && { customFields: dto.customFields }),
+        ...(dto.validDays !== undefined && { validDays }),
       },
     });
   }

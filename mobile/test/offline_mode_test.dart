@@ -263,6 +263,60 @@ void main() {
     await d.close();
   });
 
+  group('validity days (tariff of one day, pass of several)', () {
+    String day(int offset) {
+      final d = DateTime.now().add(Duration(days: offset));
+      return '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    }
+
+    test('a ticket for another day is refused with its day', () async {
+      await db.saveOfflinePack(eventId, [
+        {...serverTicket('d1', 'SN-D1'), 'validDays': [day(1)]},
+        {...serverTicket('d2', 'SN-D2'), 'validDays': [day(-1)]},
+        {...serverTicket('d3', 'SN-D3'), 'validDays': [day(0)]},
+      ], full: false, generatedAt: '2026-10-01T19:00:00Z');
+
+      final tomorrow = await repo.validateTicket(eventId: eventId, qrCode: qr('d1', 'SN-D1'));
+      expect(tomorrow.status, ValidationStatus.error);
+      expect(tomorrow.errorMessage, startsWith('Ce billet est valable le '));
+      final yesterday = await repo.validateTicket(eventId: eventId, qrCode: qr('d2', 'SN-D2'));
+      expect(yesterday.errorMessage, startsWith('Ce billet était valable le '));
+      expect((await repo.validateTicket(eventId: eventId, qrCode: qr('d3', 'SN-D3'))).status, ValidationStatus.valid);
+      expect(await repo.getPendingScanCount(), 1, reason: 'only the entry of the right day is queued');
+    });
+
+    test('a pass used yesterday enters again today, once', () async {
+      await db.saveOfflinePack(eventId, [
+        {
+          ...serverTicket('p1', 'SN-P1', status: 'USED', checkedInAt: DateTime.now().subtract(const Duration(days: 1)).toUtc().toIso8601String()),
+          'validDays': [day(-1), day(0)],
+        },
+      ], full: false, generatedAt: '2026-10-01T19:00:00Z');
+
+      final today = await repo.validateTicket(eventId: eventId, qrCode: qr('p1', 'SN-P1'));
+      expect(today.status, ValidationStatus.valid);
+      final again = await repo.validateTicket(eventId: eventId, qrCode: qr('p1', 'SN-P1'));
+      expect(again.status, ValidationStatus.used, reason: 'one entry a day');
+    });
+  });
+
+  test('upgrade to v4: validity days added, ticket lists downloaded again in full', () async {
+    final path = '${dir.path}/v3.db';
+    final v3 = await openDatabase(path, version: 3, onCreate: (d, _) async {
+      await d.execute('CREATE TABLE tickets (id TEXT PRIMARY KEY, event_id TEXT NOT NULL, serial_number TEXT, '
+          'qr_code TEXT, holder_name TEXT, status TEXT, used_at TEXT, is_guest INTEGER DEFAULT 0)');
+      await d.execute('CREATE TABLE offline_packs (event_id TEXT PRIMARY KEY, generated_at TEXT NOT NULL, downloaded_at TEXT NOT NULL)');
+      await d.insert('offline_packs', {'event_id': 'e', 'generated_at': '2026-10-01T10:00:00Z', 'downloaded_at': '2026-10-01T10:00:00Z'});
+    });
+    await v3.close();
+    final upgraded = LocalDatabase(path: path);
+    final d = await upgraded.database;
+    final cols = (await d.rawQuery('PRAGMA table_info(tickets)')).map((c) => c['name']).toList();
+    expect(cols, contains('valid_days'));
+    expect(await upgraded.getOfflinePack('e'), isNull);
+    await d.close();
+  });
+
   test('upgrade to v3: guest flag added, ticket lists downloaded again in full', () async {
     final path = '${dir.path}/v2.db';
     final v2 = await openDatabase(path, version: 2, onCreate: (d, _) async {

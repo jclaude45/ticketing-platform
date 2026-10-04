@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { ViewToggle, useViewMode } from '@/components/common/ViewToggle';
 import { cn, formatMoney, formatNumber } from '@/lib/utils';
+import { tariffDaysLabel } from '@/components/site/format';
 
 interface Template {
   id: string;
@@ -21,6 +22,7 @@ interface Template {
   availableCount?: number;
   color?: string;
   customFields?: { preview?: string } | null;
+  validDays?: string[];
 }
 
 /** Sold = issued from the tariff's stock */
@@ -150,6 +152,9 @@ export default function TicketTemplatesListPage() {
                           </h3>
                           <span className="flex-shrink-0 text-[15px] font-semibold text-black dark:text-white">{priceLabel(t)}</span>
                         </div>
+                        {tariffDaysLabel(t.validDays) && (
+                          <p className="text-xs font-medium text-black dark:text-white">{tariffDaysLabel(t.validDays)}</p>
+                        )}
                         <p className="flex justify-between text-xs text-gray-500">
                           <span>Billets émis</span>
                           <span>{formatNumber(s.sold)} / {formatNumber(s.total)}</span>
@@ -194,6 +199,7 @@ export default function TicketTemplatesListPage() {
                         </p>
                         <p className="mt-0.5 text-xs text-gray-500">
                           {t.customFields?.preview ? 'Design prêt' : <span className="font-medium text-black dark:text-white">À concevoir</span>}
+                          {tariffDaysLabel(t.validDays) && <span> · {tariffDaysLabel(t.validDays)}</span>}
                           <span className="md:hidden"> · {priceLabel(t)} · {formatNumber(s.sold)}/{formatNumber(s.total)}</span>
                         </p>
                       </div>

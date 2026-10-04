@@ -12,13 +12,15 @@ import { cn } from '@/lib/utils';
 import { TicketVisual, ExportPDFButton, type TicketData } from './TicketCard';
 import { ProductCard, CartSummary, cartLines, money, variantLabel, type Cart, type ShopCatalog } from './Shop';
 import { StoreButtons } from '@/components/site/StoreButtons';
-import { formatEventDayTime, formatPrice, capitalize } from '@/components/site/format';
+import { formatEventDayTime, formatPrice, capitalize, tariffDaysLabel } from '@/components/site/format';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface CheckoutTemplate {
   id: string; name: string; description?: string; price: number; currency: string;
   quantity: number; availableCount: number; color: string;
+  /** Days the tariff is valid; empty = the whole event, several = a pass */
+  validDays?: string[];
 }
 export interface CheckoutEvent {
   id: string; name: string; venue: string; city: string; country: string;
@@ -69,14 +71,15 @@ function BuyButton({ children, disabled, loading, onClick }: { children: React.R
 
 /** One row of an accordion: name (+ detail when open) and a chevron */
 function AccordionRow({
-  open, onToggle, icon, title, detail, badge, disabled,
-}: { open: boolean; onToggle: () => void; icon?: React.ReactNode; title: string; detail?: React.ReactNode; badge?: string; disabled?: boolean }) {
+  open, onToggle, icon, title, subtitle, detail, badge, disabled,
+}: { open: boolean; onToggle: () => void; icon?: React.ReactNode; title: string; subtitle?: string | null; detail?: React.ReactNode; badge?: string; disabled?: boolean }) {
   return (
     <button type="button" onClick={onToggle} disabled={disabled} aria-expanded={open}
       className="flex w-full items-center gap-2 border-b border-[#9a9a9a] py-3 text-left disabled:opacity-40">
       {open && icon}
       <span className="min-w-0 flex-1">
         <span className="block truncate text-xl leading-tight">{title}</span>
+        {subtitle && <span className="block text-xs text-[#707070]">{subtitle}</span>}
         {open && detail && <span className="block text-xl font-bold leading-tight">{detail}</span>}
       </span>
       {badge && !open && <span className="rounded-full bg-black px-2 py-0.5 text-xs font-bold text-white">{badge}</span>}
@@ -317,6 +320,7 @@ export function Checkout({
                         onToggle={() => setOpenTemplate(o => (o === t.id ? null : t.id))}
                         icon={<TicketGlyph />}
                         title={t.name}
+                        subtitle={tariffDaysLabel(t.validDays)}
                         detail={t.price === 0 ? 'Gratuit' : `${t.currency} ${Number.isInteger(t.price) ? t.price : t.price.toFixed(2)}`}
                         badge={quantities[t.id] ? `× ${quantities[t.id]}` : undefined}
                       />

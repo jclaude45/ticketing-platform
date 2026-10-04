@@ -37,7 +37,7 @@ class AppConstants {
 
   // Database
   static const String dbName = 'ticket_scanner.db';
-  static const int dbVersion = 3; // v2: offline packs + pending_scans.ticket_id; v3: tickets.is_guest
+  static const int dbVersion = 4; // v2: offline packs + pending_scans.ticket_id; v3: tickets.is_guest; v4: tickets.valid_days
 
   // Tables
   static const String eventsTable = 'events';

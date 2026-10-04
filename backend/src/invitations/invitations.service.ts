@@ -12,6 +12,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TicketGenerationService } from '../tickets/ticket-generation.service';
 import { PublicService } from '../public/public.service';
 import { MAX_GUESTS_PER_BATCH } from './dto/invitation.dto';
+import { tariffLabel } from '../tickets/event-days';
 
 /** Invitation tickets are regular tickets tagged with metadata.source = INVITATION. */
 export const INVITATION_SOURCE = 'INVITATION';
@@ -124,7 +125,7 @@ export class InvitationsService {
       where: { id: { in: result.tickets.map((t) => t.id) } },
       select: {
         id: true, serialNumber: true, holderName: true, holderEmail: true, qrCode: true,
-        metadata: true, template: { select: { name: true, currency: true } },
+        metadata: true, template: { select: { name: true, currency: true, validDays: true } },
       },
     });
 
@@ -219,7 +220,7 @@ export class InvitationsService {
       where: { id: { in: result.tickets.map((t) => t.id) } },
       select: {
         id: true, serialNumber: true, holderName: true, holderEmail: true, qrCode: true,
-        metadata: true, template: { select: { name: true, currency: true } },
+        metadata: true, template: { select: { name: true, currency: true, validDays: true } },
       },
     });
     this.deliver(event, tickets, null).catch((err) =>
@@ -284,7 +285,7 @@ export class InvitationsService {
       where: { id: ticketId, eventId, metadata: { path: ['source'], equals: INVITATION_SOURCE } },
       select: {
         id: true, serialNumber: true, holderName: true, holderEmail: true, qrCode: true, status: true,
-        metadata: true, template: { select: { name: true, currency: true } },
+        metadata: true, template: { select: { name: true, currency: true, validDays: true } },
       },
     });
     if (!ticket) throw new NotFoundException('Invitation introuvable');
@@ -348,7 +349,7 @@ export class InvitationsService {
     ticket: {
       id: string; serialNumber: string; holderName: string | null; holderEmail: string | null;
       qrCode: string | null; metadata: Prisma.JsonValue;
-      template: { name: string; currency: string };
+      template: { name: string; currency: string; validDays?: string[] };
     },
     message: string | null,
   ): Promise<EmailStatus> {
@@ -360,7 +361,7 @@ export class InvitationsService {
         [{
           ticketId: ticket.id,
           serialNumber: ticket.serialNumber,
-          templateName: ticket.template.name,
+          templateName: tariffLabel(ticket.template.name, ticket.template.validDays),
           price: 0,
           currency: ticket.template.currency,
           qrCode: ticket.qrCode,

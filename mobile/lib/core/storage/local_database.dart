@@ -74,6 +74,7 @@ class LocalDatabase {
         zone TEXT,
         synced_at TEXT,
         is_guest INTEGER DEFAULT 0,
+        valid_days TEXT,
         FOREIGN KEY (event_id) REFERENCES ${AppConstants.eventsTable}(id)
       )
     ''');
@@ -147,6 +148,17 @@ class LocalDatabase {
   Future<void> _upgradeDatabase(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) await _createV2(db, alterPendingScans: true);
     if (oldVersion < 3) await _upgradeV3(db);
+    if (oldVersion < 4) await _upgradeV4(db);
+  }
+
+  /// v4: days a ticket is valid (tariffs of one day, passes of several). The lists already
+  /// on the phone don't have them: forgetting them makes the next sync download them in full.
+  Future<void> _upgradeV4(Database db) async {
+    final cols = await db.rawQuery('PRAGMA table_info(${AppConstants.ticketsTable})');
+    if (cols.isNotEmpty && !cols.any((c) => c['name'] == 'valid_days')) {
+      await db.execute('ALTER TABLE ${AppConstants.ticketsTable} ADD COLUMN valid_days TEXT');
+    }
+    await db.delete(AppConstants.offlinePacksTable);
   }
 
   /// v3: invitation tickets flagged (guest list). The ticket lists already on the phone
@@ -291,6 +303,8 @@ class LocalDatabase {
             'used_at': t['checkedInAt'],
             'synced_at': generatedAt,
             'is_guest': t['guest'] == true ? 1 : 0,
+            // 'YYYY-MM-DD' days, comma separated; empty = the whole event
+            'valid_days': (t['validDays'] as List<dynamic>?)?.join(',') ?? '',
           },
           conflictAlgorithm: ConflictAlgorithm.replace,
         );

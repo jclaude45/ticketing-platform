@@ -90,7 +90,7 @@ export class ControllerSpaceService {
       where: { eventId, ...(sinceDate && { updatedAt: { gt: sinceDate } }) },
       select: {
         id: true, serialNumber: true, holderName: true, status: true, checkedInAt: true,
-        template: { select: { name: true } },
+        template: { select: { name: true, validDays: true } },
         metadata: true,
       },
       orderBy: { createdAt: 'asc' },
@@ -103,6 +103,8 @@ export class ControllerSpaceService {
         serialNumber: t.serialNumber,
         holderName: t.holderName,
         templateName: t.template.name,
+        // Days the ticket is valid (empty = the whole event; several = one entry a day)
+        validDays: t.template.validDays,
         status: t.status,
         checkedInAt: t.checkedInAt,
         // Invitation tickets make the app's guest list (the metadata itself stays here)

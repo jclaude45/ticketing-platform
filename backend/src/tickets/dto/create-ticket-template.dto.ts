@@ -8,6 +8,8 @@ import {
   MaxLength,
   IsPositive,
   IsObject,
+  IsArray,
+  Matches,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -64,4 +66,13 @@ export class CreateTicketTemplateDto {
   @IsOptional()
   @IsObject()
   customFields?: Record<string, any>;
+
+  @ApiPropertyOptional({
+    example: ['2026-10-10', '2026-10-11'],
+    description: "Days the tariff is valid (YYYY-MM-DD, Kinshasa time). Empty = the whole event; several days = a pass, one entry per day",
+  })
+  @IsOptional()
+  @IsArray()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { each: true })
+  validDays?: string[];
 }

@@ -235,6 +235,8 @@ export interface TemplateMeta {
   currency: string;
   quantity: number;
   color?: string;
+  /** Days the tariff is valid ('YYYY-MM-DD'); empty = the whole event; several = a pass */
+  validDays?: string[];
 }
 export interface TemplatePayload {
   meta: TemplateMeta;
@@ -301,6 +303,7 @@ export const ticketsApi = {
       quantity: payload.meta.quantity,
       color: payload.meta.color,
     };
+    if (payload.meta.validDays) body.validDays = payload.meta.validDays;
     if (payload.customFields) body.customFields = payload.customFields;
     return apiClient.post<ApiResponse<TicketTemplate>>(`/events/${eventId}/templates`, body);
   },
@@ -314,6 +317,7 @@ export const ticketsApi = {
       quantity: payload.meta.quantity,
       color: payload.meta.color,
     };
+    if (payload.meta.validDays) body.validDays = payload.meta.validDays;
     if (payload.customFields) body.customFields = payload.customFields;
     return apiClient.patch<ApiResponse<TicketTemplate>>(`/events/${eventId}/templates/${templateId}`, body);
   },

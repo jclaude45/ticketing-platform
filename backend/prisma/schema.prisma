@@ -215,6 +215,9 @@ model TicketTemplate {
   logoUrl         String?
   backgroundUrl   String?
   customFields    Json?
+  // Days the tariff is valid ('YYYY-MM-DD', Kinshasa time); empty = every day of the event.
+  // Several days = a pass: one entry per day
+  validDays       String[] @default([])
   eventId         String
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

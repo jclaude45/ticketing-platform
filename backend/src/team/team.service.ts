@@ -570,11 +570,23 @@ export class TeamService {
       return { valid: false, reason: 'Accreditation has been revoked' };
     }
     const now = new Date();
-    if (acc.validUntil && acc.validUntil < now) {
-      return { valid: false, reason: 'Accreditation expired' };
+    // Dates picked in the dashboard are whole days (stored at 00:00 UTC): a badge "valid
+    // until 11/10" must still open the doors on the 11th, so it ends at the end of that day
+    const isWholeDay = (d: Date) => d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0;
+    const until = acc.validUntil && isWholeDay(acc.validUntil)
+      ? new Date(acc.validUntil.getTime() + 24 * 60 * 60 * 1000 - 1)
+      : acc.validUntil;
+    // …and starts at midnight in Kinshasa (UTC+1), not at 01:00
+    const from = acc.validFrom && isWholeDay(acc.validFrom)
+      ? new Date(acc.validFrom.getTime() - 60 * 60 * 1000)
+      : acc.validFrom;
+    const day = (d: Date) => d.toLocaleDateString('fr-FR', { timeZone: 'Africa/Kinshasa' });
+    // French messages with the date: the scanner app shows unknown reasons as they are
+    if (until && until < now) {
+      return { valid: false, reason: `Ce badge a expiré le ${day(acc.validUntil!)}.` };
     }
-    if (acc.validFrom && acc.validFrom > now) {
-      return { valid: false, reason: 'Accreditation not yet valid' };
+    if (from && from > now) {
+      return { valid: false, reason: `Ce badge n'est valable qu'à partir du ${day(acc.validFrom!)}.` };
     }
     return {
       valid: true,

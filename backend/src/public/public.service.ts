@@ -6,6 +6,7 @@ import { TicketGenerationService } from '../tickets/ticket-generation.service';
 import { Role, EventType } from '@prisma/client';
 import { PurchaseTicketDto } from './dto/purchase-ticket.dto';
 import { ContactDto } from './dto/contact.dto';
+import { tariffLabel } from '../tickets/event-days';
 import * as nodemailer from 'nodemailer';
 import { ConfigService } from '@nestjs/config';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -80,7 +81,7 @@ export class PublicService {
           bannerUrl: true, totalCapacity: true,
           organizer: { select: { firstName: true, lastName: true } },
           ticketTemplates: {
-            select: { id: true, name: true, price: true, currency: true, availableCount: true },
+            select: { id: true, name: true, price: true, currency: true, availableCount: true, validDays: true },
             orderBy: { price: 'asc' },
           },
           _count: { select: { tickets: true } },
@@ -111,7 +112,7 @@ export class PublicService {
             id: true, name: true, description: true,
             price: true, currency: true,
             quantity: true, availableCount: true,
-            color: true,
+            color: true, validDays: true,
           },
           orderBy: { price: 'asc' },
         },
@@ -193,7 +194,7 @@ export class PublicService {
       where: { id: { in: allTicketIds } },
       select: {
         id: true, serialNumber: true, holderName: true, holderEmail: true, qrCode: true,
-        template: { select: { id: true, name: true, price: true, currency: true } },
+        template: { select: { id: true, name: true, price: true, currency: true, validDays: true } },
       },
     });
 
@@ -206,7 +207,7 @@ export class PublicService {
     const ticketRows = tickets.map(t => ({
       ticketId:     t.id,
       serialNumber: t.serialNumber,
-      templateName: t.template.name,
+      templateName: tariffLabel(t.template.name, t.template.validDays),
       price:        Number(t.template.price),
       currency:     t.template.currency,
       qrCode:       t.qrCode,

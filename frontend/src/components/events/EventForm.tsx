@@ -13,6 +13,7 @@ import { FileUpload } from '@/components/common/FileUpload';
 import { UpgradePlanModal } from '@/components/subscription/UpgradePlanModal';
 import type { Event } from '@/types';
 import { cn } from '@/lib/utils';
+import { daysBetween, shortDay } from '@/components/site/format';
 import { SearchSelect, type SearchOption } from '@/components/common/SearchSelect';
 import { CountryFlag } from '@/components/common/CountryFlag';
 import { useCountries, useCities, countryCodeOf, FREQUENT_COUNTRIES } from '@/hooks/useGeo';
@@ -25,6 +26,8 @@ interface TariffInput {
   price: number;
   quantity: number;
   color: string;
+  /** Days ticked ('YYYY-MM-DD'); none = valid once over the whole event */
+  validDays: string[];
 }
 
 interface EventFormProps {
@@ -91,7 +94,7 @@ function toLocalDateTime(iso: string): string {
 const COLORS = ['#181818', '#707070', '#db2777', '#dc2626', '#d97706', '#16a34a', '#0891b2', '#374151'];
 
 function newTariff(): TariffInput {
-  return { _key: crypto.randomUUID(), name: '', price: 0, quantity: 100, color: '#181818' };
+  return { _key: crypto.randomUUID(), name: '', price: 0, quantity: 100, color: '#181818', validDays: [] };
 }
 
 export function EventForm({ event, isEdit }: EventFormProps) {
@@ -110,6 +113,7 @@ export function EventForm({ event, isEdit }: EventFormProps) {
         price: Number(t.price),
         quantity: t.quantity,
         color: t.color ?? '#181818',
+        validDays: t.validDays ?? [],
       }));
     }
     return [newTariff()];
@@ -162,7 +166,21 @@ export function EventForm({ event, isEdit }: EventFormProps) {
   const previewCity = watch('city');
   const namedTariffs = tariffs.filter(t => t.name.trim());
   const minPrice = namedTariffs.length > 0 ? Math.min(...namedTariffs.map(t => Number(t.price) || 0)) : null;
-  const totalSeats = tariffs.reduce((s, t) => s + (Number(t.quantity) || 0), 0);
+  // Days of the event (from the dates being typed): tariffs can be limited to some of them
+  const eventDayList = daysBetween(watch('startDate'), watch('endDate'));
+  const multiDay = eventDayList.length > 1;
+  // Seats are counted per day: the busiest day is what must fit in the capacity
+  const seatsOn = (day: string) => tariffs
+    .filter(t => t.validDays.length === 0 || t.validDays.includes(day))
+    .reduce((s, t) => s + (Number(t.quantity) || 0), 0);
+  const totalSeats = multiDay
+    ? Math.max(0, ...eventDayList.map(seatsOn))
+    : tariffs.reduce((s, t) => s + (Number(t.quantity) || 0), 0);
+  const toggleDay = (key: string, day: string) =>
+    setTariffs(prev => prev.map(t => t._key !== key ? t : {
+      ...t,
+      validDays: t.validDays.includes(day) ? t.validDays.filter(d => d !== day) : [...t.validDays, day].sort(),
+    }));
 
   const updateTariff = (key: string, field: keyof TariffInput, value: any) =>
     setTariffs(prev => prev.map(t => t._key === key ? { ...t, [field]: value } : t));
@@ -173,7 +191,9 @@ export function EventForm({ event, isEdit }: EventFormProps) {
   const syncTariffs = async (eventId: string) => {
     const valid = tariffs.filter(t => t.name.trim());
     for (const t of valid) {
-      const meta = { name: t.name, price: t.price, currency, quantity: t.quantity, color: t.color };
+      // Only days still within the event (its dates may have changed)
+      const validDays = multiDay ? t.validDays.filter(d => eventDayList.includes(d)) : [];
+      const meta = { name: t.name, price: t.price, currency, quantity: t.quantity, color: t.color, validDays };
       if (t.id) {
         await ticketsApi.updateTemplate(eventId, t.id, { meta, customFields: null as any });
       } else {
@@ -311,7 +331,11 @@ export function EventForm({ event, isEdit }: EventFormProps) {
               label="Capacité totale"
               error={errors.totalCapacity?.message}
               required
-              hint={totalSeats > 0 ? `Vos tarifs totalisent ${totalSeats.toLocaleString('fr-FR')} places.` : undefined}
+              hint={totalSeats > 0
+                ? multiDay
+                  ? `Jour le plus chargé : ${totalSeats.toLocaleString('fr-FR')} places (les places sont comptées par jour).`
+                  : `Vos tarifs totalisent ${totalSeats.toLocaleString('fr-FR')} places.`
+                : undefined}
             >
               <input {...register('totalCapacity', { valueAsNumber: true })} type="number" min={1} placeholder="500" className={cn(inputClass, 'sm:max-w-[220px]')} />
             </Field>
@@ -350,6 +374,37 @@ export function EventForm({ event, isEdit }: EventFormProps) {
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
+                    {multiDay && (
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <span className="text-xs text-gray-500">Jours</span>
+                        <button
+                          type="button"
+                          onClick={() => updateTariff(t._key, 'validDays', [])}
+                          className={cn('rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                            t.validDays.length === 0 ? 'border-black bg-black text-white dark:border-white dark:bg-white dark:text-black' : 'border-gray-200 text-gray-600 hover:border-black dark:border-gray-700 dark:text-gray-300')}
+                        >
+                          Tout l&apos;événement
+                        </button>
+                        {eventDayList.map(day => (
+                          <button
+                            key={day}
+                            type="button"
+                            onClick={() => toggleDay(t._key, day)}
+                            className={cn('rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                              t.validDays.includes(day) ? 'border-black bg-black text-white dark:border-white dark:bg-white dark:text-black' : 'border-gray-200 text-gray-600 hover:border-black dark:border-gray-700 dark:text-gray-300')}
+                          >
+                            {shortDay(day)}
+                          </button>
+                        ))}
+                        <span className="w-full text-[11px] text-gray-400">
+                          {t.validDays.length === 0
+                            ? 'Une seule entrée, n’importe quel jour de l’événement.'
+                            : t.validDays.length === 1
+                              ? 'Valable uniquement ce jour-là.'
+                              : 'Pass : une entrée par jour coché.'}
+                        </span>
+                      </div>
+                    )}
                     <div className="mt-3 flex items-center gap-2">
                       <span className="text-xs text-gray-500">Couleur</span>
                       {COLORS.map(c => (

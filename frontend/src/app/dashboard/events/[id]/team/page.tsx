@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import { apiClient, teamApi } from '@/lib/api';
 import { printPDFBlob } from '@/lib/print';
 import { useAccessZones } from '@/hooks/useAccessZones';
+import { useEvent } from '@/hooks/useEvents';
 import { BadgeDesigner, BadgeConfig, defaultBadgeConfig } from '@/components/team/BadgeDesigner';
 import toast from 'react-hot-toast';
 
@@ -466,6 +467,13 @@ function AccreditationModal({ eventId, member, onClose, onSaved }: {
   const zoneOptions = [...accountZones.map((z) => z.name), ...zones.filter((z) => !accountZones.some((a) => a.name === z))];
   const [validFrom, setValidFrom] = useState(existing?.validFrom ? existing.validFrom.slice(0, 10) : '');
   const [validUntil, setValidUntil] = useState(existing?.validUntil ? existing.validUntil.slice(0, 10) : '');
+  // Event days, to check the validity window against them
+  const { data: event } = useEvent(eventId);
+  const eventStart: string | undefined = event?.startDate?.slice(0, 10);
+  const eventEnd: string | undefined = (event?.endDate ?? event?.startDate)?.slice(0, 10);
+  const dayFr = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('fr-FR');
+  const outsideEvent = !!eventStart && !!eventEnd && ((!!validFrom && validFrom > eventEnd) || (!!validUntil && validUntil < eventStart));
+  const partialEvent = !outsideEvent && !!eventStart && !!eventEnd && ((!!validFrom && validFrom > eventStart) || (!!validUntil && validUntil < eventEnd));
   const [badgeConfig, setBadgeConfig] = useState<BadgeConfig>(() => ({
     ...defaultBadgeConfig(member.role),
     ...(existing?.badgeConfig ?? {}),
@@ -567,6 +575,33 @@ function AccreditationModal({ eventId, member, onClose, onSaved }: {
                       className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none" />
                   </div>
                 </div>
+                {eventStart && eventEnd && (
+                  <div className="space-y-2 text-xs">
+                    <p className="text-gray-500">
+                      L&apos;événement a lieu {eventStart === eventEnd ? `le ${dayFr(eventStart)}` : `du ${dayFr(eventStart)} au ${dayFr(eventEnd)}`}.
+                      Laissez vide pour un badge valable tout le temps.
+                    </p>
+                    {(outsideEvent || partialEvent) && (
+                      <div className={cn(
+                        'flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2',
+                        outsideEvent ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700',
+                      )}>
+                        <span>
+                          {outsideEvent
+                            ? 'Ce badge ne sera valable aucun jour de l’événement : il sera refusé au scan.'
+                            : 'Ce badge ne couvre pas toute la durée de l’événement.'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => { setValidFrom(eventStart); setValidUntil(eventEnd); }}
+                          className="rounded-full bg-black px-3 py-1 font-semibold text-white dark:bg-white dark:text-black"
+                        >
+                          Utiliser les dates de l&apos;événement
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               <BadgeDesigner
