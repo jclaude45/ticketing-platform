@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { Suspense, useEffect, useState, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { AccountNav } from '@/components/account/AccountNav';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -44,8 +46,21 @@ const TABS = [
 type TabId = typeof TABS[number]['id'];
 
 export default function SettingsPage() {
+  return (
+    <Suspense>
+      <SettingsContent />
+    </Suspense>
+  );
+}
+
+const isTab = (t: string | null): t is TabId => TABS.some(x => x.id === t);
+
+function SettingsContent() {
   const { user, setUser } = useAuthStore();
-  const [activeTab, setActiveTab] = useState<TabId>('profile');
+  // The section comes from ?tab= (links of the account menu)
+  const tabParam = useSearchParams().get('tab');
+  const [activeTab, setActiveTab] = useState<TabId>(isTab(tabParam) ? tabParam : 'profile');
+  useEffect(() => { if (isTab(tabParam)) setActiveTab(tabParam); }, [tabParam]);
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -154,38 +169,15 @@ export default function SettingsPage() {
   });
 
   return (
-    <div className="flex flex-col gap-6 p-4 sm:p-6 max-w-4xl mx-auto">
+    <div className="mx-auto flex max-w-6xl flex-col gap-6">
       {/* Header */}
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Paramètres</h1>
+        <h1 className="text-3xl font-black uppercase tracking-tight text-black sm:text-4xl dark:text-white">Paramètres</h1>
         <p className="text-sm text-gray-500 mt-0.5">Gérez votre compte et vos préférences</p>
       </div>
 
-      <div className="flex flex-col gap-6 lg:flex-row">
-        {/* Sidebar tabs */}
-        <nav className="flex flex-row gap-1 overflow-x-auto lg:flex-col lg:w-52 lg:flex-shrink-0">
-          {TABS.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-left whitespace-nowrap transition-all',
-                  activeTab === tab.id
-                    ? 'bg-indigo-50 text-indigo-700'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
-                )}
-              >
-                <Icon className="h-4 w-4 flex-shrink-0" />
-                {tab.label}
-                {activeTab === tab.id && (
-                  <ChevronRight className="ml-auto h-4 w-4 text-indigo-400 hidden lg:block" />
-                )}
-              </button>
-            );
-          })}
-        </nav>
+      <div className="flex flex-col gap-6 lg:flex-row lg:gap-10">
+        <AccountNav active={activeTab} />
 
         {/* Content area */}
         <div className="flex-1 min-w-0">

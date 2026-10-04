@@ -64,9 +64,15 @@ export class SubscriptionController {
     return { subscription: sub, limits };
   }
 
+  @Get('me/history')
+  @Roles(Role.ORGANIZER, Role.ADMIN, Role.SUPER_ADMIN)
+  getMyHistory(@CurrentUser('id') userId: string) {
+    return this.subscriptionService.getMyHistory(userId);
+  }
+
   @Post('me/subscribe')
   @Roles(Role.ORGANIZER, Role.ADMIN)
   subscribePlan(@CurrentUser('id') userId: string, @Body() body: { planId: string }) {
-    return this.subscriptionService.assignPlan(userId, { planId: body.planId });
+    return this.subscriptionService.assignPlan(userId, { planId: body.planId }, 'self');
   }
 }

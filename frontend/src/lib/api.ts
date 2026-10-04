@@ -465,6 +465,18 @@ export const adminApi = {
 };
 
 // --- Subscription API ---
+/** One plan change of the organizer's subscription */
+export interface SubscriptionHistoryEntry {
+  id: string;
+  date: string;
+  kind: 'start' | 'change' | 'status' | string;
+  planName: string;
+  price: number | null;
+  previousPlanName: string | null;
+  status: string | null;
+  by: 'self' | 'admin' | string;
+}
+
 export const subscriptionApi = {
   // Plans (super admin)
   listPlans: () => apiClient.get<ApiResponse<SubscriptionPlan[]>>('/subscriptions/plans'),
@@ -484,6 +496,9 @@ export const subscriptionApi = {
   // Current organizer
   getMySubscription: () =>
     apiClient.get<ApiResponse<{ subscription: OrganizerSubscription | null; limits: OrganizerLimits }>>('/subscriptions/me'),
+
+  getMyHistory: () =>
+    apiClient.get<ApiResponse<SubscriptionHistoryEntry[]>>('/subscriptions/me/history'),
 
   subscribePlan: (planId: string) =>
     apiClient.post<ApiResponse<OrganizerSubscription>>('/subscriptions/me/subscribe', { planId }),

@@ -1,372 +1,284 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import Link from 'next/link';
-import {
-  Crown,
-  Check,
-  X,
-  Zap,
-  Ticket,
-  Calendar,
-  Infinity as LucideInfinity,
-  ArrowLeft,
-  BadgeCheck,
-  CheckCircle2,
-  AlertCircle,
-  Mail,
-} from 'lucide-react';
-import { subscriptionApi } from '@/lib/api';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Check, Loader2 } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { eventsApi, subscriptionApi, type SubscriptionHistoryEntry } from '@/lib/api';
+import { AccountNav } from '@/components/account/AccountNav';
+import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { cn } from '@/lib/utils';
 import type { SubscriptionPlan } from '@/types';
 
-function QuotaBar({
-  label,
-  used,
-  max,
-  icon,
-}: {
-  label: string;
-  used: number;
-  max: number;
-  icon: React.ReactNode;
-}) {
-  if (max === -1) {
-    return (
-      <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-        {icon}
-        <span className="font-medium text-gray-800 dark:text-gray-200">{label}</span>
-        <div className="ml-auto flex items-center gap-1 text-indigo-500">
-          <LucideInfinity size={16} />
-          <span className="text-xs">Illimité</span>
-        </div>
-      </div>
-    );
-  }
+/** Rows shown before "Voir plus" */
+const HISTORY_PREVIEW = 4;
 
-  const pct = max > 0 ? Math.min((used / max) * 100, 100) : 0;
-  const color = pct >= 90 ? 'bg-red-500' : pct >= 70 ? 'bg-amber-500' : 'bg-indigo-500';
+const STATUS_LABELS: Record<string, string> = {
+  ACTIVE: 'Actif',
+  EXPIRED: 'Expiré',
+  CANCELLED: 'Annulé',
+  SUSPENDED: 'Suspendu',
+};
 
+const day = (d: string | Date) =>
+  new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+
+/** 16 → "16 $ / mois", 0 → "Gratuit" (prices are in dollars, as on zaya.live) */
+function planPrice(price: number | null | undefined) {
+  if (price === null || price === undefined) return '—';
+  if (price === 0) return 'Gratuit';
+  const n = Number.isInteger(price) ? price.toLocaleString('fr-FR') : price.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
+  return `${n} $ / mois`;
+}
+
+const count = (n: number, one: string, many: string) =>
+  n < 0 ? `${many.charAt(0).toUpperCase()}${many.slice(1)} illimités` : `${n.toLocaleString('fr-FR')} ${n > 1 ? many : one}`;
+
+/** What a plan includes, in one line */
+function planSummary(p: SubscriptionPlan) {
+  return [
+    count(p.maxEvents, 'événement', 'événements'),
+    `${count(p.maxTickets, 'billet', 'billets')}`,
+    count(p.maxBadges, 'badge', 'badges'),
+    p.allowCommunication && 'campagnes email et SMS',
+    p.allowBulkExport && 'export des données',
+    !p.showPoweredBy && 'sans « Powered by ZAYA »',
+  ].filter(Boolean).join(' · ');
+}
+
+function operation(h: SubscriptionHistoryEntry) {
+  const by = h.by === 'admin' ? ' par ZAYA' : '';
+  if (h.kind === 'start') return `Souscription${by}`;
+  if (h.kind === 'status') return `${STATUS_LABELS[h.status ?? ''] ?? 'Statut modifié'}${by}`;
+  return `Changement de plan${by}`;
+}
+
+/** Block of the page, title and subtitle as in the account design */
+function Block({ id, title, desc, children }: { id?: string; title: string; desc: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-1">
-      <div className="flex items-center gap-2 text-sm">
-        {icon}
-        <span className="font-medium text-gray-800 dark:text-gray-200">{label}</span>
-        <span className="ml-auto text-xs text-gray-500">
-          {used} / {max}
-        </span>
+    <section id={id} className="scroll-mt-24">
+      <h2 className="text-[15px] font-bold text-black dark:text-white">{title}</h2>
+      <p className="mt-0.5 text-sm text-gray-500">{desc}</p>
+      <div className="mt-5">{children}</div>
+    </section>
+  );
+}
+
+function UsageRow({ label, used, max }: { label: string; used: number; max: number }) {
+  const unlimited = max < 0;
+  const pct = !unlimited && max > 0 ? Math.min(100, Math.round((used / max) * 100)) : 0;
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-6 gap-y-2 border-b border-gray-200 py-3.5 sm:grid-cols-[160px_minmax(0,1fr)_120px] dark:border-gray-800">
+      <span className="text-sm font-medium text-black dark:text-white">{label}</span>
+      <div className="order-last col-span-2 h-1 overflow-hidden rounded-full bg-gray-100 sm:order-none sm:col-span-1 dark:bg-gray-800">
+        {!unlimited && (
+          <div
+            className={cn('h-full rounded-full', pct >= 90 ? 'bg-red-500' : pct >= 70 ? 'bg-[#FFDD00]' : 'bg-black dark:bg-white')}
+            style={{ width: `${pct}%` }}
+          />
+        )}
       </div>
-      <div className="h-1.5 w-full rounded-full bg-gray-100 dark:bg-gray-800">
-        <div className={cn('h-1.5 rounded-full transition-all', color)} style={{ width: `${pct}%` }} />
-      </div>
+      <span className="text-right text-sm text-black dark:text-white">
+        {used.toLocaleString('fr-FR')}
+        <span className="text-gray-400"> / {unlimited ? 'illimité' : max.toLocaleString('fr-FR')}</span>
+      </span>
     </div>
   );
 }
 
-function SkeletonCard() {
-  return (
-    <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 py-5 animate-pulse space-y-3">
-      <div className="h-5 w-1/2 bg-gray-200 dark:bg-gray-700 rounded" />
-      <div className="h-4 w-1/3 bg-gray-100 dark:bg-gray-800 rounded" />
-      <div className="space-y-2 mt-4">
-        <div className="h-3 w-full bg-gray-100 dark:bg-gray-800 rounded" />
-        <div className="h-3 w-4/5 bg-gray-100 dark:bg-gray-800 rounded" />
-        <div className="h-3 w-3/4 bg-gray-100 dark:bg-gray-800 rounded" />
-      </div>
-      <div className="h-10 w-full bg-gray-200 dark:bg-gray-700 rounded-xl mt-4" />
-    </div>
-  );
-}
+const outlineButton =
+  'inline-flex h-9 items-center justify-center gap-1.5 rounded-full border border-gray-200 px-4 text-sm font-medium text-black transition-colors hover:border-black disabled:opacity-50 dark:border-gray-700 dark:text-white dark:hover:border-white';
 
 export default function SubscriptionPage() {
   const qc = useQueryClient();
-  const [successPlanId, setSuccessPlanId] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
+  const [toPlan, setToPlan] = useState<SubscriptionPlan | null>(null);
 
-  const { data: mySubData, isLoading: loadingSub } = useQuery({
+  const { data: mine, isLoading: loadingSub } = useQuery({
     queryKey: ['my-subscription'],
     queryFn: () => subscriptionApi.getMySubscription().then(r => r.data.data),
   });
-
   const { data: plans, isLoading: loadingPlans } = useQuery({
     queryKey: ['subscription-plans-public'],
     queryFn: () => subscriptionApi.listPlans().then(r => r.data.data),
   });
-
-  const subscribePlanMut = useMutation({
-    mutationFn: (planId: string) => subscriptionApi.subscribePlan(planId),
-    onSuccess: (_data, planId) => {
-      qc.invalidateQueries({ queryKey: ['my-subscription'] });
-      qc.invalidateQueries({ queryKey: ['subscription-plans-public'] });
-      setSuccessPlanId(planId);
-      setTimeout(() => setSuccessPlanId(null), 4000);
-    },
+  const { data: history, isLoading: loadingHistory } = useQuery({
+    queryKey: ['subscription-history'],
+    queryFn: () => subscriptionApi.getMyHistory().then(r => r.data.data),
+  });
+  // Events created, for the events quota
+  const { data: eventCount } = useQuery({
+    queryKey: ['events-count'],
+    queryFn: () => eventsApi.list({ page: 1, limit: 1 }).then(r => (r.data as any)?.total ?? (r.data as any)?.data?.total ?? 0),
   });
 
-  const subscription = mySubData?.subscription ?? null;
-  const limits = mySubData?.limits;
+  const subscribe = useMutation({
+    mutationFn: (planId: string) => subscriptionApi.subscribePlan(planId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['my-subscription'] });
+      qc.invalidateQueries({ queryKey: ['subscription-history'] });
+      toast.success('Nouveau plan activé');
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message ?? 'Le plan n’a pas pu être activé. Réessayez.'),
+  });
 
-  const statusColors: Record<string, string> = {
-    ACTIVE: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-    EXPIRED: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-    CANCELLED: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
-    SUSPENDED: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-  };
+  const subscription = mine?.subscription ?? null;
+  const limits = mine?.limits;
+  const status = subscription?.status ?? 'ACTIVE';
+  const rows = history ?? [];
+  const visible = showAll ? rows : rows.slice(0, HISTORY_PREVIEW);
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 py-8 px-4">
-      {/* Header */}
-      <div>
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 mb-4 transition-colors"
-        >
-          <ArrowLeft size={16} />
-          Tableau de bord
-        </Link>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-          <Crown size={24} className="text-amber-400" />
-          Mon Abonnement
-        </h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Gérez votre plan et consultez vos quotas d&apos;utilisation.
-        </p>
-      </div>
+    <div className="mx-auto flex max-w-6xl flex-col gap-8 lg:flex-row lg:gap-10">
+      <AccountNav active="subscription" />
 
-      {/* Current plan card */}
-      <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 py-6 space-y-5">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-1">
-              Plan actuel
-            </p>
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-              {subscription?.plan.name ?? 'Gratuit'}
-            </h2>
-            {subscription && (
-              <span
-                className={cn(
-                  'inline-block mt-1 text-xs font-medium px-2 py-0.5 rounded-full',
-                  statusColors[subscription.status] ?? statusColors.CANCELLED
-                )}
-              >
-                {subscription.status}
-              </span>
-            )}
-          </div>
-          <span className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-xs font-semibold px-3 py-1 rounded-full">
-            Plan actuel
-          </span>
-        </div>
-
-        {limits && (
-          <div className="space-y-3 pt-2">
-            <QuotaBar
-              label="Billets"
-              used={limits.ticketsUsed}
-              max={limits.maxTickets}
-              icon={<Ticket size={15} className="text-gray-400 flex-shrink-0" />}
-            />
-            <QuotaBar
-              label="Badges"
-              used={limits.badgesUsed}
-              max={limits.maxBadges}
-              icon={<BadgeCheck size={15} className="text-gray-400 flex-shrink-0" />}
-            />
-            <QuotaBar
-              label="Événements"
-              used={0}
-              max={limits.maxEvents}
-              icon={<Calendar size={15} className="text-gray-400 flex-shrink-0" />}
-            />
-          </div>
-        )}
-
-        {limits && (
-          <div className="flex flex-wrap gap-2 pt-1">
-            <span
-              className={cn(
-                'inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium',
-                limits.allowBulkExport
-                  ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                  : 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400'
-              )}
-            >
-              {limits.allowBulkExport ? <Check size={12} /> : <X size={12} />}
-              Export en lot
-            </span>
-            <span
-              className={cn(
-                'inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium',
-                limits.allowCommunication
-                  ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                  : 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400'
-              )}
-            >
-              {limits.allowCommunication ? <Check size={12} /> : <X size={12} />}
-              <Mail size={11} />
-              Communication & Marketing
-            </span>
-            <span
-              className={cn(
-                'inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium',
-                !limits.showPoweredBy
-                  ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                  : 'bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
-              )}
-            >
-              <Zap size={12} />
-              {limits.showPoweredBy ? '"Powered by" activé' : '"Powered by" masqué'}
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* Available plans */}
-      <div>
-        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-4">
-          Plans disponibles
-        </h3>
-
-        {loadingPlans || loadingSub ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            <SkeletonCard />
-            <SkeletonCard />
-            <SkeletonCard />
-          </div>
-        ) : !plans || plans.length === 0 ? (
-          <p className="text-sm text-gray-500">Aucun plan disponible.</p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {plans.map((plan: SubscriptionPlan) => {
-              const isCurrent = subscription?.planId === plan.id;
-              const isPending =
-                subscribePlanMut.isPending && subscribePlanMut.variables === plan.id;
-              const isSuccess = successPlanId === plan.id;
-              const isError =
-                subscribePlanMut.isError && subscribePlanMut.variables === plan.id;
-
-              return (
-                <div
-                  key={plan.id}
-                  className={cn(
-                    'bg-white dark:bg-gray-900 rounded-2xl border p-5 flex flex-col gap-4 transition-shadow hover:shadow-md',
-                    isCurrent
-                      ? 'border-indigo-300 dark:border-indigo-700'
-                      : 'border-gray-100 dark:border-gray-800'
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <h4 className="font-bold text-gray-900 dark:text-white">{plan.name}</h4>
-                    <span className="flex-shrink-0 text-xs font-semibold bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-0.5 rounded-full">
-                      {plan.price === 0 ? 'Gratuit' : `€${plan.price}/mois`}
-                    </span>
+      <div className="min-w-0 flex-1">
+        <h1 className="mb-8 text-3xl font-black uppercase tracking-tight text-black sm:text-4xl xl:mb-10 dark:text-white">Abonnement</h1>
+        <div className="grid grid-cols-1 gap-10 xl:grid-cols-[minmax(0,1fr)_280px] xl:items-start">
+          {/* Current plan: on top on small screens, on the right on wide ones */}
+          <aside className="xl:sticky xl:top-6 xl:order-last">
+            <div className="rounded-[18px] bg-[#FFDD00] p-6 text-black">
+              <p className="text-sm font-medium">Votre plan</p>
+              {loadingSub ? (
+                <div className="mt-2 h-8 w-32 animate-pulse rounded bg-black/10" />
+              ) : (
+                <>
+                  <p className="mt-1 text-2xl font-black tracking-tight">{subscription?.plan.name ?? 'Gratuit'}</p>
+                  <p className="mt-0.5 text-sm font-semibold">{planPrice(subscription?.plan.price ?? 0)}</p>
+                  <div className="mt-3 space-y-0.5 text-xs">
+                    {status !== 'ACTIVE' && (
+                      <p className="mb-1.5 inline-block rounded-full bg-black px-2.5 py-0.5 font-semibold text-[#FFDD00]">
+                        {STATUS_LABELS[status] ?? status}
+                      </p>
+                    )}
+                    {subscription && <p>Depuis le {day(subscription.startsAt)}</p>}
+                    <p>
+                      {subscription?.expiresAt
+                        ? `${new Date(subscription.expiresAt) < new Date() ? 'A expiré' : 'Expire'} le ${day(subscription.expiresAt)}`
+                        : 'Sans date d’expiration'}
+                    </p>
                   </div>
+                </>
+              )}
+              <a
+                href="#plans"
+                className="mt-5 flex h-10 items-center justify-center rounded-full border border-black/80 text-sm font-semibold transition-colors hover:bg-black hover:text-[#FFDD00]"
+              >
+                Changer de plan
+              </a>
+            </div>
+          </aside>
 
-                  <ul className="space-y-1.5 text-sm text-gray-600 dark:text-gray-400 flex-1">
-                    <li className="flex items-center gap-2">
-                      <Ticket size={14} className="text-gray-400 flex-shrink-0" />
-                      {plan.maxTickets === -1 ? 'Billets illimités' : `${plan.maxTickets} billets`}
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <BadgeCheck size={14} className="text-gray-400 flex-shrink-0" />
-                      {plan.maxBadges === -1 ? 'Badges illimités' : `${plan.maxBadges} badges`}
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <Calendar size={14} className="text-gray-400 flex-shrink-0" />
-                      {plan.maxEvents === -1 ? 'Événements illimités' : `${plan.maxEvents} événements`}
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <span
-                        className={cn(
-                          plan.allowBulkExport ? 'text-green-500' : 'text-red-400'
-                        )}
-                      >
-                        {plan.allowBulkExport ? <Check size={14} /> : <X size={14} />}
-                      </span>
-                      Export en lot
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <span className={cn(plan.allowCommunication ? 'text-green-500' : 'text-red-400')}>
-                        {plan.allowCommunication ? <Check size={14} /> : <X size={14} />}
-                      </span>
-                      <Mail size={13} className="text-gray-400 flex-shrink-0" />
-                      Communication & Marketing
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <Zap size={14} className="text-gray-400 flex-shrink-0" />
-                      Powered by {plan.showPoweredBy ? 'activé' : 'désactivé'}
-                    </li>
-                  </ul>
-
-                  {isSuccess && (
-                    <div className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
-                      <CheckCircle2 size={14} />
-                      Plan activé avec succès !
-                    </div>
-                  )}
-
-                  {isError && (
-                    <div className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400">
-                      <AlertCircle size={14} />
-                      Une erreur est survenue. Réessayez.
-                    </div>
-                  )}
-
-                  {isCurrent ? (
-                    <div className="mt-auto">
-                      <div className="w-full text-center rounded-xl py-2.5 text-sm font-semibold border border-indigo-300 text-indigo-600 dark:border-indigo-700 dark:text-indigo-400">
-                        Plan actuel
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="mt-auto">
-                      <button
-                        disabled={isPending}
-                        onClick={() => subscribePlanMut.mutate(plan.id)}
-                        className={cn(
-                          'w-full rounded-xl py-2.5 text-sm font-semibold text-white transition-colors flex items-center justify-center gap-2',
-                          isPending
-                            ? 'bg-indigo-400 cursor-not-allowed'
-                            : 'bg-indigo-600 hover:bg-indigo-700'
-                        )}
-                      >
-                        {isPending ? (
-                          <>
-                            <svg
-                              className="animate-spin h-4 w-4 text-white"
-                              xmlns="http://www.w3.org/2000/svg"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                            >
-                              <circle
-                                className="opacity-25"
-                                cx="12"
-                                cy="12"
-                                r="10"
-                                stroke="currentColor"
-                                strokeWidth="4"
-                              />
-                              <path
-                                className="opacity-75"
-                                fill="currentColor"
-                                d="M4 12a8 8 0 018-8v8H4z"
-                              />
-                            </svg>
-                            Activation…
-                          </>
-                        ) : (
-                          'Activer ce plan'
-                        )}
-                      </button>
-                    </div>
-                  )}
+          <div className="min-w-0 space-y-12">
+            <Block title="Historique" desc="Les souscriptions et changements de plan de votre compte.">
+              <div className="hidden grid-cols-[110px_minmax(0,0.8fr)_minmax(0,1.4fr)_110px] gap-4 border-b border-gray-200 px-3 pb-2 text-xs text-gray-400 sm:grid dark:border-gray-800">
+                <span>Date</span>
+                <span>Plan</span>
+                <span>Opération</span>
+                <span className="text-right">Montant</span>
+              </div>
+              {loadingHistory ? (
+                <div className="space-y-3 py-4">
+                  {[0, 1, 2].map(i => <div key={i} className="h-5 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />)}
                 </div>
-              );
-            })}
+              ) : rows.length === 0 ? (
+                <p className="border-b border-gray-200 px-3 py-6 text-sm text-gray-500 dark:border-gray-800">
+                  Aucun changement de plan pour l’instant : vous êtes sur le plan gratuit.
+                </p>
+              ) : (
+                visible.map(h => (
+                  <div
+                    key={h.id}
+                    className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-0.5 border-b border-gray-200 px-3 py-3.5 text-sm transition-shadow hover:rounded-xl hover:border-transparent hover:bg-white hover:shadow-[0_6px_24px_rgba(0,0,0,0.08)] sm:grid-cols-[110px_minmax(0,0.8fr)_minmax(0,1.4fr)_110px] sm:items-center dark:border-gray-800 dark:hover:bg-gray-900"
+                  >
+                    <span className="text-black dark:text-white">{day(h.date)}</span>
+                    <span className="text-right font-semibold text-black sm:text-left dark:text-white">{h.planName}</span>
+                    <span className="text-gray-500">
+                      {operation(h)}
+                      {h.previousPlanName && <span className="block text-xs text-gray-400">depuis {h.previousPlanName}</span>}
+                    </span>
+                    <span className="text-right text-black dark:text-white">{planPrice(h.price)}</span>
+                  </div>
+                ))
+              )}
+              {rows.length > HISTORY_PREVIEW && (
+                <button
+                  type="button"
+                  onClick={() => setShowAll(v => !v)}
+                  className="mt-4 text-sm font-semibold text-black underline decoration-[#FFDD00] decoration-2 underline-offset-4 dark:text-white"
+                >
+                  {showAll ? 'Voir moins' : `Voir plus (${rows.length - HISTORY_PREVIEW})`}
+                </button>
+              )}
+            </Block>
+
+            <Block title="Utilisation" desc="Ce que vous avez consommé sur votre plan actuel.">
+              {limits ? (
+                <div className="border-t border-gray-200 dark:border-gray-800">
+                  <UsageRow label="Billets" used={limits.ticketsUsed} max={limits.maxTickets} />
+                  <UsageRow label="Badges" used={limits.badgesUsed} max={limits.maxBadges} />
+                  <UsageRow label="Événements" used={eventCount ?? 0} max={limits.maxEvents} />
+                </div>
+              ) : (
+                <div className="h-24 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+              )}
+            </Block>
+
+            <Block id="plans" title="Changer de plan" desc="Le nouveau plan s’applique immédiatement.">
+              {loadingPlans || loadingSub ? (
+                <div className="h-32 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+              ) : !plans || plans.length === 0 ? (
+                <p className="text-sm text-gray-500">Aucun plan disponible pour l’instant.</p>
+              ) : (
+                <div className="border-t border-gray-200 dark:border-gray-800">
+                  {plans.filter(p => p.isActive !== false).map(plan => {
+                    const current = subscription?.planId === plan.id;
+                    const pending = subscribe.isPending && subscribe.variables === plan.id;
+                    return (
+                      <div
+                        key={plan.id}
+                        className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-6 gap-y-1 border-b border-gray-200 px-3 py-4 sm:grid-cols-[minmax(0,1fr)_130px_120px] dark:border-gray-800"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-semibold text-black dark:text-white">{plan.name}</p>
+                          <p className="mt-0.5 text-xs leading-relaxed text-gray-500">{planSummary(plan)}</p>
+                        </div>
+                        <span className="hidden text-right text-sm text-black sm:block dark:text-white">{planPrice(plan.price)}</span>
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="text-xs text-gray-500 sm:hidden">{planPrice(plan.price)}</span>
+                          {current ? (
+                            <span className="inline-flex h-9 items-center gap-1.5 rounded-full bg-black px-4 text-sm font-medium text-white dark:bg-white dark:text-black">
+                              <Check className="h-3.5 w-3.5" /> Actuel
+                            </span>
+                          ) : (
+                            <button type="button" onClick={() => setToPlan(plan)} disabled={subscribe.isPending} className={outlineButton}>
+                              {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                              Choisir
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </Block>
           </div>
-        )}
+        </div>
       </div>
+
+      <ConfirmDialog
+        open={!!toPlan}
+        onClose={() => setToPlan(null)}
+        onConfirm={() => { if (toPlan) subscribe.mutate(toPlan.id); setToPlan(null); }}
+        title="Changer de plan"
+        description={toPlan
+          ? `Passer au plan « ${toPlan.name} » (${planPrice(toPlan.price)}) ? Il s’applique tout de suite, et vos compteurs de billets et de badges repartent de zéro.`
+          : ''}
+        confirmLabel="Changer de plan"
+        variant="default"
+        isLoading={subscribe.isPending}
+      />
     </div>
   );
 }

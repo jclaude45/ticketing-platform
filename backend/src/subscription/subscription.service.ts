@@ -65,12 +65,15 @@ export class SubscriptionService {
     });
   }
 
-  async assignPlan(organizerId: string, dto: AssignPlanDto) {
+  async assignPlan(organizerId: string, dto: AssignPlanDto, by: 'self' | 'admin' = 'admin') {
     const organizer = await this.prisma.user.findUnique({ where: { id: organizerId } });
     if (!organizer) throw new NotFoundException('Organizer not found');
-    await this.getPlanOrThrow(dto.planId);
+    const plan = await this.getPlanOrThrow(dto.planId);
 
-    const existing = await this.prisma.organizerSubscription.findUnique({ where: { organizerId } });
+    const existing = await this.prisma.organizerSubscription.findUnique({
+      where: { organizerId },
+      include: { plan: { select: { name: true } } },
+    });
     const data = {
       planId: dto.planId,
       status: 'ACTIVE' as const,
@@ -81,16 +84,95 @@ export class SubscriptionService {
       notes: dto.notes ?? null,
     };
 
-    if (existing) {
-      return this.prisma.organizerSubscription.update({ where: { organizerId }, data, include: { plan: true } });
+    const saved = existing
+      ? await this.prisma.organizerSubscription.update({ where: { organizerId }, data, include: { plan: true } })
+      : await this.prisma.organizerSubscription.create({ data: { ...data, organizerId }, include: { plan: true } });
+
+    await this.logChange(organizerId, {
+      kind: existing ? 'change' : 'start',
+      planName: plan.name,
+      price: plan.price,
+      previousPlanName: existing?.plan.name ?? null,
+      expiresAt: data.expiresAt?.toISOString() ?? null,
+      by,
+    });
+    return saved;
+  }
+
+  /**
+   * Billing history of the subscription page: one AuditLog row per plan change,
+   * attached to the organizer (entity 'subscription', entityId = organizer id).
+   */
+  private async logChange(organizerId: string, values: Record<string, unknown>) {
+    try {
+      await this.prisma.auditLog.create({
+        data: {
+          userId: organizerId,
+          action: 'subscription.change',
+          entity: 'subscription',
+          entityId: organizerId,
+          newValues: values as any,
+        },
+      });
+    } catch {
+      // The history must never block a plan change
     }
-    return this.prisma.organizerSubscription.create({ data: { ...data, organizerId }, include: { plan: true } });
+  }
+
+  /** Plan changes, newest first; the current subscription when nothing was recorded yet */
+  async getMyHistory(organizerId: string) {
+    const rows = await this.prisma.auditLog.findMany({
+      where: { entity: 'subscription', entityId: organizerId, action: 'subscription.change' },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+    const history = rows.map((r) => {
+      const v = (r.newValues ?? {}) as Record<string, any>;
+      return {
+        id: r.id,
+        date: r.createdAt,
+        kind: (v.kind ?? 'change') as string,
+        planName: (v.planName ?? '—') as string,
+        price: typeof v.price === 'number' ? v.price : null,
+        previousPlanName: (v.previousPlanName ?? null) as string | null,
+        status: (v.status ?? null) as string | null,
+        by: (v.by ?? 'admin') as string,
+      };
+    });
+    if (history.length === 0) {
+      const sub = await this.getOrganizerSubscription(organizerId);
+      if (sub) {
+        history.push({
+          id: sub.id,
+          date: sub.startsAt,
+          kind: 'start',
+          planName: sub.plan.name,
+          price: sub.plan.price,
+          previousPlanName: null,
+          status: null,
+          by: 'admin',
+        });
+      }
+    }
+    return history;
   }
 
   async updateSubscription(organizerId: string, dto: UpdateSubscriptionDto) {
-    const sub = await this.prisma.organizerSubscription.findUnique({ where: { organizerId } });
+    const sub = await this.prisma.organizerSubscription.findUnique({ where: { organizerId }, include: { plan: true } });
     if (!sub) throw new NotFoundException('No subscription found for this organizer');
-    if (dto.planId) await this.getPlanOrThrow(dto.planId);
+    const plan = dto.planId ? await this.getPlanOrThrow(dto.planId) : sub.plan;
+    const planChanged = plan.id !== sub.planId;
+    const statusChanged = !!dto.status && dto.status !== sub.status;
+    if (planChanged || statusChanged) {
+      await this.logChange(organizerId, {
+        kind: planChanged ? 'change' : 'status',
+        planName: plan.name,
+        price: plan.price,
+        previousPlanName: planChanged ? sub.plan.name : null,
+        status: statusChanged ? dto.status : null,
+        by: 'admin',
+      });
+    }
     return this.prisma.organizerSubscription.update({
       where: { organizerId },
       data: {
