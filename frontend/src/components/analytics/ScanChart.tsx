@@ -46,7 +46,7 @@ export function ScanChart({ data, title, label, color = '#181818', isLoading }: 
     title ? (
       <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 py-5">
         <h3 className="font-semibold text-gray-900 dark:text-white mb-1 text-sm">{title}</h3>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Hourly scan activity</p>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Scans par heure</p>
         {content}
       </div>
     ) : <>{content}</>;
@@ -60,7 +60,7 @@ export function ScanChart({ data, title, label, color = '#181818', isLoading }: 
             <stop offset="95%" stopColor={color} stopOpacity={0} />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(99,102,241,0.1)" />
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
         <XAxis dataKey="hour" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
         <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
         <Tooltip content={<CustomTooltip dataLabel={label} />} />

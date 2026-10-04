@@ -9,7 +9,6 @@ interface OccupancyChartProps {
   isLoading?: boolean;
 }
 
-const COLORS = ['#181818', '#FFDD00', '#e5e7eb'];
 
 export function OccupancyChart({ scanned, total, capacity, isLoading }: OccupancyChartProps) {
   if (isLoading) {
@@ -24,18 +23,20 @@ export function OccupancyChart({ scanned, total, capacity, isLoading }: Occupanc
   const remaining = Math.max(0, total - scanned);
   const notGenerated = Math.max(0, cap - total);
 
+  // Each slice keeps its own colour, even when another one is empty
   const data = [
-    { name: 'Scanned', value: scanned },
-    { name: 'Issued (not scanned)', value: remaining },
-    { name: 'Available', value: notGenerated },
+    { name: 'Entrés', value: scanned, color: '#181818' },
+    { name: 'Émis, pas encore entrés', value: remaining, color: '#FFDD00' },
+    { name: 'Places libres', value: notGenerated, color: '#e5e7eb' },
   ].filter((d) => d.value > 0);
 
-  const occupancyPct = cap > 0 ? Math.round((scanned / cap) * 100) : 0;
+  // Occupation = tickets issued / capacity: the same figure everywhere in the dashboard
+  const occupancyPct = cap > 0 ? Math.min(100, Math.round((total / cap) * 100)) : 0;
 
   return (
     <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 py-5">
-      <h3 className="font-semibold text-gray-900 dark:text-white mb-1 text-sm">Occupancy</h3>
-      <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Ticket status breakdown</p>
+      <h3 className="font-semibold text-gray-900 dark:text-white mb-1 text-sm">Occupation</h3>
+      <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Billets émis et entrées, par rapport à la capacité</p>
       <div className="relative">
         <ResponsiveContainer width="100%" height={200}>
           <PieChart>
@@ -48,13 +49,14 @@ export function OccupancyChart({ scanned, total, capacity, isLoading }: Occupanc
               paddingAngle={3}
               dataKey="value"
             >
-              {data.map((entry, index) => (
-                <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
+              {data.map((entry) => (
+                <Cell key={entry.name} fill={entry.color} />
               ))}
             </Pie>
             <Tooltip
+              formatter={(value: number) => value.toLocaleString('fr-FR')}
               contentStyle={{
-                backgroundColor: '#1e1b4b',
+                backgroundColor: '#111111',
                 border: 'none',
                 borderRadius: '8px',
                 color: '#fff',
@@ -71,7 +73,7 @@ export function OccupancyChart({ scanned, total, capacity, isLoading }: Occupanc
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ top: '-10px' }}>
           <div className="text-center">
             <p className="text-2xl font-bold text-gray-900 dark:text-white">{occupancyPct}%</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">occupied</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">occupé</p>
           </div>
         </div>
       </div>

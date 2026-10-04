@@ -389,7 +389,8 @@ export class PaymentService {
     const ticketRows = tickets.map(t => ({
       ticketId: t.id, serialNumber: t.serialNumber,
       templateName: tariffLabel(t.template.name, t.template.validDays), price: Number(t.price),
-      currency: t.template.currency, qrCode: t.qrCode,
+      // The QR is drawn from ticketId + serialNumber: no image copied into the order
+      currency: t.template.currency, qrCode: null,
     }));
 
     await this.prisma.payment.update({

@@ -5,9 +5,10 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Eye, EyeOff, Loader2, Lock } from 'lucide-react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { resetPasswordSchema, type ResetPasswordFormData } from '@/lib/validations';
 import { useResetPassword } from '@/hooks/useAuth';
+import { authButton, authField } from '@/components/site/AuthShell';
 
 export function ResetPasswordForm() {
   const [showPassword, setShowPassword] = useState(false);
@@ -28,66 +29,50 @@ export function ResetPasswordForm() {
     resetPassword.mutate({ token, password: data.password });
   };
 
+  if (!token) {
+    return (
+      <div className="space-y-3">
+        <p className="text-xl font-semibold text-black">Lien incomplet</p>
+        <p className="text-[#555]">Ce lien de réinitialisation est incomplet ou a expiré. Demandez-en un nouveau.</p>
+        <a href="/auth/forgot-password" className={`${authButton} mt-6`}>Recevoir un nouveau lien</a>
+      </div>
+    );
+  }
+
+  const fields = [
+    { name: 'password' as const, label: 'Nouveau mot de passe', placeholder: 'Au moins 8 caractères', show: showPassword, toggle: () => setShowPassword(v => !v) },
+    { name: 'confirmPassword' as const, label: 'Confirmer le mot de passe', placeholder: 'Répétez le mot de passe', show: showConfirm, toggle: () => setShowConfirm(v => !v) },
+  ];
+
   return (
     <motion.form
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
       onSubmit={handleSubmit(onSubmit)}
-      className="space-y-5"
+      className="space-y-6"
     >
-      <div>
-        <label className="block text-sm font-medium text-white/80 mb-1.5">Nouveau mot de passe</label>
-        <div className="relative">
-          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
-          <input
-            {...register('password')}
-            type={showPassword ? 'text' : 'password'}
-            placeholder="Au moins 8 caractères"
-            className="w-full pl-10 pr-12 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all"
-          />
-          <button
-            type="button"
-            onClick={() => setShowPassword((v) => !v)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 transition-colors"
-          >
-            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          </button>
+      {fields.map(f => (
+        <div key={f.name}>
+          <label className="mb-1.5 block text-sm text-[#707070]">{f.label}</label>
+          <div className="relative">
+            <input
+              {...register(f.name)}
+              type={f.show ? 'text' : 'password'}
+              autoComplete="new-password"
+              placeholder={f.placeholder}
+              className={`${authField} pr-10`}
+            />
+            <button type="button" onClick={f.toggle} aria-label="Afficher ou masquer le mot de passe" className="absolute right-1 top-1/2 -translate-y-1/2 text-[#9a9a9a] transition-colors hover:text-black">
+              {f.show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+          {errors[f.name] && <p className="mt-1 text-sm text-red-600">{errors[f.name]?.message}</p>}
         </div>
-        {errors.password && <p className="mt-1 text-sm text-red-300">{errors.password.message}</p>}
-      </div>
+      ))}
 
-      <div>
-        <label className="block text-sm font-medium text-white/80 mb-1.5">Confirmer le mot de passe</label>
-        <div className="relative">
-          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
-          <input
-            {...register('confirmPassword')}
-            type={showConfirm ? 'text' : 'password'}
-            placeholder="Répétez le mot de passe"
-            className="w-full pl-10 pr-12 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all"
-          />
-          <button
-            type="button"
-            onClick={() => setShowConfirm((v) => !v)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 transition-colors"
-          >
-            {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          </button>
-        </div>
-        {errors.confirmPassword && <p className="mt-1 text-sm text-red-300">{errors.confirmPassword.message}</p>}
-      </div>
-
-      <button
-        type="submit"
-        disabled={resetPassword.isPending || !token}
-        className="w-full py-3 px-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold rounded-full shadow-lg hover:from-indigo-600 hover:to-purple-700 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-      >
-        {resetPassword.isPending ? (
-          <><Loader2 className="h-4 w-4 animate-spin" />Réinitialisation...</>
-        ) : (
-          'Réinitialiser'
-        )}
+      <button type="submit" disabled={resetPassword.isPending} className={`${authButton} mt-4`}>
+        {resetPassword.isPending ? <><Loader2 className="h-4 w-4 animate-spin" />Réinitialisation...</> : 'Choisir ce mot de passe'}
       </button>
     </motion.form>
   );

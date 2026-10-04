@@ -4,9 +4,10 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { motion } from 'framer-motion';
-import { CheckCircle, Loader2, Mail } from 'lucide-react';
+import { CheckCircle2, Loader2 } from 'lucide-react';
 import { forgotPasswordSchema, type ForgotPasswordFormData } from '@/lib/validations';
 import { useForgotPassword } from '@/hooks/useAuth';
+import { authButton, authField } from '@/components/site/AuthShell';
 
 export function ForgotPasswordForm() {
   const [sent, setSent] = useState(false);
@@ -29,17 +30,14 @@ export function ForgotPasswordForm() {
 
   if (sent) {
     return (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="text-center space-y-4"
-      >
-        <CheckCircle className="h-16 w-16 text-green-400 mx-auto" />
-        <h3 className="text-xl font-semibold text-white">Email envoyé !</h3>
-        <p className="text-white/60 text-sm">
-          Nous avons envoyé un lien de réinitialisation à <span className="text-indigo-300 font-medium">{getValues('email')}</span>
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+        <CheckCircle2 className="h-12 w-12 text-black" strokeWidth={1.5} />
+        <p className="text-xl font-semibold text-black">E-mail envoyé</p>
+        <p className="text-[#555]">
+          Si un compte existe pour <span className="font-semibold text-black">{getValues('email')}</span>, vous allez recevoir un lien
+          pour choisir un nouveau mot de passe.
         </p>
-        <p className="text-white/40 text-xs">Vérifiez votre dossier spam si vous ne le voyez pas.</p>
+        <p className="text-sm text-[#707070]">Pensez à regarder dans vos courriers indésirables.</p>
       </motion.div>
     );
   }
@@ -50,32 +48,16 @@ export function ForgotPasswordForm() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
       onSubmit={handleSubmit(onSubmit)}
-      className="space-y-5"
+      className="space-y-6"
     >
       <div>
-        <label className="block text-sm font-medium text-white/80 mb-1.5">Adresse e-mail</label>
-        <div className="relative">
-          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
-          <input
-            {...register('email')}
-            type="email"
-            placeholder="you@example.com"
-            className="w-full pl-10 pr-4 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all"
-          />
-        </div>
-        {errors.email && <p className="mt-1 text-sm text-red-300">{errors.email.message}</p>}
+        <label className="mb-1.5 block text-sm text-[#707070]">Adresse e-mail</label>
+        <input {...register('email')} type="email" autoComplete="email" placeholder="vous@exemple.com" className={authField} />
+        {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>}
       </div>
 
-      <button
-        type="submit"
-        disabled={forgotPassword.isPending}
-        className="w-full py-3 px-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold rounded-full shadow-lg hover:from-indigo-600 hover:to-purple-700 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-      >
-        {forgotPassword.isPending ? (
-          <><Loader2 className="h-4 w-4 animate-spin" />Envoi en cours...</>
-        ) : (
-          'Envoyer le lien'
-        )}
+      <button type="submit" disabled={forgotPassword.isPending} className={`${authButton} mt-4`}>
+        {forgotPassword.isPending ? <><Loader2 className="h-4 w-4 animate-spin" />Envoi en cours...</> : 'Envoyer le lien'}
       </button>
     </motion.form>
   );

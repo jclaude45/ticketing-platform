@@ -6,6 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from '../crypto/crypto.service';
 import { QrcodeService } from '../qrcode/qrcode.service';
@@ -119,6 +120,7 @@ export class TicketGenerationService {
     // 6-char template discriminator — derived from the template UUID so it is globally unique.
     const tmplDisc = dto.templateId.replace(/-/g, '').slice(0, 6).toUpperCase();
 
+    const purchasedAt = new Date();
     for (let i = 0; i < count; i++) {
       const sequence = existingCount + i + 1;
       // Format: <eventCode>-<tmplDisc>-<sequence>  e.g.  KNK2026-A1B2C3-00001
@@ -127,29 +129,25 @@ export class TicketGenerationService {
       const holderName = holders[i]?.holderName?.trim();
       const holderEmail = holders[i]?.holderEmail?.trim();
 
-      // Generate signed QR code
-      const qrResult = await this.qrcodeService.generateSignedQRCode(
-        {
-          ticketId: `PENDING-${Date.now()}-${i}`, // Temp ID, will be updated
-          serialNumber,
-          eventId,
-          eventName: event.name,
-          holderName,
-          templateId: dto.templateId,
-        },
+      // The id is chosen here, so the ticket is signed once with its final id. No QR image is
+      // stored: it is drawn from the id and serial wherever it is shown (PDF, e-mail, page).
+      const id = randomUUID();
+      const signature = this.qrcodeService.signTicket(
+        { ticketId: id, serialNumber, eventId, eventName: event.name, holderName, templateId: dto.templateId },
         plainPrivateKey,
       );
 
       ticketsData.push({
+        id,
         serialNumber,
-        qrCode: qrResult.qrCodeDataUrl,
-        qrCodeSignature: qrResult.signature,
+        qrCode: null,
+        qrCodeSignature: signature,
         holderName: holderName || null,
         holderEmail: holderEmail || null,
         status: TicketStatus.VALID,
         price: options?.price ?? template.price,
         currency: template.currency,
-        purchasedAt: new Date(),
+        purchasedAt,
         eventId,
         templateId: dto.templateId,
         ...(options?.metadata !== undefined && { metadata: options.metadata }),
@@ -160,7 +158,7 @@ export class TicketGenerationService {
     // Batch insert tickets + atomic stock decrement in one transaction.
     // updateMany with gte condition is the critical section: prevents overselling
     // even when concurrent requests both passed the pre-flight check above.
-    const createdTickets = await this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx) => {
       const reserved = await tx.ticketTemplate.updateMany({
         where: { id: dto.templateId, availableCount: { gte: count } },
         data: { availableCount: { decrement: count } },
@@ -168,44 +166,16 @@ export class TicketGenerationService {
       if (reserved.count === 0) {
         throw new BadRequestException(`Stock épuisé : plus assez de places disponibles pour ce type de billet.`);
       }
-
-      const tickets = [];
-      for (const ticketData of ticketsData) {
-        const ticket = await tx.ticket.create({ data: ticketData });
-        tickets.push(ticket);
+      // One insert per 1 000 tickets instead of one per ticket
+      for (let i = 0; i < ticketsData.length; i += 1000) {
+        await tx.ticket.createMany({ data: ticketsData.slice(i, i + 1000) });
       }
-
-      return tickets;
-    }).catch(async (err) => {
+    }, { timeout: 60_000 }).catch(async (err) => {
       // Nothing was issued: give back the credits taken for this batch
       await this.subscriptionService.refundCredits(event.organizerId, 'TICKETS', creditsTaken);
       throw err;
     });
-
-    // Regenerate QR codes with actual ticket IDs
-    const ticketsWithQR = await Promise.all(
-      createdTickets.map(async (ticket) => {
-        const qrResult = await this.qrcodeService.generateSignedQRCode(
-          {
-            ticketId: ticket.id,
-            serialNumber: ticket.serialNumber,
-            eventId,
-            eventName: event.name,
-            holderName: ticket.holderName,
-            templateId: dto.templateId,
-          },
-          plainPrivateKey,
-        );
-
-        return this.prisma.ticket.update({
-          where: { id: ticket.id },
-          data: {
-            qrCode: qrResult.qrCodeDataUrl,
-            qrCodeSignature: qrResult.signature,
-          },
-        });
-      }),
-    );
+    const ticketsWithQR = ticketsData as { id: string; serialNumber: string; status: TicketStatus; holderName: string | null; holderEmail: string | null }[];
 
     this.logger.log(`Generated ${count} tickets for event ${eventId}`);
 

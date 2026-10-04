@@ -15,7 +15,7 @@ export class AnalyticsService {
   async getEventAnalytics(eventId: string, organizerId: string, organizerRole: Role) {
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
-      select: { id: true, organizerId: true, currency: true },
+      select: { id: true, organizerId: true, currency: true, totalCapacity: true },
     });
     if (!event) throw new ForbiddenException('Event not found');
     if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && event.organizerId !== organizerId) {
@@ -109,7 +109,9 @@ export class AnalyticsService {
       eventId,
       totalTickets,
       scannedTickets,
-      occupancyRate: totalTickets > 0 ? scannedTickets / totalTickets : 0,
+      // Occupation = tickets issued / capacity, as on the event overview and the global analytics
+      occupancyRate: event.totalCapacity > 0 ? Math.min(1, totalTickets / event.totalCapacity) : 0,
+      capacity: event.totalCapacity,
       sales,
       scansByHour,
       scansByController,
@@ -373,15 +375,16 @@ export class AnalyticsService {
         }),
       ]);
 
-    // Average occupancy across PUBLISHED events
-    let averageOccupancy = 0;
-    if (publishedEvents.length > 0) {
-      const sum = publishedEvents.reduce(
-        (acc, e) => acc + Math.min(100, (e._count.tickets / e.totalCapacity) * 100),
-        0,
-      );
-      averageOccupancy = Math.round(sum / publishedEvents.length);
-    }
+    // Occupation of the PUBLISHED events = tickets issued / capacity (same definition as the
+    // event pages); the entries come with it so the chart shows the same figures
+    const occupancy = {
+      capacity: publishedEvents.reduce((n, e) => n + e.totalCapacity, 0),
+      issued: publishedEvents.reduce((n, e) => n + Math.min(e._count.tickets, e.totalCapacity), 0),
+      scanned: publishedEvents.length
+        ? await this.prisma.ticket.count({ where: { status: 'USED', event: { ...where, status: 'PUBLISHED', totalCapacity: { gt: 0 } } } })
+        : 0,
+    };
+    const averageOccupancy = occupancy.capacity > 0 ? Math.round((occupancy.issued / occupancy.capacity) * 100) : 0;
 
     // Scans by hour today — fill all 24 slots so the chart always has a full axis
     const hourlyMap: Record<string, number> = {};
@@ -416,7 +419,7 @@ export class AnalyticsService {
       .map((e) => ({ eventId: e.id, name: e.name, count: e._count.tickets }));
 
     const result = {
-      totalEvents, activeEvents, totalTickets, totalScans, averageOccupancy,
+      totalEvents, activeEvents, totalTickets, totalScans, averageOccupancy, occupancy,
       eventsByMonth, ticketsByEvent, scansByHour,
       // Month-over-month raw counts — frontend computes the % delta
       mom: {

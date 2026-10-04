@@ -62,6 +62,27 @@ export class QrcodeService {
     };
   }
 
+  /** Signature of a ticket (stored in qrCodeSignature), without drawing any image */
+  signTicket(
+    ticketData: { ticketId: string; serialNumber: string; eventId: string; eventName: string; holderName?: string; templateId: string },
+    privateKey: string,
+  ): string {
+    const payload = this.cryptoService.createTicketPayload({ ...ticketData, issuedAt: new Date().toISOString() });
+    return this.cryptoService.signData(payload, privateKey);
+  }
+
+  /** What the QR code of a ticket contains (V2 compact format, read by ZCONTRÔLE) */
+  static ticketQrContent(ticketId: string, serialNumber: string): string {
+    return JSON.stringify({ id: ticketId, sn: serialNumber, v: '2' });
+  }
+
+  /** QR image of a ticket, drawn when it is shown */
+  async ticketQrDataUrl(ticketId: string, serialNumber: string): Promise<string> {
+    return QRCode.toDataURL(QrcodeService.ticketQrContent(ticketId, serialNumber), {
+      errorCorrectionLevel: 'M', margin: 2, width: 300, color: { dark: '#000000', light: '#FFFFFF' },
+    });
+  }
+
   async generateQRCodeBuffer(content: string, size: number = 400): Promise<Buffer> {
     return QRCode.toBuffer(content, {
       errorCorrectionLevel: 'H',

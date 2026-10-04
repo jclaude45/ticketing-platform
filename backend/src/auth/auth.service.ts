@@ -207,7 +207,8 @@ export class AuthService {
       if (await this.redisService.get(replayKey)) {
         throw new UnauthorizedException('TOTP code already used — wait for the next code');
       }
-      const totp = authenticator.create({ window: 1 });
+      // clone keeps the base32 decoder of the default authenticator (create() drops it and every check throws)
+      const totp = authenticator.clone({ window: 1 });
       const isValid = totp.verify({ token: dto.totpCode, secret: fullUser.twoFactorSecret });
       if (!isValid) {
         throw new UnauthorizedException('Invalid two-factor authentication code');
@@ -322,7 +323,10 @@ export class AuthService {
     }
 
     const issuer = this.configService.get<string>('totp.issuer') || 'ZAYA';
-    const secret = authenticator.generateSecret(20); // 20 bytes = 160 bits base32
+    // A setup already in progress keeps its secret: two calls (page shown twice, double click)
+    // must not leave the page showing one secret while another one is kept for the check
+    const existing = await this.redisService.get(`2fa_setup:${userId}`);
+    const secret = existing || authenticator.generateSecret(20); // 20 bytes = 160 bits base32
     const otpAuthUrl = authenticator.keyuri(user.email, issuer, secret);
 
     // Temporarily store secret in Redis until verified
@@ -345,7 +349,7 @@ export class AuthService {
       throw new BadRequestException('No 2FA setup in progress. Please start setup again.');
     }
 
-    const isValid = authenticator.create({ window: 1 }).verify({ token: totpCode, secret: tempSecret });
+    const isValid = authenticator.clone({ window: 1 }).verify({ token: totpCode, secret: tempSecret });
     if (!isValid) {
       throw new UnauthorizedException('Invalid TOTP code');
     }
@@ -378,7 +382,7 @@ export class AuthService {
       throw new ForbiddenException('La double authentification ne peut pas être désactivée pour les comptes administrateurs.');
     }
 
-    const isValid = authenticator.create({ window: 1 }).verify({ token: totpCode, secret: user.twoFactorSecret });
+    const isValid = authenticator.clone({ window: 1 }).verify({ token: totpCode, secret: user.twoFactorSecret });
     if (!isValid) {
       throw new UnauthorizedException('Invalid TOTP code');
     }

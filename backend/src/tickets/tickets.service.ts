@@ -1,3 +1,5 @@
+import * as QRCode from 'qrcode';
+import { QrcodeService } from '../qrcode/qrcode.service';
 import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
@@ -150,7 +152,8 @@ export class TicketsService {
     return {
       ticketId: ticket.id,
       serialNumber: ticket.serialNumber,
-      qrCode: ticket.qrCode,
+      // Drawn from the id and serial: no image is stored with the ticket
+      qrCode: ticket.qrCode ?? (await QRCode.toDataURL(QrcodeService.ticketQrContent(ticket.id, ticket.serialNumber), { errorCorrectionLevel: 'M', margin: 2, width: 300 })),
       status: ticket.status,
     };
   }

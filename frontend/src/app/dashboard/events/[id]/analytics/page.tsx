@@ -112,8 +112,9 @@ export default function EventAnalyticsPage() {
           isLoading={isLoading}
         />
         <StatsCard
-          title="Taux d'occupation"
+          title="Occupation"
           value={`${occupancyPct}%`}
+          description="billets émis / capacité"
           icon={<BarChart3 className="h-5 w-5" />}
           color={occupancyPct > 80 ? 'emerald' : occupancyPct > 50 ? 'amber' : 'violet'}
           isLoading={isLoading}
@@ -141,13 +142,11 @@ export default function EventAnalyticsPage() {
         </div>
 
         {/* Occupancy donut — 1/3 */}
-        <div className="border-b border-gray-200 bg-white py-6 flex flex-col">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-base font-semibold text-gray-900">Occupation</h2>
-          </div>
+        <div className="flex flex-col">
           <OccupancyChart
             scanned={analytics?.scannedTickets ?? 0}
             total={analytics?.totalTickets ?? 0}
+            capacity={event?.totalCapacity ?? undefined}
             isLoading={isLoading}
           />
         </div>

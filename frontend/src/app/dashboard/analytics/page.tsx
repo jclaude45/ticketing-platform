@@ -67,13 +67,11 @@ export default function AnalyticsPage() {
       suffix: 'validations',
     },
     {
-      title: 'Taux d\'occupation moyen',
-      value: analytics?.averageOccupancy
-        ? `${Math.round(analytics.averageOccupancy)}%`
-        : '—',
+      title: 'Occupation',
+      value: `${Math.round(analytics?.averageOccupancy ?? 0)}%`,
       icon: <BarChart3 className="h-5 w-5" />,
       color: 'amber',
-      suffix: 'occupation',
+      suffix: 'billets émis / capacité',
     },
   ];
 
@@ -82,7 +80,7 @@ export default function AnalyticsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Analytics globales</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Analytique globale</h1>
           <p className="text-sm text-gray-500 mt-0.5">
             Vue d'ensemble de toute votre activité billetterie
           </p>
@@ -192,16 +190,12 @@ export default function AnalyticsPage() {
 
       {/* Occupation */}
       <div className="grid grid-cols-1 gap-6">
-        <div className="border-b border-gray-200 bg-white py-6">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-semibold text-gray-900">Taux d'occupation</h2>
-              <p className="text-xs text-gray-500">Événements publiés</p>
-            </div>
-          </div>
+        <div>
+          {/* Same figures as the "Occupation" card: published events, issued / capacity */}
           <OccupancyChart
-            scanned={analytics?.totalScans ?? 0}
-            total={analytics?.totalTickets ?? 0}
+            scanned={(analytics as any)?.occupancy?.scanned ?? 0}
+            total={(analytics as any)?.occupancy?.issued ?? 0}
+            capacity={(analytics as any)?.occupancy?.capacity ?? 0}
             isLoading={isLoading}
           />
         </div>

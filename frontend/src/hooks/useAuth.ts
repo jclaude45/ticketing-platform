@@ -158,7 +158,6 @@ export function useSetup2FA() {
 }
 
 export function useVerify2FA() {
-  const router = useRouter();
   const { setUser } = useAuthStore();
   const queryClient = useQueryClient();
 
@@ -177,7 +176,7 @@ export function useVerify2FA() {
       } catch {
         queryClient.invalidateQueries({ queryKey: ['auth', 'profile'] });
       }
-      router.push('/dashboard');
+      // The setup page then shows its confirmation step
     },
     onError: () => toast.error('Code 2FA invalide. Réessayez.'),
   });

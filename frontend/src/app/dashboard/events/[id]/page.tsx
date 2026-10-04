@@ -205,7 +205,7 @@ export default function EventDetailPage() {
 
       <div className="grid grid-cols-2 gap-x-8 md:grid-cols-4">
         <StatsCard title="Billets émis" value={formatNumber(ticketsIssued)} icon={<Ticket className="h-5 w-5" />} color="indigo" />
-        <StatsCard title="Occupation" value={`${occupancy}%`} icon={<CheckCircle2 className="h-5 w-5" />} color="green" />
+        <StatsCard title="Occupation" value={`${occupancy}%`} icon={<CheckCircle2 className="h-5 w-5" />} color="green" description="billets émis / capacité" />
         <StatsCard
           title="Solde des ventes"
           value={formatMoney(sales?.amount ?? 0, sales?.currency ?? (event as any).currency ?? 'USD')}

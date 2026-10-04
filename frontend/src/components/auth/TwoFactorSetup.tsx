@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -10,6 +10,7 @@ import { totpSchema, type TotpFormData } from '@/lib/validations';
 import { useSetup2FA, useVerify2FA } from '@/hooks/useAuth';
 import { copyToClipboard } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { authButton } from '@/components/site/AuthShell';
 
 type Step = 'scan' | 'verify' | 'done';
 
@@ -25,7 +26,11 @@ export function TwoFactorSetup() {
     resolver: zodResolver(totpSchema),
   });
 
+  // Asked once: a second request would show a secret other than the one kept by the server
+  const asked = useRef(false);
   useEffect(() => {
+    if (asked.current) return;
+    asked.current = true;
     setup2FA.mutate(undefined, {
       onSuccess: (res) => {
         setQrCode(res.data.data.qrCode);
@@ -51,68 +56,46 @@ export function TwoFactorSetup() {
   return (
     <AnimatePresence mode="wait">
       {step === 'scan' && (
-        <motion.div
-          key="scan"
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -20 }}
-          className="space-y-6"
-        >
-          <div className="text-center">
-            <p className="text-white/80 text-sm mb-4">
-              Scannez ce QR code avec votre application d&apos;authentification (Google Authenticator, Authy, etc.)
-            </p>
-            {setup2FA.isPending ? (
-              <div className="w-48 h-48 mx-auto flex items-center justify-center bg-white/10 rounded-xl">
-                <Loader2 className="h-8 w-8 text-indigo-300 animate-spin" />
-              </div>
-            ) : qrCode ? (
-              <div className="inline-block p-3 bg-white rounded-xl mx-auto">
-                <Image src={qrCode} alt="2FA QR Code" width={192} height={192} className="rounded" />
-              </div>
-            ) : null}
-          </div>
+        <motion.div key="scan" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+          <p className="text-[#555]">
+            <span className="font-semibold text-black">1.</span> Scannez ce QR code avec votre application d&apos;authentification
+            (Google Authenticator, Authy, Microsoft Authenticator…).
+          </p>
+          {setup2FA.isPending ? (
+            <div className="flex h-52 w-52 items-center justify-center rounded-2xl border border-[#e5e5e5]">
+              <Loader2 className="h-8 w-8 animate-spin text-[#9a9a9a]" />
+            </div>
+          ) : qrCode ? (
+            <div className="inline-block rounded-2xl border border-[#e5e5e5] p-3">
+              <Image src={qrCode} alt="QR code de double authentification" width={192} height={192} />
+            </div>
+          ) : null}
 
           {secret && (
             <div>
-              <p className="text-white/60 text-xs text-center mb-2">Ou entrez cette clé manuellement :</p>
-              <div className="flex items-center gap-2 bg-white/10 rounded-lg px-3 py-2 border border-white/20">
-                <code className="flex-1 text-indigo-300 font-mono text-sm tracking-wider break-all">{secret}</code>
-                <button
-                  type="button"
-                  onClick={handleCopySecret}
-                  className="text-white/40 hover:text-white transition-colors flex-shrink-0"
-                >
+              <p className="mb-1.5 text-sm text-[#707070]">Ou saisissez cette clé dans l&apos;application :</p>
+              <div className="flex items-center gap-3 border-b border-[#9a9a9a] pb-2">
+                <code className="flex-1 break-all font-mono text-[15px] tracking-wider text-black">{secret}</code>
+                <button type="button" onClick={handleCopySecret} aria-label="Copier la clé" className="flex-shrink-0 text-[#9a9a9a] transition-colors hover:text-black">
                   <Copy className="h-4 w-4" />
                 </button>
               </div>
             </div>
           )}
 
-          <button
-            type="button"
-            onClick={() => setStep('verify')}
-            disabled={!qrCode}
-            className="w-full py-3 px-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold rounded-full hover:from-indigo-600 hover:to-purple-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-          >
+          <button type="button" onClick={() => setStep('verify')} disabled={!qrCode} className={`${authButton} mt-4`}>
             J&apos;ai scanné le code
           </button>
         </motion.div>
       )}
 
       {step === 'verify' && (
-        <motion.form
-          key="verify"
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -20 }}
-          onSubmit={handleSubmit(onVerify)}
-          className="space-y-5"
-        >
-          <div className="text-center">
-            <ShieldCheck className="h-12 w-12 text-indigo-300 mx-auto mb-3" />
-            <p className="text-white font-medium">Vérifier la configuration</p>
-            <p className="text-white/60 text-sm mt-1">Entrez le code à 6 chiffres de votre application pour confirmer</p>
+        <motion.form key="verify" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} onSubmit={handleSubmit(onVerify)} className="space-y-6">
+          <div>
+            <ShieldCheck className="mb-3 h-12 w-12 text-black" strokeWidth={1.5} />
+            <p className="text-[#555]">
+              <span className="font-semibold text-black">2.</span> Entrez le code à 6 chiffres affiché par votre application pour confirmer.
+            </p>
           </div>
 
           <div>
@@ -120,26 +103,19 @@ export function TwoFactorSetup() {
               {...register('code')}
               type="text"
               inputMode="numeric"
+              autoComplete="one-time-code"
               maxLength={6}
               placeholder="000000"
-              className="w-full text-center text-2xl tracking-widest py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all"
+              className="w-full rounded-2xl border border-[#9a9a9a] py-3 text-center text-2xl tracking-[0.4em] text-black placeholder:text-[#c4c4c4] focus:border-black focus:outline-none focus:ring-0"
             />
-            {errors.code && <p className="mt-1 text-sm text-red-300 text-center">{errors.code.message}</p>}
+            {errors.code && <p className="mt-1 text-center text-sm text-red-600">{errors.code.message}</p>}
           </div>
 
           <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => setStep('scan')}
-              className="flex-1 py-2.5 px-4 border border-white/20 text-white/80 rounded-lg hover:bg-white/10 transition-all text-sm"
-            >
+            <button type="button" onClick={() => setStep('scan')} className="h-12 flex-1 rounded-full border border-black text-lg font-semibold uppercase text-black transition-colors hover:bg-black hover:text-white">
               Retour
             </button>
-            <button
-              type="submit"
-              disabled={verify2FA.isPending}
-              className="flex-1 py-2.5 px-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold rounded-full hover:from-indigo-600 hover:to-purple-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
+            <button type="submit" disabled={verify2FA.isPending} className={`${authButton} flex-1`}>
               {verify2FA.isPending ? <><Loader2 className="h-4 w-4 animate-spin" />Vérification...</> : 'Vérifier'}
             </button>
           </div>
@@ -147,40 +123,29 @@ export function TwoFactorSetup() {
       )}
 
       {step === 'done' && (
-        <motion.div
-          key="done"
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="space-y-5"
-        >
-          <div className="text-center">
-            <CheckCircle className="h-16 w-16 text-green-400 mx-auto mb-3" />
-            <h3 className="text-xl font-semibold text-white">Double authentification activée !</h3>
-            <p className="text-white/60 text-sm mt-1">Votre compte est maintenant protégé</p>
+        <motion.div key="done" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-6">
+          <div>
+            <CheckCircle className="mb-3 h-12 w-12 text-black" strokeWidth={1.5} />
+            <p className="text-xl font-semibold text-black">Double authentification activée</p>
+            <p className="mt-1 text-[#555]">
+              Votre compte est maintenant protégé. À chaque connexion, ZAYA vous demandera le code à 6 chiffres de votre application :
+              gardez-la sur votre téléphone. Si vous changez de téléphone, désactivez la double authentification dans Paramètres avant.
+            </p>
           </div>
 
           {backupCodes.length > 0 && (
             <div>
-              <p className="text-white/80 text-sm font-medium mb-2">
-                Enregistrez ces codes de secours dans un endroit sûr :
-              </p>
-              <div className="bg-white/10 border border-white/20 rounded-lg p-4 grid grid-cols-2 gap-1.5">
+              <p className="mb-2 text-sm font-semibold text-black">Gardez ces codes de secours en lieu sûr :</p>
+              <div className="grid grid-cols-2 gap-2 rounded-2xl bg-[#FFDD00] p-4">
                 {backupCodes.map((code, i) => (
-                  <code key={i} className="text-indigo-300 font-mono text-sm text-center py-1 bg-white/5 rounded">
-                    {code}
-                  </code>
+                  <code key={i} className="rounded bg-white/60 py-1 text-center font-mono text-sm text-black">{code}</code>
                 ))}
               </div>
-              <p className="text-white/40 text-xs mt-2">Chaque code de secours ne peut être utilisé qu&apos;une seule fois.</p>
+              <p className="mt-2 text-xs text-[#707070]">Chaque code ne peut servir qu&apos;une seule fois, si vous perdez votre téléphone.</p>
             </div>
           )}
 
-          <a
-            href="/dashboard"
-            className="block w-full py-3 px-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold rounded-full hover:from-indigo-600 hover:to-purple-700 transition-all text-center"
-          >
-            Aller au tableau de bord
-          </a>
+          <a href="/dashboard" className={authButton}>Aller au tableau de bord</a>
         </motion.div>
       )}
     </AnimatePresence>

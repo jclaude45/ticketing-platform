@@ -73,7 +73,7 @@ export default function DashboardPage() {
       color: 'green' as const,
     },
     {
-      title: 'Occupation moyenne',
+      title: 'Occupation',
       value: `${analytics?.averageOccupancy ?? 0}%`,
       icon: <TrendingUp className="h-5 w-5" />,
       color: 'blue' as const,

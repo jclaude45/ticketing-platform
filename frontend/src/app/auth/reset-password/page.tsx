@@ -1,23 +1,25 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { ResetPasswordForm } from '@/components/auth/ResetPasswordForm';
+import { AuthShell } from '@/components/site/AuthShell';
 
 export const metadata: Metadata = { title: 'Réinitialiser le mot de passe' };
 
 export default function ResetPasswordPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-950 via-purple-900 to-slate-900 p-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold text-white">Réinitialiser le mot de passe</h1>
-          <p className="text-indigo-200 mt-2">Entrez votre nouveau mot de passe</p>
-        </div>
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 shadow-2xl p-5 sm:p-8">
-          <Suspense>
-            <ResetPasswordForm />
-          </Suspense>
-        </div>
-      </div>
-    </div>
+    <AuthShell
+      title="Nouveau mot de passe"
+      subtitle="Choisissez un mot de passe d’au moins 8 caractères, avec une majuscule et un chiffre."
+      headline="Transformez vos événements en expériences inoubliables !"
+      footer={
+        <p>
+          <a href="/auth/login" className="font-semibold text-black underline underline-offset-4">Retour à la connexion</a>
+        </p>
+      }
+    >
+      <Suspense>
+        <ResetPasswordForm />
+      </Suspense>
+    </AuthShell>
   );
 }
