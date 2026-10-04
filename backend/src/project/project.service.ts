@@ -1,3 +1,4 @@
+import { button, emailLayout, emailText, esc, note, p, quote } from '../common/email/layout';
 import {
   Injectable,
   ForbiddenException,
@@ -829,21 +830,50 @@ export class ProjectService {
   ) {
     const frontendUrl = this.configService.get<string>('frontend.url');
     const joinUrl = `${frontendUrl}/join/project/${token}`;
-    const roleLabel = role === 'MANAGER' ? 'Responsable' : 'Collaborateur';
+    const roleLabel = role === 'MANAGER' ? 'responsable' : 'collaborateur';
     try {
       await this.mailerTransport.sendMail({
         from: this.configService.get<string>('email.from'),
         to: email,
         subject: `Invitation au projet : ${eventName}`,
-        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-          <h2>Bonjour ${firstName} !</h2>
-          <p>Vous avez été invité(e) en tant que <strong>${roleLabel}</strong> sur le projet de l'événement <strong>${eventName}</strong>.</p>
-          <p>Cliquez sur le bouton ci-dessous pour créer votre compte et rejoindre l'équipe :</p>
-          <a href="${joinUrl}" style="display:inline-block;padding:12px 24px;background:#6366f1;color:white;text-decoration:none;border-radius:8px;font-weight:bold">Rejoindre le projet</a>
-          <p style="color:#9ca3af;font-size:12px">Ce lien expire dans 7 jours.</p>
-        </div>`,
+        html: emailLayout({
+          preheader: `Rejoignez l'équipe de ${eventName} sur ZAYA.`,
+          eyebrow: 'Invitation',
+          title: `Rejoignez le projet ${eventName}`,
+          body:
+            p(`Bonjour <strong>${esc(firstName)}</strong>,`) +
+            p(`Vous êtes invité(e) comme <strong>${roleLabel}</strong> sur le projet de l’événement <strong>${esc(eventName)}</strong> : tâches, budget et équipe, au même endroit.`) +
+            button('Rejoindre le projet', joinUrl) +
+            note('Ce lien expire dans 7 jours.'),
+          reason: 'Vous recevez cet e-mail parce qu’un organisateur vous a invité(e) sur ZAYA.',
+        }),
+        text: emailText(`Rejoignez le projet ${eventName}`, [
+          `Bonjour ${firstName},`,
+          `Vous êtes invité(e) comme ${roleLabel} sur le projet de l’événement ${eventName}.`,
+          joinUrl,
+          'Ce lien expire dans 7 jours.',
+        ]),
       });
     } catch (err) { this.logger.warn('sendInvitationEmail failed', (err as Error)?.message); }
+  }
+
+  /** Task notifications share the same short layout */
+  private async sendTaskEmail(to: string, subject: string, o: { eyebrow: string; firstName: string; message: string; highlight?: string; url: string }) {
+    try {
+      await this.mailerTransport.sendMail({
+        from: this.configService.get<string>('email.from'),
+        to,
+        subject,
+        html: emailLayout({
+          preheader: o.highlight ? `${o.highlight}` : subject,
+          eyebrow: o.eyebrow,
+          title: `Bonjour ${o.firstName}`,
+          body: p(o.message) + (o.highlight ? quote(o.highlight) : '') + button('Voir le projet', o.url),
+          reason: 'Vous recevez cet e-mail parce que vous faites partie de l’équipe de ce projet sur ZAYA.',
+        }),
+        text: emailText(subject, [`Bonjour ${o.firstName},`, o.message.replace(/<[^>]+>/g, ''), ...(o.highlight ? [o.highlight] : []), o.url]),
+      });
+    } catch (err) { this.logger.warn(`Task e-mail failed (${subject})`, (err as Error)?.message); }
   }
 
   private async sendTaskStatusChangeEmail(
@@ -861,19 +891,13 @@ export class ProjectService {
     };
     const label = statusLabels[newStatus] ?? newStatus;
     const frontendUrl = this.configService.get<string>('frontend.url');
-    try {
-      await this.mailerTransport.sendMail({
-        from: this.configService.get<string>('email.from'),
-        to: email,
-        subject: `Tâche mise à jour — ${eventName}`,
-        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-          <h2>Bonjour ${firstName} !</h2>
-          <p>La tâche <strong>${taskTitle}</strong> sur le projet <strong>${eventName}</strong> a changé de statut :</p>
-          <p style="font-size:18px;font-weight:bold;color:#6366f1">${label}</p>
-          <a href="${frontendUrl}/dashboard" style="display:inline-block;padding:12px 24px;background:#6366f1;color:white;text-decoration:none;border-radius:8px">Voir le projet</a>
-        </div>`,
-      });
-    } catch (err) { this.logger.warn('sendTaskStatusChangeEmail failed', (err as Error)?.message); }
+    await this.sendTaskEmail(email, `Tâche mise à jour — ${eventName}`, {
+      eyebrow: 'Tâche mise à jour',
+      firstName,
+      message: `La tâche <strong>${esc(taskTitle)}</strong> du projet <strong>${esc(eventName)}</strong> a changé de statut :`,
+      highlight: label,
+      url: `${frontendUrl}/dashboard`,
+    });
   }
 
   private async sendTaskUpdateEmail(
@@ -884,19 +908,12 @@ export class ProjectService {
     eventId: string,
   ) {
     const frontendUrl = this.configService.get<string>('frontend.url');
-    const url = `${frontendUrl}/dashboard/events/${eventId}/project`;
-    try {
-      await this.mailerTransport.sendMail({
-        from: this.configService.get<string>('email.from'),
-        to: email,
-        subject: `Tâche modifiée — ${eventName}`,
-        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-          <h2>Bonjour ${firstName} !</h2>
-          <p>La tâche <strong>${taskTitle}</strong> sur le projet <strong>${eventName}</strong> a été modifiée.</p>
-          <a href="${url}" style="display:inline-block;padding:12px 24px;background:#6366f1;color:white;text-decoration:none;border-radius:8px">Voir le projet</a>
-        </div>`,
-      });
-    } catch (err) { this.logger.warn('sendTaskUpdateEmail failed', (err as Error)?.message); }
+    await this.sendTaskEmail(email, `Tâche modifiée — ${eventName}`, {
+      eyebrow: 'Tâche modifiée',
+      firstName,
+      message: `La tâche <strong>${esc(taskTitle)}</strong> du projet <strong>${esc(eventName)}</strong> a été modifiée.`,
+      url: `${frontendUrl}/dashboard/events/${eventId}/project`,
+    });
   }
 
   private async sendTaskAssignmentEmail(
@@ -907,19 +924,12 @@ export class ProjectService {
     eventId: string,
   ) {
     const frontendUrl = this.configService.get<string>('frontend.url');
-    const url = `${frontendUrl}/dashboard/events/${eventId}/project`;
-    try {
-      await this.mailerTransport.sendMail({
-        from: this.configService.get<string>('email.from'),
-        to: email,
-        subject: `Nouvelle tâche assignée — ${eventName}`,
-        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-          <h2>Bonjour ${firstName} !</h2>
-          <p>Une tâche vous a été assignée sur le projet <strong>${eventName}</strong> :</p>
-          <p style="font-size:18px;font-weight:bold;color:#6366f1">${taskTitle}</p>
-          <a href="${url}" style="display:inline-block;padding:12px 24px;background:#6366f1;color:white;text-decoration:none;border-radius:8px">Voir le projet</a>
-        </div>`,
-      });
-    } catch (err) { this.logger.warn('sendTaskAssignmentEmail failed', (err as Error)?.message); }
+    await this.sendTaskEmail(email, `Nouvelle tâche assignée — ${eventName}`, {
+      eyebrow: 'Nouvelle tâche',
+      firstName,
+      message: `Une tâche vous a été assignée sur le projet <strong>${esc(eventName)}</strong> :`,
+      highlight: taskTitle,
+      url: `${frontendUrl}/dashboard/events/${eventId}/project`,
+    });
   }
 }

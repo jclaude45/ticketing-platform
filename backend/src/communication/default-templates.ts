@@ -13,8 +13,7 @@
  *  9. No external images except {{bannerUrl}} (event cover = trusted sender domain)
  * 10. Clean subject lines — no punctuation abuse, no deceptive prefixes
  *
- * Visual identity: the event's own cover image ({{bannerUrl}}) drives the header.
- * If the banner is not set, the indigo gradient strip alone is shown.
+ * Visual identity: ZAYA's (white, black, yellow), with the event's cover image ({{bannerUrl}}).
  */
 
 export type TemplateChannel = 'EMAIL' | 'SMS' | 'WHATSAPP';
@@ -28,41 +27,38 @@ export interface DefaultTemplate {
 }
 
 // ─── HTML helpers ─────────────────────────────────────────────────────────────
+// Same look as every ZAYA e-mail (src/common/email/layout.ts): white, black type, yellow
+// accent, black button. No gradients: they are poorly rendered and disliked by spam filters.
+
+const FONT = 'Arial,Helvetica,sans-serif';
 
 /**
- * Event-branded header:
- * • Row 1 — event banner image ({{bannerUrl}}). Fails silently if empty.
- * • Row 2 — indigo gradient strip with the action title + event name.
+ * Header: yellow strip, ZAYA logo, the event poster ({{bannerUrl}}) when there is one,
+ * then the action title and the event name.
  */
 const header = (title: string) => `
-  <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" bgcolor="#4f46e5">
-    <tr>
-      <td style="padding:0;font-size:0;line-height:0;mso-line-height-rule:exactly;">
-        <img src="{{bannerUrl}}" alt="{{eventName}}" width="600"
-             style="display:block;width:600px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;font-size:0;"
-             border="0"/>
-      </td>
-    </tr>
-  </table>
   <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0">
-    <tr>
-      <td align="center" style="background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%);padding:28px 32px 22px;">
-        <h1 style="margin:0;color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:21px;font-weight:700;line-height:1.35;letter-spacing:-0.01em;">${title}</h1>
-        <p style="margin:8px 0 0;color:rgba(255,255,255,0.82);font-family:Arial,Helvetica,sans-serif;font-size:13px;letter-spacing:0.02em;">{{eventName}}</p>
-      </td>
-    </tr>
+    <tr><td bgcolor="#FFDD00" style="height:6px;font-size:0;line-height:0;">&nbsp;</td></tr>
+    <tr><td class="pad" style="padding:26px 32px 0;">
+      <img src="https://zaya.live/email-logo-zaya.png" width="104" height="32" alt="ZAYA" style="display:block;border:0;width:104px;height:32px;"/>
+    </td></tr>
+    <tr><td class="pad" style="padding:18px 32px 0;font-size:0;line-height:0;">
+      <img src="{{bannerUrl}}" alt="{{eventName}}" width="536"
+           style="display:block;width:100%;max-width:536px;height:auto;border:0;border-radius:12px;"/>
+    </td></tr>
+    <tr><td class="pad" style="padding:24px 32px 0;">
+      <p style="margin:0 0 6px;font-family:${FONT};font-size:11px;font-weight:bold;letter-spacing:1.5px;text-transform:uppercase;color:#6b6b6b;">{{eventName}}</p>
+      <h1 style="margin:0;font-family:${FONT};font-size:24px;line-height:1.25;font-weight:bold;color:#111111;">${title}</h1>
+    </td></tr>
   </table>`;
 
 const footer = () => `
   <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0">
     <tr>
-      <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:20px 32px;" align="center">
-        <p style="margin:0;color:#9ca3af;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.7;">
-          Vous recevez cet email car vous avez un billet pour cet événement.<br/>
-          Si vous pensez l'avoir reçu par erreur, ignorez-le simplement.<br/>
-          <a href="#" style="color:#6b7280;text-decoration:underline;">Se désabonner</a>
-          &nbsp;&middot;&nbsp;
-          Propulsé par <strong style="color:#4b5563;">ZAYA</strong>
+      <td class="pad" style="border-top:1px solid #e6e6e6;padding:18px 32px 26px;">
+        <p style="margin:0;color:#6b6b6b;font-family:${FONT};font-size:12px;line-height:1.6;">
+          Vous recevez cet e-mail car vous êtes inscrit(e) à cet événement. Pour ne plus en recevoir, répondez à ce message.<br/>
+          Envoyé avec <a href="https://zaya.live" style="color:#111111;font-weight:bold;text-decoration:none;">ZAYA</a> — BACK2NEXT, Kinshasa
         </p>
       </td>
     </tr>
@@ -75,25 +71,28 @@ const wrap = (hdr: string, body: string, preheader: string) =>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <meta name="x-apple-disable-message-reformatting"/>
-  <title>Email</title>
+  <meta name="color-scheme" content="light"/>
+  <title>{{eventName}}</title>
   <style type="text/css">
     @media screen and (max-width:620px){
       .w600{width:100% !important;}
-      .btn{display:block !important;width:88% !important;text-align:center !important;}
-      .pad{padding:24px 20px !important;}
+      .btn{display:block !important;text-align:center !important;}
+      .pad{padding-left:20px !important;padding-right:20px !important;}
     }
   </style>
 </head>
-<body style="margin:0;padding:0;background-color:#f0f0f5;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
-  <div style="display:none;font-size:1px;color:#f0f0f5;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">${preheader}&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;</div>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f0f0f5">
+<body style="margin:0;padding:0;background-color:#f4f4f4;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+  <div style="display:none;font-size:1px;color:#f4f4f4;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">${preheader}&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f4f4f4">
     <tr>
-      <td align="center" style="padding:24px 0 40px;">
+      <td align="center" style="padding:24px 12px 40px;">
         <table class="w600" role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"
-               style="background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 2px 20px rgba(0,0,0,0.07);">
+               style="background-color:#ffffff;border-radius:16px;overflow:hidden;">
+          <tr><td>
           ${hdr}
           ${body}
           ${footer()}
+          </td></tr>
         </table>
       </td>
     </tr>
@@ -103,25 +102,23 @@ const wrap = (hdr: string, body: string, preheader: string) =>
 
 const ctaButton = (text: string) =>
   `<a href="#" class="btn"
-     style="display:inline-block;padding:13px 34px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:700;text-decoration:none;border-radius:8px;letter-spacing:0.01em;mso-padding-alt:0;line-height:1.2;">${text}</a>`;
+     style="display:inline-block;padding:14px 30px;background:#111111;color:#ffffff;font-family:${FONT};font-size:15px;font-weight:bold;text-decoration:none;border-radius:999px;line-height:1.2;">${text}</a>`;
 
 const infoBox = (rows: Array<[string, string]>) =>
   `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
-         style="background:#f0f0ff;border-radius:10px;overflow:hidden;margin:0;">
-    <tr><td style="padding:18px 22px;">
-      ${rows.map(([label, val]) => `
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:10px;">
-        <tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:0.07em;padding-bottom:2px;">${label}</td></tr>
-        <tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:600;color:#1e1b4b;">${val}</td></tr>
-      </table>`).join('')}
-    </td></tr>
+         style="border-top:2px solid #111111;border-bottom:1px solid #e6e6e6;margin:0 0 24px;">
+    ${rows.map(([label, val], i) => `
+    <tr>
+      <td style="padding:12px 0;${i ? 'border-top:1px solid #e6e6e6;' : ''}font-family:${FONT};font-size:13px;color:#6b6b6b;width:34%;vertical-align:top;">${label}</td>
+      <td style="padding:12px 0;${i ? 'border-top:1px solid #e6e6e6;' : ''}font-family:${FONT};font-size:14px;font-weight:bold;color:#111111;vertical-align:top;">${val}</td>
+    </tr>`).join('')}
   </table>`;
 
-const p = (text: string, mb = '20px') =>
-  `<p style="margin:0 0 ${mb};font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#4b5563;line-height:1.7;">${text}</p>`;
+const p = (text: string, mb = '18px') =>
+  `<p style="margin:0 0 ${mb};font-family:${FONT};font-size:15px;color:#2b2b2b;line-height:1.6;">${text}</p>`;
 
 const greeting = () =>
-  `<p style="margin:0 0 18px;font-family:Arial,Helvetica,sans-serif;font-size:16px;color:#374151;line-height:1.5;">Bonjour <strong>{{firstName}}</strong>,</p>`;
+  `<p style="margin:0 0 16px;font-family:${FONT};font-size:15px;color:#2b2b2b;line-height:1.5;">Bonjour <strong>{{firstName}}</strong>,</p>`;
 
 // ─── Template 1 — Invitation officielle ──────────────────────────────────────
 
@@ -129,7 +126,7 @@ const t1 = `
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0">
   <tr><td class="pad" style="padding:32px;">
     ${greeting()}
-    ${p('Nous avons le plaisir de vous convier à <strong style="color:#4f46e5;">{{eventName}}</strong>, un événement que nous avons hâte de partager avec vous.')}
+    ${p('Nous avons le plaisir de vous convier à <strong style="color:#111111;">{{eventName}}</strong>, un événement que nous avons hâte de partager avec vous.')}
     ${infoBox([
       ['Date', '{{eventDate}} &mdash; {{eventTime}}'],
       ['Lieu', '{{eventVenue}}, {{eventCity}}'],
@@ -138,7 +135,7 @@ const t1 = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
       <tr><td align="center" style="padding-bottom:24px;">${ctaButton('Accéder à mon billet')}</td></tr>
     </table>
-    <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#9ca3af;line-height:1.6;">
+    <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#6b6b6b;line-height:1.6;">
       Si vous ne pouvez pas vous déplacer, aucune action n'est requise de votre part.
     </p>
   </td></tr>
@@ -149,23 +146,23 @@ const t1 = `
 const t2 = `
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0">
   <tr>
-    <td style="background:#fffbeb;border-bottom:3px solid #f59e0b;padding:10px 32px;text-align:center;">
-      <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:700;color:#92400e;letter-spacing:0.1em;text-transform:uppercase;">
+    <td style="background:#FFF6B3;border-bottom:3px solid #FFDD00;padding:10px 32px;text-align:center;">
+      <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:700;color:#111111;letter-spacing:0.1em;text-transform:uppercase;">
         Invitation personnelle et confidentielle
       </p>
     </td>
   </tr>
   <tr><td class="pad" style="padding:32px;">
-    <p style="margin:0 0 18px;font-family:Arial,Helvetica,sans-serif;font-size:16px;color:#374151;">
+    <p style="margin:0 0 18px;font-family:Arial,Helvetica,sans-serif;font-size:16px;color:#2b2b2b;">
       Cher(e) <strong>{{firstName}} {{lastName}}</strong>,
     </p>
-    ${p('C\'est avec un plaisir tout particulier que nous vous réservons un accès privilégié à <strong style="color:#4f46e5;">{{eventName}}</strong>. Votre présence nous honore.')}
+    ${p('C\'est avec un plaisir tout particulier que nous vous réservons un accès privilégié à <strong style="color:#111111;">{{eventName}}</strong>. Votre présence nous honore.')}
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
-           style="background:#fffbeb;border-radius:10px;border-left:4px solid #f59e0b;">
+           style="background:#FFF6B3;border-radius:10px;border-left:4px solid #FFDD00;">
       <tr><td style="padding:18px 22px;">
-        <p style="margin:0 0 8px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:0.07em;">Vos informations</p>
+        <p style="margin:0 0 8px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:700;color:#111111;text-transform:uppercase;letter-spacing:0.07em;">Vos informations</p>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-          <tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#78350f;line-height:1.9;">
+          <tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111111;line-height:1.9;">
             Date&nbsp;: <strong>{{eventDate}} &agrave; {{eventTime}}</strong><br/>
             Lieu&nbsp;: <strong>{{eventVenue}}, {{eventCity}}</strong><br/>
             Billet&nbsp;: <strong style="font-family:'Courier New',Courier,monospace;">{{ticketSerial}}</strong>
@@ -186,15 +183,15 @@ const t3 = `
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0">
   <tr><td class="pad" style="padding:32px;">
     ${greeting()}
-    ${p('Votre inscription à <strong style="color:#4f46e5;">{{eventName}}</strong> est confirmée. Conservez les informations ci-dessous pour le jour de l\'événement.')}
+    ${p('Votre inscription à <strong style="color:#111111;">{{eventName}}</strong> est confirmée. Conservez les informations ci-dessous pour le jour de l\'événement.')}
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
-           style="background:#f0fdf4;border-radius:10px;border:1px solid #bbf7d0;">
+           style="background:#f4f4f4;border-radius:12px;">
       <tr><td style="padding:20px 22px;">
-        <p style="margin:0 0 10px;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:700;color:#15803d;">
+        <p style="margin:0 0 10px;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:700;color:#111111;">
           Inscription confirmée
         </p>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-          <tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#166534;line-height:1.9;">
+          <tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111111;line-height:1.9;">
             Événement&nbsp;: <strong>{{eventName}}</strong><br/>
             Date&nbsp;: {{eventDate}} &agrave; {{eventTime}}<br/>
             Lieu&nbsp;: {{eventVenue}}, {{eventCity}}<br/>
@@ -217,13 +214,13 @@ const t4 = `
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0">
   <tr><td class="pad" style="padding:32px;">
     ${greeting()}
-    ${p('Dans exactement <strong>7 jours</strong>, vous êtes attendu(e) à <strong style="color:#4f46e5;">{{eventName}}</strong>. Voici les informations essentielles pour préparer votre venue.')}
+    ${p('Dans exactement <strong>7 jours</strong>, vous êtes attendu(e) à <strong style="color:#111111;">{{eventName}}</strong>. Voici les informations essentielles pour préparer votre venue.')}
     ${infoBox([
       ['Date et heure', '{{eventDate}} &mdash; {{eventTime}}'],
       ['Adresse', '{{eventVenue}}, {{eventCity}}'],
       ['Votre billet', '{{ticketSerial}}'],
     ])}
-    <p style="margin:22px 0 12px;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:700;color:#1f2937;">
+    <p style="margin:22px 0 12px;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:700;color:#111111;">
       Avant l'événement
     </p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
@@ -234,8 +231,8 @@ const t4 = `
         'Vérifiez les conditions météo et habillez-vous en conséquence.',
       ].map(item => `
         <tr>
-          <td width="20" style="padding:4px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#4f46e5;font-weight:700;vertical-align:top;">&#8250;</td>
-          <td style="padding:4px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#4b5563;line-height:1.5;vertical-align:top;">${item}</td>
+          <td width="20" style="padding:4px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111111;font-weight:700;vertical-align:top;">&#8250;</td>
+          <td style="padding:4px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#2b2b2b;line-height:1.5;vertical-align:top;">${item}</td>
         </tr>`).join('')}
     </table>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:28px;">
@@ -249,20 +246,20 @@ const t4 = `
 const t5 = `
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0">
   <tr>
-    <td style="background:#fff7ed;border-bottom:2px solid #fed7aa;padding:12px 32px;text-align:center;">
-      <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;color:#c2410c;letter-spacing:0.06em;text-transform:uppercase;">
+    <td style="background:#FFF6B3;border-bottom:2px solid #FFDD00;padding:12px 32px;text-align:center;">
+      <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;color:#111111;letter-spacing:0.06em;text-transform:uppercase;">
         Dernier rappel &mdash; C'est demain
       </p>
     </td>
   </tr>
   <tr><td class="pad" style="padding:32px;">
-    <p style="margin:0 0 16px;font-family:Arial,Helvetica,sans-serif;font-size:16px;color:#374151;">Bonsoir <strong>{{firstName}}</strong>,</p>
-    ${p('<strong style="color:#4f46e5;">{{eventName}}</strong> a lieu <strong>demain</strong>. Votre billet est prêt &mdash; assurez-vous d\'y avoir accès.')}
+    <p style="margin:0 0 16px;font-family:Arial,Helvetica,sans-serif;font-size:16px;color:#2b2b2b;">Bonsoir <strong>{{firstName}}</strong>,</p>
+    ${p('<strong style="color:#111111;">{{eventName}}</strong> a lieu <strong>demain</strong>. Votre billet est prêt &mdash; assurez-vous d\'y avoir accès.')}
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
-           style="background:#fff7ed;border-radius:10px;border:1px solid #fed7aa;">
+           style="background:#FFF6B3;border-radius:10px;border:1px solid #FFDD00;">
       <tr><td style="padding:18px 22px;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-          <tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#9a3412;line-height:1.9;">
+          <tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111111;line-height:1.9;">
             Rendez-vous&nbsp;: <strong>{{eventDate}} &agrave; {{eventTime}}</strong><br/>
             Lieu&nbsp;: <strong>{{eventVenue}}, {{eventCity}}</strong><br/>
             Billet&nbsp;: <strong style="font-family:'Courier New',Courier,monospace;">{{ticketSerial}}</strong>
@@ -283,28 +280,28 @@ const t6 = `
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0">
   <tr><td class="pad" style="padding:32px;">
     ${greeting()}
-    ${p('<strong style="color:#4f46e5;">{{eventName}}</strong> commence <strong>aujourd\'hui</strong>. Nous avons hâte de vous accueillir.')}
+    ${p('<strong style="color:#111111;">{{eventName}}</strong> commence <strong>aujourd\'hui</strong>. Nous avons hâte de vous accueillir.')}
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
-           style="background:linear-gradient(135deg,#eef2ff,#f5f3ff);border-radius:12px;">
+           style="background:#FFDD00;border-radius:12px;">
       <tr><td style="padding:24px;text-align:center;">
-        <p style="margin:0 0 4px;font-family:Arial,Helvetica,sans-serif;font-size:32px;font-weight:700;color:#4f46e5;letter-spacing:-0.02em;">{{eventTime}}</p>
-        <p style="margin:0 0 14px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#6366f1;font-weight:600;text-transform:uppercase;letter-spacing:0.07em;">Heure de début</p>
-        <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#4338ca;font-weight:500;">
+        <p style="margin:0 0 4px;font-family:Arial,Helvetica,sans-serif;font-size:32px;font-weight:700;color:#111111;letter-spacing:-0.02em;">{{eventTime}}</p>
+        <p style="margin:0 0 14px;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#111111;font-weight:600;text-transform:uppercase;letter-spacing:0.07em;">Heure de début</p>
+        <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111111;font-weight:500;">
           {{eventVenue}}, {{eventCity}}
         </p>
       </td></tr>
     </table>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
-           style="margin-top:16px;border-radius:8px;background:#f8fafc;border:1px solid #e2e8f0;">
-      <tr><td style="padding:12px 18px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#64748b;">
+           style="margin-top:16px;border-radius:8px;background:#f4f4f4;border:1px solid #e6e6e6;">
+      <tr><td style="padding:12px 18px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#6b6b6b;">
         Numéro de billet&nbsp;:
-        <strong style="font-family:'Courier New',Courier,monospace;color:#1e293b;letter-spacing:0.04em;">{{ticketSerial}}</strong>
+        <strong style="font-family:'Courier New',Courier,monospace;color:#111111;letter-spacing:0.04em;">{{ticketSerial}}</strong>
       </td></tr>
     </table>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:24px;">
       <tr><td align="center">${ctaButton('Voir mon billet')}</td></tr>
     </table>
-    <p style="margin:20px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#9ca3af;text-align:center;">
+    <p style="margin:20px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#6b6b6b;text-align:center;">
       Profitez pleinement de la journée.
     </p>
   </td></tr>
@@ -316,14 +313,14 @@ const t7 = `
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0">
   <tr><td class="pad" style="padding:32px;">
     ${greeting()}
-    ${p('Merci d\'avoir participé à <strong style="color:#4f46e5;">{{eventName}}</strong>. Votre présence a contribué à faire de cet événement un moment réussi.')}
+    ${p('Merci d\'avoir participé à <strong style="color:#111111;">{{eventName}}</strong>. Votre présence a contribué à faire de cet événement un moment réussi.')}
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
-           style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-radius:12px;border:1px solid #bbf7d0;">
+           style="background:#f4f4f4;border-radius:12px;">
       <tr><td style="padding:22px;text-align:center;">
-        <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:700;color:#15803d;">
+        <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:700;color:#111111;">
           Merci pour votre participation
         </p>
-        <p style="margin:8px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#166534;">
+        <p style="margin:8px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111111;">
           {{eventName}} &mdash; {{eventDate}}
         </p>
       </td></tr>
@@ -348,7 +345,7 @@ const t8 = `
   </tr>
   <tr><td class="pad" style="padding:32px;">
     ${greeting()}
-    ${p('Des informations ont été mises à jour concernant l\'événement <strong style="color:#4f46e5;">{{eventName}}</strong> auquel vous êtes inscrit(e). Veuillez prendre connaissance des détails actualisés.')}
+    ${p('Des informations ont été mises à jour concernant l\'événement <strong style="color:#111111;">{{eventName}}</strong> auquel vous êtes inscrit(e). Veuillez prendre connaissance des détails actualisés.')}
     ${infoBox([
       ['Date mise à jour', '{{eventDate}} &mdash; {{eventTime}}'],
       ['Lieu', '{{eventVenue}}, {{eventCity}}'],

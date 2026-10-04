@@ -1,3 +1,4 @@
+import { details, emailLayout, esc, note, p } from '../common/email/layout';
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
@@ -89,9 +90,6 @@ const ROLE_LABELS_FR: Record<string, string> = {
   MANAGER: 'Manager', STAFF: 'Staff', VOLUNTEER: 'Bénévole', SECURITY: 'Sécurité',
   PRESS: 'Presse', VIP: 'VIP', ARTIST: 'Artiste', SPONSOR: 'Sponsor',
 };
-
-const escapeHtml = (v: string) =>
-  v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 type MemberEmailContext = {
   name: string;
@@ -499,54 +497,32 @@ export class TeamService {
   }
 
   private memberEmailHtml(m: MemberEmailContext, kind: 'added' | 'badge'): string {
-    const firstName = escapeHtml(m.name.split(' ')[0] || m.name);
-    const organizer = escapeHtml(`${m.event.organizer.firstName} ${m.event.organizer.lastName}`.trim());
-    const eventName = escapeHtml(m.event.name);
-    const role = escapeHtml(ROLE_LABELS_FR[m.role] ?? m.role);
-    const department = m.department ? ` &middot; ${escapeHtml(m.department)}` : '';
+    const firstName = m.name.split(' ')[0] || m.name;
+    const organizer = `${m.event.organizer.firstName} ${m.event.organizer.lastName}`.trim();
     const date = new Intl.DateTimeFormat('fr-FR', {
       weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
     }).format(new Date(m.event.startDate));
 
-    const lead = kind === 'added'
-      ? `<strong>${organizer}</strong> vous a ajouté(e) à l&apos;équipe de l&apos;événement <strong>${eventName}</strong>.`
-      : `Voici votre badge pour <strong>${eventName}</strong>, en pièce jointe (PDF).`;
-    const outro = kind === 'added'
-      ? `Votre badge d&apos;accès vous sera transmis par l&apos;organisateur.`
-      : `Imprimez-le ou gardez-le sur votre téléphone : son QR code sera contrôlé à l&apos;entrée. Il est personnel, ne le partagez pas.`;
-
-    return `<!DOCTYPE html>
-<html lang="fr"><head><meta charset="UTF-8"/></head>
-<body style="margin:0;padding:0;background:#f1f1f5;font-family:Arial,sans-serif;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:28px 16px 40px;">
-<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;">
-  <tr><td style="background:#5C37FF;height:6px;font-size:0;line-height:0;">&nbsp;</td></tr>
-  <tr><td style="padding:32px 36px 28px;">
-    <p style="margin:0 0 12px;font-size:11px;font-weight:700;color:#5C37FF;text-transform:uppercase;letter-spacing:0.1em;">
-      ${kind === 'added' ? 'Équipe' : 'Badge d&apos;accès'}
-    </p>
-    <h1 style="margin:0 0 16px;font-size:20px;color:#111827;">Bonjour ${firstName},</h1>
-    <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.5;">${lead}</p>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #f3f4f6;border-radius:8px;">
-      <tr><td style="padding:14px 16px;">
-        <p style="margin:0 0 4px;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#9ca3af;">Votre rôle</p>
-        <p style="margin:0 0 12px;font-size:14px;font-weight:600;color:#111827;">${role}${department}</p>
-        <p style="margin:0 0 4px;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#9ca3af;">Événement</p>
-        <p style="margin:0;font-size:14px;font-weight:600;color:#111827;">${eventName}</p>
-        <p style="margin:4px 0 0;font-size:13px;color:#6b7280;">${escapeHtml(date)} &middot; ${escapeHtml(m.event.venue)}, ${escapeHtml(m.event.city)}</p>
-      </td></tr>
-    </table>
-    <p style="margin:16px 0 0;font-size:13px;color:#6b7280;line-height:1.5;">${outro}</p>
-    <p style="margin:20px 0 0;font-size:12px;color:#9ca3af;">
-      Une question ? Contactez l&apos;organisateur : ${escapeHtml(m.event.organizer.email)}
-    </p>
-  </td></tr>
-  <tr><td align="center" style="background:#5C37FF;padding:16px;">
-    <p style="margin:0;font-size:13px;font-weight:700;color:#ffffff;letter-spacing:0.08em;">ZAYA</p>
-  </td></tr>
-</table>
-</td></tr></table>
-</body></html>`;
+    return emailLayout({
+      preheader: kind === 'added' ? `Vous faites partie de l'équipe de ${m.event.name}.` : `Votre badge pour ${m.event.name} est joint.`,
+      eyebrow: kind === 'added' ? 'Équipe' : 'Badge d’accès',
+      title: `Bonjour ${firstName}`,
+      body:
+        p(kind === 'added'
+          ? `<strong>${esc(organizer)}</strong> vous a ajouté(e) à l’équipe de l’événement <strong>${esc(m.event.name)}</strong>.`
+          : `Voici votre badge pour <strong>${esc(m.event.name)}</strong>, en pièce jointe (PDF).`) +
+        details([
+          ['Votre rôle', `${esc(ROLE_LABELS_FR[m.role] ?? m.role)}${m.department ? ` · ${esc(m.department)}` : ''}`],
+          ['Événement', esc(m.event.name)],
+          ['Date', esc(date.charAt(0).toUpperCase() + date.slice(1))],
+          ['Lieu', `${esc(m.event.venue)}, ${esc(m.event.city)}`],
+        ]) +
+        p(kind === 'added'
+          ? 'Votre badge d’accès vous sera transmis par l’organisateur.'
+          : 'Imprimez-le ou gardez-le sur votre téléphone : son QR code sera contrôlé à l’entrée. Il est personnel, ne le partagez pas.') +
+        note(`Une question ? Contactez l’organisateur : ${esc(m.event.organizer.email)}`),
+      reason: 'Vous recevez cet e-mail parce qu’un organisateur vous a ajouté(e) à son équipe sur ZAYA.',
+    });
   }
 
   async scanAccreditation(eventId: string, qrContent: string) {

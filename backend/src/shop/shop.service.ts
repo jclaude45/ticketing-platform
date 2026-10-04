@@ -1,3 +1,4 @@
+import { codeBox, emailLayout, emailText, esc, orderLines, p } from '../common/email/layout';
 import { buyerUnitPrice, roundMoney, ticketFeeSplit } from '../billing/pricing';
 import {
   Injectable, NotFoundException, ForbiddenException, BadRequestException, Logger,
@@ -32,9 +33,6 @@ export const STATUS_LABELS: Record<string, string> = {
   PENDING_PAYMENT: 'En attente de paiement', PAID: 'Payée', READY: 'Prête', SHIPPED: 'Expédiée',
   DELIVERED: 'Livrée', PICKED_UP: 'Remise', CANCELLED: 'Annulée',
 };
-
-const escapeHtml = (v: string) =>
-  v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 const money = (n: number, currency: string) =>
   `${new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)} ${currency}`;
@@ -541,52 +539,50 @@ export class ShopService {
   private async sendOrderEmail(order: Prisma.MerchOrderGetPayload<{ include: { items: true; event: { select: { name: true; organizerId: true; merchPickupInfo: true } } } }>) {
     if (!this.mailer) return;
     const currency = order.currency;
-    const rows = order.items.map((i) => `
-      <tr>
-        <td style="padding:8px 0;border-bottom:1px solid #f3f4f6;font-size:14px;color:#111827;">
-          ${escapeHtml(i.productName)}
-          ${i.size || i.color ? `<br/><span style="font-size:12px;color:#6b7280;">${escapeHtml([i.size, i.color].filter(Boolean).join(' · '))}</span>` : ''}
-        </td>
-        <td style="padding:8px 0;border-bottom:1px solid #f3f4f6;font-size:14px;color:#374151;text-align:center;">× ${i.quantity}</td>
-        <td style="padding:8px 0;border-bottom:1px solid #f3f4f6;font-size:14px;color:#111827;text-align:right;">${money(Number(i.unitPrice) * i.quantity, currency)}</td>
-      </tr>`).join('');
-
     const isPickup = order.fulfillment === 'PICKUP';
     const qr = isPickup
       ? await QRCode.toBuffer(JSON.stringify({ mo: order.id, c: order.code }), { errorCorrectionLevel: 'M', margin: 1, width: 220 })
       : null;
+    const firstName = order.buyerName.split(' ')[0];
 
-    const fulfillmentBlock = isPickup
-      ? `<p style="margin:0 0 8px;font-size:14px;color:#111827;font-weight:600;">Retrait sur place</p>
-         <p style="margin:0 0 12px;font-size:13px;color:#374151;">${escapeHtml(order.event.merchPickupInfo || 'Au stand boutique de l’événement.')}<br/>
-         Présentez ce QR code (ou le code <strong>${order.code}</strong>) au stand.</p>
-         <img src="cid:pickup-qr" width="160" height="160" alt="QR de retrait" style="display:block;"/>`
-      : `<p style="margin:0 0 8px;font-size:14px;color:#111827;font-weight:600;">Livraison</p>
-         <p style="margin:0;font-size:13px;color:#374151;">${escapeHtml(order.deliveryAddress ?? '')}, ${escapeHtml(order.deliveryCity ?? '')}
-         ${order.deliveryNotes ? `<br/>${escapeHtml(order.deliveryNotes)}` : ''}<br/>Vous serez informé(e) de l'expédition par email.</p>`;
+    const fulfillment = isPickup
+      ? p(`<strong>Retrait sur place.</strong> ${esc((order.event.merchPickupInfo || 'Au stand boutique de l’événement').replace(/[.\s]*$/, ''))}. Présentez ce QR code ou le code de commande au stand.`) +
+        `<img src="cid:pickup-qr" width="150" height="150" alt="QR code de retrait" style="display:block;margin:0 0 20px;border:0;"/>`
+      : p(`<strong>Livraison</strong> à ${esc(order.deliveryAddress ?? '')}, ${esc(order.deliveryCity ?? '')}.${order.deliveryNotes ? ` ${esc(order.deliveryNotes)}.` : ''} Vous serez prévenu(e) par e-mail à l’expédition.`);
 
     await this.mailer.sendMail({
       from: this.config.get<string>('email.from'),
       to: order.buyerEmail,
       subject: `Votre commande ${order.code} — ${order.event.name}`,
       attachments: qr ? [{ filename: 'retrait.png', content: qr, cid: 'pickup-qr', contentType: 'image/png' }] : [],
-      html: `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"/></head>
-<body style="margin:0;padding:0;background:#f1f1f5;font-family:Arial,sans-serif;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:28px 16px 40px;">
-<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;">
-  <tr><td style="background:#5C37FF;height:6px;font-size:0;line-height:0;">&nbsp;</td></tr>
-  <tr><td style="padding:32px 36px;">
-    <p style="margin:0 0 12px;font-size:11px;font-weight:700;color:#5C37FF;text-transform:uppercase;letter-spacing:0.1em;">Commande confirmée · ${order.code}</p>
-    <h1 style="margin:0 0 16px;font-size:20px;color:#111827;">Merci ${escapeHtml(order.buyerName.split(' ')[0])} !</h1>
-    <p style="margin:0 0 20px;font-size:14px;color:#374151;">Votre commande boutique pour <strong>${escapeHtml(order.event.name)}</strong> est payée.</p>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows}
-      ${Number(order.deliveryFee) > 0 ? `<tr><td colspan="2" style="padding:8px 0;font-size:13px;color:#6b7280;">Livraison</td><td style="padding:8px 0;font-size:13px;color:#374151;text-align:right;">${money(Number(order.deliveryFee), currency)}</td></tr>` : ''}
-      <tr><td colspan="2" style="padding:10px 0 0;font-size:14px;font-weight:700;color:#111827;">Total</td><td style="padding:10px 0 0;font-size:14px;font-weight:700;color:#111827;text-align:right;">${money(Number(order.total), currency)}</td></tr>
-    </table>
-    <div style="margin-top:24px;padding:16px;border:1px solid #f3f4f6;border-radius:8px;">${fulfillmentBlock}</div>
-  </td></tr>
-  <tr><td align="center" style="background:#5C37FF;padding:16px;"><p style="margin:0;font-size:13px;font-weight:700;color:#ffffff;letter-spacing:0.08em;">ZAYA</p></td></tr>
-</table></td></tr></table></body></html>`,
+      html: emailLayout({
+        preheader: `Commande ${order.code} payée · ${order.event.name}`,
+        eyebrow: 'Commande confirmée',
+        title: `Merci ${firstName} !`,
+        body:
+          p(`Votre commande boutique pour <strong>${esc(order.event.name)}</strong> est payée.`) +
+          codeBox(order.code, 'Code de commande') +
+          orderLines(
+            order.items.map((i) => ({
+              label: i.productName,
+              sub: [i.size, i.color].filter(Boolean).join(' · ') || undefined,
+              qty: i.quantity,
+              amount: money(Number(i.unitPrice) * i.quantity, currency),
+            })),
+            [
+              ...(Number(order.deliveryFee) > 0 ? [['Livraison', money(Number(order.deliveryFee), currency)] as [string, string]] : []),
+              ['Total', money(Number(order.total), currency)],
+            ],
+          ) +
+          fulfillment,
+        reason: 'Vous recevez cet e-mail suite à votre commande sur zaya.live.',
+      }),
+      text: emailText(`Commande ${order.code} confirmée`, [
+        `Merci ${firstName}, votre commande pour ${order.event.name} est payée.`,
+        ...order.items.map((i) => `- ${i.productName}${i.size || i.color ? ` (${[i.size, i.color].filter(Boolean).join(', ')})` : ''} × ${i.quantity}`),
+        `Total : ${money(Number(order.total), currency)}`,
+        isPickup ? `Retrait sur place avec le code ${order.code}.` : `Livraison : ${order.deliveryAddress ?? ''}, ${order.deliveryCity ?? ''}.`,
+      ]),
     });
   }
 
@@ -594,17 +590,24 @@ export class ShopService {
     if (!this.mailer) return;
     const event = await this.prisma.event.findUnique({ where: { id: order.eventId }, select: { name: true, merchPickupInfo: true } });
     const ready = order.status === 'READY';
+    const firstName = order.buyerName.split(' ')[0];
+    const message = ready
+      ? `Votre commande pour <strong>${esc(event?.name ?? '')}</strong> est prête : présentez le code ci-dessous au stand boutique. ${esc(event?.merchPickupInfo ?? '')}`
+      : `Votre commande pour <strong>${esc(event?.name ?? '')}</strong> a été expédiée : elle est en route vers vous.`;
     await this.mailer.sendMail({
       from: this.config.get<string>('email.from'),
       to: order.buyerEmail,
       subject: ready ? `Votre commande ${order.code} est prête` : `Votre commande ${order.code} a été expédiée`,
-      html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#111827">
-        <h2 style="color:#5C37FF;margin:0 0 12px">${ready ? 'Commande prête' : 'Commande expédiée'}</h2>
-        <p>Bonjour ${escapeHtml(order.buyerName.split(' ')[0])},</p>
-        <p>${ready
-          ? `Votre commande <strong>${order.code}</strong> (${escapeHtml(event?.name ?? '')}) est prête à être retirée. ${escapeHtml(event?.merchPickupInfo ?? '')}`
-          : `Votre commande <strong>${order.code}</strong> (${escapeHtml(event?.name ?? '')}) est en route.`}</p>
-      </div>`,
+      html: emailLayout({
+        preheader: ready ? 'Votre commande vous attend au stand.' : 'Votre commande est en route.',
+        eyebrow: ready ? 'Commande prête' : 'Commande expédiée',
+        title: `Bonjour ${firstName}`,
+        body: p(message) + codeBox(order.code, 'Code de commande'),
+        reason: 'Vous recevez cet e-mail pour suivre votre commande passée sur zaya.live.',
+      }),
+      text: emailText(ready ? 'Commande prête' : 'Commande expédiée', [
+        ready ? `Votre commande ${order.code} est prête à être retirée.` : `Votre commande ${order.code} a été expédiée.`,
+      ]),
     });
   }
 }

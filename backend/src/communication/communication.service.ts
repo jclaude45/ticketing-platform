@@ -447,7 +447,9 @@ export class CommunicationService {
         bannerUrl: resolvedBanner,
       };
 
-      const body = this.renderTemplate(campaign.body, vars);
+      // No poster: drop its row rather than show a broken image
+      const source = vars.bannerUrl ? campaign.body : campaign.body.replace(/<tr>\s*<td[^>]*>\s*<img src="\{\{bannerUrl\}\}"[\s\S]*?<\/td>\s*<\/tr>/g, '');
+      const body = this.renderTemplate(source, vars);
       const subject = campaign.subject ? this.renderTemplate(campaign.subject, vars) : undefined;
 
       try {

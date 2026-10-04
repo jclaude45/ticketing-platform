@@ -1,3 +1,4 @@
+import { button, emailLayout, emailText, note, p } from '../common/email/layout';
 import { SubscriptionService } from '../subscription/subscription.service';
 import {
   Injectable,
@@ -327,21 +328,28 @@ export class ControllersService {
 
   private async sendAlreadyActiveEmail(email: string, name: string) {
     const firstName = name.split(' ')[0];
+    const loginUrl = `${this.configService.get<string>('FRONTEND_URL') || 'https://app.zaya.live'}/auth/controller-login`;
     try {
       await this.mailer.sendMail({
         from: this.configService.get<string>('email.from'),
         to: email,
         subject: 'Accès contrôleur activé — ZAYA',
-        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px">
-          <h2 style="color:#4f46e5">Bonjour ${firstName} !</h2>
-          <p>Vous avez été ajouté(e) comme <strong>contrôleur de billets</strong> sur la plateforme ZAYA.</p>
-          <p>Votre accès est déjà actif. Connectez-vous à l'espace contrôleur avec votre adresse email et votre mot de passe ZAYA habituel :</p>
-          <a href="${(this.configService.get<string>('FRONTEND_URL') || 'https://app.zaya.live')}/auth/controller-login" style="display:inline-block;margin:16px 0;padding:12px 28px;background:#4f46e5;color:white;text-decoration:none;border-radius:8px;font-weight:bold">
-            Accéder à l'espace contrôleur
-          </a>
-          <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
-          <p style="color:#9ca3af;font-size:12px">Si vous n'attendiez pas ce message, contactez votre organisateur.</p>
-        </div>`,
+        html: emailLayout({
+          preheader: 'Vous pouvez contrôler les entrées avec votre compte ZAYA.',
+          eyebrow: 'Contrôle d’accès',
+          title: `Bonjour ${firstName}`,
+          body:
+            p('Vous avez été ajouté(e) comme <strong>contrôleur de billets</strong> sur ZAYA.') +
+            p('Votre accès est déjà actif : connectez-vous avec votre adresse e-mail et votre mot de passe ZAYA habituel, sur le site ou dans l’application ZCONTRÔLE.') +
+            button('Accéder à l’espace contrôleur', loginUrl) +
+            note('Si vous n’attendiez pas ce message, contactez l’organisateur qui vous a ajouté(e).'),
+          reason: 'Vous recevez cet e-mail parce qu’un organisateur vous a ajouté(e) comme contrôleur sur ZAYA.',
+        }),
+        text: emailText('Accès contrôleur activé', [
+          `Bonjour ${firstName},`,
+          'Vous avez été ajouté(e) comme contrôleur de billets sur ZAYA. Connectez-vous avec votre compte habituel :',
+          loginUrl,
+        ]),
       });
     } catch (err) {
       this.logger.warn('sendAlreadyActiveEmail failed', (err as Error)?.message);
@@ -357,17 +365,23 @@ export class ControllersService {
         from: this.configService.get<string>('email.from'),
         to: email,
         subject: 'Invitation contrôleur — ZAYA',
-        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px">
-          <h2 style="color:#4f46e5">Bonjour ${firstName} !</h2>
-          <p>Vous avez été invité(e) à rejoindre la plateforme <strong>ZAYA</strong> en tant que <strong>contrôleur de billets</strong>.</p>
-          <p>Cliquez sur le bouton ci-dessous pour créer votre mot de passe et activer votre compte :</p>
-          <a href="${joinUrl}" style="display:inline-block;margin:16px 0;padding:12px 28px;background:#4f46e5;color:white;text-decoration:none;border-radius:8px;font-weight:bold">
-            Activer mon compte
-          </a>
-          <p style="color:#6b7280;font-size:13px">Ce lien est à usage unique et expire dans 7 jours.</p>
-          <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
-          <p style="color:#9ca3af;font-size:12px">Si vous n'attendiez pas cette invitation, ignorez cet email.</p>
-        </div>`,
+        html: emailLayout({
+          preheader: 'Activez votre compte de contrôleur de billets.',
+          eyebrow: 'Invitation',
+          title: `Bonjour ${firstName}`,
+          body:
+            p('Vous êtes invité(e) à rejoindre ZAYA comme <strong>contrôleur de billets</strong> : vous scannerez les billets et les badges à l’entrée des événements.') +
+            p('Choisissez votre mot de passe pour activer votre compte :') +
+            button('Activer mon compte', joinUrl) +
+            note('Ce lien est à usage unique et expire dans 7 jours. Si vous n’attendiez pas cette invitation, ignorez cet e-mail.'),
+          reason: 'Vous recevez cet e-mail parce qu’un organisateur vous a invité(e) comme contrôleur sur ZAYA.',
+        }),
+        text: emailText('Invitation contrôleur', [
+          `Bonjour ${firstName},`,
+          'Vous êtes invité(e) à rejoindre ZAYA comme contrôleur de billets. Activez votre compte :',
+          joinUrl,
+          'Ce lien expire dans 7 jours.',
+        ]),
       });
     } catch (err) {
       this.logger.warn('sendInvitationEmail failed', (err as Error)?.message);

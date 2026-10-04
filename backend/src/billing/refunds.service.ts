@@ -1,3 +1,4 @@
+import { details, emailLayout, emailText, esc, note, p } from '../common/email/layout';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Role } from '@prisma/client';
@@ -180,15 +181,34 @@ export class RefundsService {
 
   private async notifyBuyer(to: string, name: string, eventName: string, amount: number, currency: string, reference: string) {
     if (!this.mailer || !to) return;
-    const html = `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#111;max-width:560px">
-      <p>Bonjour ${name},</p>
-      <p>Votre commande pour <strong>${eventName}</strong> (référence ${reference}) est remboursée : <strong>${money(amount, currency)}</strong>.
-      Vos billets de cette commande sont annulés.</p>
-      <p>Le virement est fait par le moyen de paiement utilisé lors de l’achat, ou à défaut par Mobile Money, sous 14 jours ouvrés.
-      Pour toute question, répondez à cet e-mail ou écrivez à contact@zaya.live.</p>
-      <p style="color:#777;font-size:12px">ZAYA — BACK2NEXT, Kinshasa</p></div>`;
+    const html = emailLayout({
+      preheader: `${money(amount, currency)} remboursés pour ${eventName}.`,
+      eyebrow: 'Remboursement',
+      title: 'Votre commande est remboursée',
+      body:
+        p(`Bonjour <strong>${esc(name)}</strong>,`) +
+        p(`Votre commande pour <strong>${esc(eventName)}</strong> est remboursée. Les billets de cette commande sont annulés.`) +
+        details([
+          ['Montant remboursé', esc(money(amount, currency))],
+          ['Référence', esc(reference)],
+          ['Délai', '14 jours ouvrés au plus'],
+        ]) +
+        p('Le virement est fait par le moyen de paiement utilisé lors de l’achat, ou à défaut par Mobile Money.') +
+        note('Une question ? Répondez à cet e-mail ou écrivez à contact@zaya.live.'),
+      reason: 'Vous recevez cet e-mail suite à votre commande sur zaya.live.',
+    });
     try {
-      await this.mailer.sendMail({ from: this.config.get<string>('email.from'), to, subject: `Remboursement de votre commande — ${eventName}`, html });
+      await this.mailer.sendMail({
+        from: this.config.get<string>('email.from'),
+        to,
+        subject: `Remboursement de votre commande — ${eventName}`,
+        html,
+        text: emailText('Votre commande est remboursée', [
+          `Bonjour ${name},`,
+          `Votre commande pour ${eventName} (référence ${reference}) est remboursée : ${money(amount, currency)}.`,
+          'Le virement est fait sous 14 jours ouvrés, par le moyen de paiement utilisé ou par Mobile Money.',
+        ]),
+      });
     } catch (err) {
       this.logger.warn(`Refund e-mail to ${to} failed: ${(err as Error).message}`);
     }

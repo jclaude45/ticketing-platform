@@ -1,3 +1,4 @@
+import { button, details, emailLayout, emailText, esc, note, p, quote } from '../common/email/layout';
 import { buyerUnitPrice } from '../billing/pricing';
 import {
   Injectable, NotFoundException, BadRequestException, Logger,
@@ -294,11 +295,9 @@ export class PublicService {
       throw new BadRequestException("L'envoi est momentanément indisponible. Écrivez-nous par email.");
     }
 
-    const esc = (v: string) =>
-      v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const rows: [string, string | undefined][] = [
       ['Nom', `${dto.firstName} ${dto.lastName}`],
-      ['Email', dto.email],
+      ['E-mail', dto.email],
       ['Entreprise', dto.company],
       ['Pays', dto.country],
       ['Profil', dto.profile],
@@ -310,14 +309,17 @@ export class PublicService {
       to: recipients,
       replyTo: dto.email,
       subject: `Contact zaya.live — ${dto.firstName} ${dto.lastName}${dto.profile ? ` (${dto.profile})` : ''}`,
-      html: `<div style="font-family:Arial,sans-serif;font-size:14px;color:#111">
-  <h2 style="margin:0 0 16px">Nouveau message depuis le formulaire « Parle-nous »</h2>
-  <table cellpadding="6" style="border-collapse:collapse">
-    ${rows.filter(([, v]) => v).map(([k, v]) => `<tr><td style="color:#666">${k}</td><td><strong>${esc(v!)}</strong></td></tr>`).join('')}
-  </table>
-  <p style="margin:16px 0 4px;color:#666">Message :</p>
-  <p style="white-space:pre-wrap;margin:0">${esc(dto.message)}</p>
-</div>`,
+      html: emailLayout({
+        preheader: `Message de ${dto.firstName} ${dto.lastName}`,
+        eyebrow: 'Formulaire « Parle-nous »',
+        title: 'Nouveau message',
+        body:
+          details(rows.filter(([, v]) => v).map(([k, v]) => [k, esc(v)] as [string, string])) +
+          quote(dto.message) +
+          note('Répondez directement à cet e-mail pour écrire à la personne.'),
+        reason: 'Message envoyé depuis le formulaire de contact de zaya.live.',
+      }),
+      text: emailText('Nouveau message', [...rows.filter(([, v]) => v).map(([k, v]) => `${k} : ${v}`), '', dto.message]),
     });
     return { sent: true };
   }
@@ -446,155 +448,51 @@ export class PublicService {
     const uniqueCategories = [...new Set(tickets.map(t => t.templateName))];
     const categoryLine     = uniqueCategories.length === 1 ? uniqueCategories[0] : `${tickets.length} billets`;
     const organizerName    = organizer ? `${organizer.firstName} ${organizer.lastName}` : '';
-    const escapeHtml = (v: string) =>
-      v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-    const invitationIntro = invitation
-      ? `<p style="margin:0 0 18px;font-size:15px;color:#374151;font-family:Arial,sans-serif;line-height:1.5;">
-           ${organizerName ? `<strong>${escapeHtml(organizerName)}</strong> vous invite` : 'Vous &ecirc;tes invit&eacute;(e)'} &agrave; cet &eacute;v&eacute;nement.
-         </p>
-         ${invitation.message?.trim()
-           ? `<p style="margin:0 0 18px;padding:12px 16px;border-left:3px solid #4f46e5;background:#f5f3ff;font-size:14px;color:#374151;font-family:Arial,sans-serif;line-height:1.5;white-space:pre-line;">${escapeHtml(invitation.message.trim())}</p>`
-           : ''}`
-      : '';
     const organizerEmail   = organizer?.email ?? '';
-
-    const ctaBtn = reference
-      ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:24px;">
-           <tr><td style="background:#4f46e5;border-radius:8px;">
-             <a href="${frontendUrl}/billetterie/payment/success?reference=${reference}"
-                style="display:inline-block;padding:13px 28px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;font-family:Arial,sans-serif;">
-               T&eacute;l&eacute;charger mes billets &rarr;
-             </a>
-           </td></tr>
-         </table>`
-      : '';
+    const ticketsUrl = reference ? `${frontendUrl}/billetterie/payment/success?reference=${reference}` : null;
+    const where = [event.venue, event.city, event.address].filter(Boolean).map(v => esc(v)).join(' · ');
+    const linkStyle = 'color:#111111;font-weight:bold;';
+    const body =
+      (invitation
+        ? p(`${organizerName ? `<strong>${esc(organizerName)}</strong> vous invite` : 'Vous êtes invité(e)'} à cet événement.`) +
+          (invitation.message?.trim() ? quote(invitation.message.trim()) : '')
+        : p(`Bonjour <strong>${esc(holder.holderName)}</strong>, votre commande est confirmée. Voici ${tickets.length > 1 ? 'vos billets' : 'votre billet'}.`)) +
+      details([
+        ['Date', `${esc(dateStr.charAt(0).toUpperCase() + dateStr.slice(1))} à ${esc(timeStr)}`],
+        ['Lieu', where],
+        [tickets.length > 1 ? 'Billets' : 'Billet', esc(invitation ? `Invitation · ${categoryLine}` : categoryLine)],
+        ...(!invitation && total > 0 ? [['Total payé', esc(`${total.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} ${currency}`)] as [string, string]] : []),
+        [invitation ? 'Invité(e)' : 'Titulaire', esc(holder.holderName)],
+      ]) +
+      p(`${tickets.length === 1 ? 'Votre billet est joint' : 'Vos billets sont joints'} à cet e-mail en PDF. Présentez le QR code à l’entrée, sur votre téléphone ou imprimé.`) +
+      (ticketsUrl ? button(tickets.length > 1 ? 'Voir mes billets' : 'Voir mon billet', ticketsUrl) : '') +
+      p(`Ajouter à mon agenda : <a href="${esc(googleCalUrl)}" style="${linkStyle}">Google</a> · <a href="${esc(outlookCalUrl)}" style="${linkStyle}">Outlook</a> · Apple (fichier .ics joint)`, { small: true }) +
+      (organizerName
+        ? note(`Organisé par ${esc(organizerName)}${organizerEmail ? ` — ${esc(organizerEmail)}` : ''}. Pour toute question sur l’événement, contactez l’organisateur.`)
+        : '');
 
     await this.mailer.sendMail({
       from,
       to: holder.holderEmail,
       subject: invitation ? `Invitation — ${event.name}` : `${event.name} — votre billet`,
       attachments,
-      html: `<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-</head>
-<body style="margin:0;padding:0;background:#f1f1f5;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-<tr><td align="center" style="padding:28px 16px 40px;">
-
-<table role="presentation" width="560" cellpadding="0" cellspacing="0"
-       style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;">
-
-  ${bannerSrc
-    ? `<tr><td style="line-height:0;font-size:0;">
-         <img src="${bannerSrc}" width="560" alt="${event.name}"
-              style="display:block;width:100%;height:auto;"/>
-       </td></tr>`
-    : `<tr><td style="background:#4f46e5;height:6px;font-size:0;line-height:0;">&nbsp;</td></tr>`
-  }
-
-  <!-- Main content -->
-  <tr><td style="padding:36px 40px 28px;">
-    <p style="margin:0 0 12px;font-size:11px;font-weight:700;color:#4f46e5;font-family:Arial,sans-serif;text-transform:uppercase;letter-spacing:0.1em;">${invitation ? 'Invitation' : 'Billet confirm&eacute;'}</p>
-    <h1 style="margin:0 0 18px;font-size:22px;font-weight:700;color:#111827;font-family:Arial,sans-serif;line-height:1.3;">${event.name}</h1>
-    ${invitationIntro}
-
-    <!-- Date + Lieu -->
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-      <tr>
-        <td width="50%" style="padding-right:6px;vertical-align:top;">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
-                 style="border:1px solid #f3f4f6;border-radius:8px;">
-            <tr><td style="padding:14px 16px;">
-              <p style="margin:0 0 5px;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#9ca3af;font-family:Arial,sans-serif;">Date &amp; heure</p>
-              <p style="margin:0;font-size:14px;font-weight:600;color:#111827;font-family:Arial,sans-serif;">${dateStr}</p>
-              <p style="margin:4px 0 0;font-size:13px;color:#6b7280;font-family:Arial,sans-serif;">${timeStr}</p>
-            </td></tr>
-          </table>
-        </td>
-        <td width="50%" style="vertical-align:top;">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
-                 style="border:1px solid #f3f4f6;border-radius:8px;">
-            <tr><td style="padding:14px 16px;">
-              <p style="margin:0 0 5px;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#9ca3af;font-family:Arial,sans-serif;">Lieu</p>
-              <p style="margin:0;font-size:14px;font-weight:600;color:#111827;font-family:Arial,sans-serif;">${event.venue}</p>
-              <p style="margin:4px 0 0;font-size:13px;color:#6b7280;font-family:Arial,sans-serif;">${event.city}${event.address ? ` &middot; ${event.address}` : ''}</p>
-            </td></tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-
-    <p style="margin:16px 0 0;font-size:13px;color:#9ca3af;font-family:Arial,sans-serif;">${invitation ? `Invitation &middot; ${categoryLine}` : categoryLine}</p>
-
-    ${ctaBtn}
-  </td></tr>
-
-  <!-- Ticket reminder -->
-  <tr><td style="padding:0 40px 28px;">
-    <p style="margin:0;font-size:13px;color:#374151;font-family:Arial,sans-serif;line-height:1.5;">
-      ${tickets.length === 1 ? 'Votre billet est joint' : 'Vos billets sont joints'} &agrave; cet email au format PDF.
-      Pr&eacute;sentez le QR code &agrave; l&apos;entr&eacute;e, sur votre t&eacute;l&eacute;phone ou imprim&eacute;.
-    </p>
-  </td></tr>
-
-  <!-- Calendar links -->
-  <tr><td style="padding:0 40px 28px;">
-    <p style="margin:0 0 10px;font-size:12px;color:#9ca3af;font-family:Arial,sans-serif;">Ajouter &agrave; mon agenda</p>
-    <table role="presentation" cellpadding="0" cellspacing="0">
-      <tr>
-        <td style="padding-right:6px;">
-          <a href="${googleCalUrl}" style="display:inline-block;padding:8px 14px;border:1px solid #e5e7eb;border-radius:6px;color:#374151;text-decoration:none;font-size:12px;font-family:Arial,sans-serif;">Google</a>
-        </td>
-        <td style="padding-right:6px;">
-          <a href="${outlookCalUrl}" style="display:inline-block;padding:8px 14px;border:1px solid #e5e7eb;border-radius:6px;color:#374151;text-decoration:none;font-size:12px;font-family:Arial,sans-serif;">Outlook</a>
-        </td>
-        <td>
-          <span style="display:inline-block;padding:8px 14px;border:1px solid #f3f4f6;border-radius:6px;color:#d1d5db;font-size:12px;font-family:Arial,sans-serif;">Apple (.ics joint)</span>
-        </td>
-      </tr>
-    </table>
-  </td></tr>
-
-  <!-- Thin divider -->
-  <tr><td style="padding:0 40px;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-      <tr><td style="border-top:1px solid #f3f4f6;font-size:0;line-height:0;">&nbsp;</td></tr>
-    </table>
-  </td></tr>
-
-  <!-- Organisateur + Acheteur -->
-  <tr><td style="padding:20px 40px;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-      <tr>
-        ${organizerName ? `<td style="width:50%;vertical-align:top;padding-right:16px;">
-          <p style="margin:0 0 3px;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:#d1d5db;font-family:Arial,sans-serif;">Organisateur</p>
-          <p style="margin:0;font-size:12px;color:#9ca3af;font-family:Arial,sans-serif;">${organizerName}</p>
-          ${organizerEmail ? `<p style="margin:2px 0 0;font-size:12px;color:#9ca3af;font-family:Arial,sans-serif;">${organizerEmail}</p>` : ''}
-        </td>` : ''}
-        <td style="vertical-align:top;">
-          <p style="margin:0 0 3px;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:#d1d5db;font-family:Arial,sans-serif;">${invitation ? 'Invit&eacute;(e)' : 'Acheteur'}</p>
-          <p style="margin:0;font-size:12px;color:#9ca3af;font-family:Arial,sans-serif;">${holder.holderName}</p>
-          <p style="margin:2px 0 0;font-size:12px;color:#9ca3af;font-family:Arial,sans-serif;">${holder.holderEmail}</p>
-        </td>
-      </tr>
-    </table>
-  </td></tr>
-
-  <!-- Footer -->
-  <tr><td align="center" style="background:#4f46e5;padding:18px 40px;">
-    <a href="https://zaya.live" style="text-decoration:none;">
-      <p style="margin:0;font-size:13px;font-weight:700;color:#ffffff;font-family:Arial,sans-serif;letter-spacing:0.08em;">ZAYA</p>
-    </a>
-  </td></tr>
-
-</table>
-</td></tr>
-</table>
-</body>
-</html>`,
+      html: emailLayout({
+        preheader: `${dateStr} · ${event.venue}, ${event.city}`,
+        eyebrow: invitation ? 'Invitation' : 'Billet confirmé',
+        title: event.name,
+        banner: bannerSrc ? { src: bannerSrc, alt: event.name } : undefined,
+        body,
+        reason: invitation
+          ? 'Vous recevez cet e-mail parce qu’un organisateur vous a invité(e) via ZAYA.'
+          : 'Vous recevez cet e-mail suite à votre commande sur zaya.live.',
+      }),
+      text: emailText(event.name, [
+        invitation ? `${organizerName || 'Un organisateur'} vous invite à cet événement.` : `Bonjour ${holder.holderName}, votre commande est confirmée.`,
+        `Date : ${dateStr} à ${timeStr}`,
+        `Lieu : ${[event.venue, event.city, event.address].filter(Boolean).join(', ')}`,
+        `${tickets.length > 1 ? 'Vos billets sont joints' : 'Votre billet est joint'} en PDF : présentez le QR code à l’entrée.`,
+        ...(ticketsUrl ? [ticketsUrl] : []),
+      ]),
     });
     return true;
   }
@@ -676,7 +574,7 @@ export class PublicService {
       // ── Logo (same mark as frontend/public/zaya-logo.svg, 1000×1000 viewBox) ──
       const LOGO = 40;
       const LOGO_Y = 50;
-      doc.fillColor('#5C37FF').roundedRect(M, LOGO_Y, LOGO, LOGO, 9).fill();
+      doc.fillColor('#111111').roundedRect(M, LOGO_Y, LOGO, LOGO, 9).fill();
       doc.save();
       doc.translate(M, LOGO_Y).scale(LOGO / 1000);
       doc.path(ZAYA_LOGO_Z_PATH).fill('#FEFFFF');

@@ -1,3 +1,4 @@
+import { button, emailLayout, emailText, esc, p } from '../common/email/layout';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
@@ -114,12 +115,16 @@ export class PlanRemindersService {
   private async email(to: string, subject: string, paragraphs: string[]) {
     if (!this.mailer) return;
     const app = this.config.get<string>('frontend.url') || 'https://app.zaya.live';
-    const html = `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#111;max-width:560px">
-      ${paragraphs.map((p) => `<p>${p}</p>`).join('')}
-      <p><a href="${app}/dashboard/subscription#plans" style="display:inline-block;background:#000;color:#fff;padding:10px 20px;border-radius:999px;text-decoration:none">Mon abonnement</a></p>
-      <p style="color:#777;font-size:12px">ZAYA — BACK2NEXT, Kinshasa</p></div>`;
+    const url = `${app}/dashboard/subscription#plans`;
+    const html = emailLayout({
+      preheader: paragraphs[1] ?? subject,
+      eyebrow: 'Abonnement',
+      title: subject,
+      body: paragraphs.map((x) => p(esc(x))).join('') + button('Mon abonnement', url),
+      reason: 'Vous recevez cet e-mail parce que vous avez un plan payant sur ZAYA.',
+    });
     try {
-      await this.mailer.sendMail({ from: this.config.get<string>('email.from'), to, subject, html });
+      await this.mailer.sendMail({ from: this.config.get<string>('email.from'), to, subject, html, text: emailText(subject, [...paragraphs, url]) });
     } catch (err) {
       this.logger.warn(`Plan reminder e-mail to ${to} failed: ${(err as Error).message}`);
     }

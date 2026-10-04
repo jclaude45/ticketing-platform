@@ -1,3 +1,4 @@
+import { button, emailLayout, emailText, esc, note, p } from '../common/email/layout';
 import {
   Injectable, BadRequestException, ConflictException, NotFoundException, Logger,
 } from '@nestjs/common';
@@ -25,9 +26,6 @@ export const DEFAULT_ZONES: { name: string; color: string }[] = [
   { name: 'SECURITE', color: '#ef4444' },
   { name: 'ALL', color: '#1a1a2e' },
 ];
-
-const escapeHtml = (v: string) =>
-  v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 const normalizeZoneName = (name: string) => name.trim().toUpperCase().replace(/\s+/g, ' ');
 
@@ -146,24 +144,28 @@ export class AccountService {
     const appUrl = this.config.get<string>('FRONTEND_URL') || 'https://app.zaya.live';
     // ?workspace= makes the app open the owner's workspace right after sign-in
     const link = `${appUrl}/auth/${hasAccount ? 'login' : 'register'}?workspace=${ownerId}`;
-    const owner = escapeHtml(ownerName);
-    const level = escapeHtml(PERMISSION_LABELS_FR[permission]);
+    const level = PERMISSION_LABELS_FR[permission];
     this.mailer.sendMail({
       from: this.config.get<string>('email.from'),
       to: email,
       subject: `${ownerName} vous invite à collaborer sur ZAYA`,
-      html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#111827">
-        <h2 style="color:#5C37FF;margin:0 0 16px">Invitation à collaborer</h2>
-        <p><strong>${owner}</strong> vous a ajouté(e) comme collaborateur de son compte ZAYA,
-           avec le niveau d'accès <strong>${level}</strong>.</p>
-        <p>${hasAccount
-          ? 'Connectez-vous avec votre compte habituel : son espace s\u2019ouvrira directement. Vous pourrez ensuite passer d\u2019un espace à l\u2019autre depuis le menu de votre compte (en haut à droite).'
-          : 'Créez votre compte ZAYA avec cette adresse email : l’accès apparaîtra automatiquement dans le menu de votre compte.'}</p>
-        <a href="${link}" style="display:inline-block;margin:12px 0;padding:12px 24px;background:#5C37FF;color:#fff;text-decoration:none;border-radius:8px;font-weight:bold">
-          ${hasAccount ? 'Se connecter' : 'Créer mon compte'}
-        </a>
-        <p style="color:#9ca3af;font-size:12px;margin-top:24px">Si vous n'attendiez pas cette invitation, ignorez cet email.</p>
-      </div>`,
+      html: emailLayout({
+        preheader: `${ownerName} vous donne accès à son espace ZAYA.`,
+        eyebrow: 'Invitation à collaborer',
+        title: `${ownerName} vous invite`,
+        body:
+          p(`<strong>${esc(ownerName)}</strong> vous a ajouté(e) comme collaborateur de son compte ZAYA, avec l’accès <strong>${esc(level)}</strong>.`) +
+          p(hasAccount
+            ? 'Connectez-vous avec votre compte habituel : son espace s’ouvrira directement. Vous passerez ensuite d’un espace à l’autre depuis le menu de votre compte, en haut à droite.'
+            : 'Créez votre compte ZAYA avec cette adresse e-mail : l’accès apparaîtra automatiquement dans le menu de votre compte.') +
+          button(hasAccount ? 'Se connecter' : 'Créer mon compte', link) +
+          note('Si vous n’attendiez pas cette invitation, ignorez cet e-mail.'),
+        reason: 'Vous recevez cet e-mail parce qu’un organisateur vous a invité(e) sur ZAYA.',
+      }),
+      text: emailText(`${ownerName} vous invite`, [
+        `${ownerName} vous a ajouté(e) comme collaborateur de son compte ZAYA (${level}).`,
+        link,
+      ]),
     }).catch((err) => this.logger.warn(`Collaborator invitation email failed: ${err?.message}`));
   }
 
