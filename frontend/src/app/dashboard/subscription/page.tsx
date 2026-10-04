@@ -3,12 +3,12 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check } from 'lucide-react';
+import { Check, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { billingApi, subscriptionApi, type BillingPaymentRow, type SubscriptionHistoryEntry } from '@/lib/api';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { FlexPayDialog, usd } from '@/components/billing/FlexPayDialog';
-import { cn } from '@/lib/utils';
+import { cn, downloadFile } from '@/lib/utils';
 import type { SubscriptionPlan } from '@/types';
 
 /** Rows shown before "Voir plus" */
@@ -280,7 +280,21 @@ export default function SubscriptionPage() {
                 <span className="text-right font-semibold text-black sm:text-left dark:text-white">{p.label}</span>
                 <span className="text-gray-500">{p.paymentMethod === 'card' ? 'Carte' : 'Mobile Money'}</span>
                 <span className="text-right text-black dark:text-white">{usd(p.amount)}</span>
-                <span className={cn('col-span-2 text-right text-xs sm:col-span-1 sm:text-sm', STATUS[p.status]?.cls)}>{STATUS[p.status]?.label ?? p.status}</span>
+                <span className={cn('col-span-2 flex items-center justify-end gap-2 text-xs sm:col-span-1 sm:text-sm', STATUS[p.status]?.cls)}>
+                  {p.status === 'COMPLETED' ? (
+                    <button
+                      type="button"
+                      title={p.receiptNumber ? `Reçu ${p.receiptNumber}` : 'Reçu'}
+                      onClick={async () => {
+                        try { downloadFile(await billingApi.receipt(p.reference), `recu-zaya-${p.receiptNumber ?? p.reference}.pdf`); }
+                        catch { toast.error('Reçu indisponible'); }
+                      }}
+                      className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2.5 py-1 text-xs font-medium text-black hover:border-black dark:border-gray-700 dark:text-white"
+                    >
+                      <Download className="h-3 w-3" /> Reçu
+                    </button>
+                  ) : (STATUS[p.status]?.label ?? p.status)}
+                </span>
               </div>
             ))}
             {payRows.length > PREVIEW && (

@@ -56,6 +56,21 @@ export class AnalyticsService {
         .map((g) => ({ currency: g.currency, amount: Number(g._sum.price ?? 0) })),
     };
 
+    // Online orders through ZAYA: what the organizer gets after the 9 % (refunds deducted)
+    const [online, refundedOnline] = await Promise.all([
+      this.prisma.payment.aggregate({
+        where: { eventId, status: 'COMPLETED', currency: eventCurrency },
+        _sum: { amount: true, netAmount: true },
+        _count: true,
+      }),
+      this.prisma.payment.aggregate({ where: { eventId, status: 'REFUNDED', currency: eventCurrency }, _sum: { feeAmount: true } }),
+    ]);
+    (sales as any).online = {
+      orders: online._count,
+      gross: Number(online._sum.amount ?? 0),
+      net: Number(online._sum.netAmount ?? 0) - Number(refundedOnline._sum.feeAmount ?? 0),
+    };
+
     // Scans grouped by hour (last 24 h buckets)
     const hourMap: Record<string, number> = {};
     scanValidations.forEach((s) => {

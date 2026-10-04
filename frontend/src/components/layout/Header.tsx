@@ -35,6 +35,7 @@ function getPageTitle(pathname: string): string {
   if (last === 'boutique') return 'Boutique';
   if (last === 'communication') return 'Communication';
   if (last === 'invitations') return 'Invitations';
+  if (last === 'orders') return 'Ventes';
   if (last === 'admin') return 'Super admin';
   if (last === 'administration') return 'Administration';
   if (last === 'subscription') return 'Mon abonnement';

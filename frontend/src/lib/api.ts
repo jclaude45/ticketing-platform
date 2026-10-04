@@ -547,13 +547,49 @@ export interface BillingPaymentRow {
   paymentMethod: string;
   status: 'PENDING' | 'COMPLETED' | 'FAILED' | string;
   date: string;
+  receiptNumber: string | null;
+}
+
+/** An online order of an event, for its organizer */
+export interface EventOrder {
+  id: string;
+  reference: string;
+  date: string;
+  holderName: string;
+  holderEmail: string;
+  holderPhone: string | null;
+  paymentMethod: string;
+  amount: number;
+  fee: number;
+  net: number;
+  currency: string;
+  status: 'COMPLETED' | 'REFUNDED' | 'PROCESSING' | string;
+  tickets: number;
+  items: number;
+  merchCode: string | null;
+  refund: { status: 'REQUESTED' | 'PAID'; amount: number; requestedAt: string; paidAt: string | null; reference: string | null; reason: string | null } | null;
+}
+
+export interface AdminRefund {
+  id: string;
+  status: 'REQUESTED' | 'PAID';
+  amount: number;
+  currency: string;
+  reason: string | null;
+  requestedAt: string;
+  paidAt: string | null;
+  reference: string | null;
+  eventName: string;
+  order: { reference: string; orderNumber: string | null; providerRef: string | null; paymentMethod: string; date: string };
+  buyer: { name: string; email: string; phone: string | null };
 }
 
 export interface PayoutPartRow {
   part: 'MAIN' | 'RESERVE';
   amount: number;
   dueAt: string;
-  status: 'PAID' | 'DUE' | 'UPCOMING';
+  /** OWED: refunds exceed what is left, the organizer owes the difference */
+  status: 'PAID' | 'DUE' | 'UPCOMING' | 'OWED';
   paidAt: string | null;
   reference: string | null;
 }
@@ -565,6 +601,8 @@ export interface PayoutRow {
   eventStatus: string;
   currency: string;
   orders: number;
+  refundedOrders: number;
+  refunded: number;
   gross: number;
   fees: number;
   net: number;
@@ -593,11 +631,31 @@ export const billingApi = {
   payments: async () => data<BillingPaymentRow[]>(await apiClient.get('/billing/payments')),
   payment: async (reference: string) => data<BillingPaymentRow>(await apiClient.get(`/billing/payments/${reference}`)),
   payouts: async () => data<PayoutRow[]>(await apiClient.get('/billing/payouts')),
-  getPayoutInfo: async () => data<PayoutInfo | null>(await apiClient.get('/billing/payout-info')),
+  // An empty answer is a real null: never take the response envelope for the value
+  getPayoutInfo: async () => {
+    const body = (await apiClient.get('/billing/payout-info')).data as any;
+    const info = body && 'success' in body ? body.data : body;
+    return (info && typeof info === 'object' && 'method' in info ? info : null) as PayoutInfo | null;
+  },
   setPayoutInfo: async (info: PayoutInfo) => data<PayoutInfo>(await apiClient.put('/billing/payout-info', { info })),
   adminPayouts: async () => data<PayoutRow[]>(await apiClient.get('/admin/payouts')),
   markPaid: async (body: { eventId: string; part: 'MAIN' | 'RESERVE'; reference?: string; note?: string }) =>
     data<unknown>(await apiClient.post('/admin/payouts', body)),
+  /** PDF files: receipt of a payment to ZAYA, statement of an event's sales */
+  receipt: async (reference: string) =>
+    (await apiClient.get(`/billing/payments/${reference}/receipt`, { responseType: 'blob' })).data as Blob,
+  statement: async (eventId: string) =>
+    (await apiClient.get(`/billing/payouts/${eventId}/statement`, { responseType: 'blob' })).data as Blob,
+  orders: async (eventId: string) => data<EventOrder[]>(await apiClient.get(`/events/${eventId}/orders`)),
+  refund: async (eventId: string, paymentId: string, reason?: string) =>
+    data<{ refunded: boolean; ticketsCancelled: number }>(await apiClient.post(`/events/${eventId}/orders/${paymentId}/refund`, { reason })),
+  refundAll: async (eventId: string, reason?: string) =>
+    data<{ refunded: number; total: number }>(await apiClient.post(`/events/${eventId}/orders/refund-all`, { reason })),
+  adminRefunds: async () => data<AdminRefund[]>(await apiClient.get('/admin/refunds')),
+  markRefundPaid: async (id: string, body: { reference?: string; note?: string }) =>
+    data<unknown>(await apiClient.post(`/admin/refunds/${id}/paid`, body)),
+  closeAccount: async (password: string) =>
+    data<{ closed: boolean; message?: string }>(await apiClient.post('/privacy/close-account', { password })),
 };
 
 // --- Project API ---

@@ -126,11 +126,14 @@ export interface EventSales {
   amount: number;
   paidTickets: number;
   otherCurrencies: { currency: string; amount: number }[];
+  /** Orders paid on the online ticketing: net is after ZAYA's 9 % and refunds */
+  online?: { orders: number; gross: number; net: number };
 }
 
 export function salesDescription(sales?: EventSales): string | undefined {
   if (!sales) return undefined;
   const parts = [`${sales.paidTickets} billet${sales.paidTickets > 1 ? 's' : ''} payant${sales.paidTickets > 1 ? 's' : ''}`];
   for (const o of sales.otherCurrencies) parts.push(`+ ${formatMoney(o.amount, o.currency)}`);
+  if (sales.online && sales.online.orders > 0) parts.push(`net en ligne après frais : ${formatMoney(sales.online.net, sales.currency)}`);
   return parts.join(' · ');
 }

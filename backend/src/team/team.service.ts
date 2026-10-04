@@ -600,6 +600,26 @@ export class TeamService {
 
   async generateBadgePDF(eventId: string, memberId: string, organizerId: string, organizerRole: Role): Promise<Buffer> {
     await this.assertAccess(eventId, organizerId, organizerRole);
+    const target = await this.prisma.teamMember.findFirst({
+      where: { id: memberId, eventId },
+      select: { accreditation: { select: { printedAt: true } }, event: { select: { organizerId: true } } },
+    });
+    // Badge quota: a badge counts once, on its first print (later downloads are free),
+    // on the account of the event owner; the credit is given back if the badge cannot be made
+    let creditsTaken = 0;
+    if (target?.accreditation && !target.accreditation.printedAt) {
+      creditsTaken = await this.subscriptionService.consumePrint(target.event.organizerId, 'BADGES', 1, eventId);
+    }
+    try {
+      return await this.buildBadgePDF(eventId, memberId, organizerId, organizerRole);
+    } catch (err) {
+      if (target) await this.subscriptionService.refundCredits(target.event.organizerId, 'BADGES', creditsTaken);
+      throw err;
+    }
+  }
+
+  private async buildBadgePDF(eventId: string, memberId: string, organizerId: string, organizerRole: Role): Promise<Buffer> {
+    await this.assertAccess(eventId, organizerId, organizerRole);
 
     const member = await this.prisma.teamMember.findFirst({
       where: { id: memberId, eventId },
@@ -610,12 +630,6 @@ export class TeamService {
     });
     if (!member) throw new NotFoundException('Team member not found');
     if (!member.accreditation) throw new NotFoundException('No accreditation found for this member');
-
-    // Badge quota: a badge counts once, on its first print (later downloads are free),
-    // on the account of the event owner
-    if (!member.accreditation.printedAt) {
-      await this.subscriptionService.consumePrint(member.event.organizerId, 'BADGES', 1, eventId);
-    }
 
     const acc = member.accreditation;
     const cfg = mergeConfig(member.role, acc.badgeConfig);

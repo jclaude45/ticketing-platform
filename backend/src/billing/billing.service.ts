@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SubscriptionService } from '../subscription/subscription.service';
 import { FlexPayClient } from './flexpay.client';
 import { PRINT_UNIT_PRICES, PrintKind, flexPayAmount } from './pricing';
+import { receiptPdf } from './billing-pdf';
 
 export interface PayInput {
   paymentMethod: 'mobile_money' | 'card';
@@ -12,6 +13,9 @@ export interface PayInput {
   /** Dashboard page to come back to after a card payment */
   returnPath?: string;
 }
+
+/** "R-2026-00012" */
+const receiptNo = (n: number) => `R-${String(n).padStart(5, '0')}`;
 
 const KIND_LABELS: Record<string, string> = {
   PLAN: 'Abonnement',
@@ -160,7 +164,50 @@ export class BillingService {
       paymentMethod: p.paymentMethod,
       status: p.status,
       date: p.paidAt ?? p.createdAt,
+      receiptNumber: p.receiptNumber ? receiptNo(p.receiptNumber) : null,
     };
+  }
+
+  /** PDF receipt of a confirmed payment */
+  async receipt(organizerId: string, reference: string) {
+    const p = await this.prisma.billingPayment.findFirst({
+      where: { reference, organizerId, status: 'COMPLETED' },
+      include: { organizer: { select: { firstName: true, lastName: true, email: true } } },
+    });
+    if (!p) throw new NotFoundException('Reçu introuvable');
+    if (!p.receiptNumber) await this.assignReceiptNumber(p.id);
+    const fresh = (await this.prisma.billingPayment.findUnique({ where: { id: p.id } }))!;
+    const plan = p.planId ? await this.prisma.subscriptionPlan.findUnique({ where: { id: p.planId }, select: { name: true } }) : null;
+    const number = receiptNo(fresh.receiptNumber!);
+    const buffer = await receiptPdf({
+      number,
+      paidAt: p.paidAt ?? p.createdAt,
+      customer: { name: `${p.organizer.firstName} ${p.organizer.lastName}`.trim(), email: p.organizer.email },
+      label: p.kind === 'PLAN' ? `Plan ${plan?.name ?? ''} — 1 mois` : p.kind === 'TICKETS' ? 'Billets à imprimer au-delà du plan' : 'Badges à imprimer au-delà du plan',
+      quantity: p.kind === 'PLAN' ? null : p.quantity,
+      unitPrice: p.kind === 'PLAN' ? null : Number(p.unitPrice),
+      amount: Number(p.amount),
+      currency: p.currency,
+      paymentMethod: p.paymentMethod,
+      reference: p.reference,
+    });
+    return { buffer, number };
+  }
+
+  /** Next receipt number, given once the payment is confirmed */
+  private async assignReceiptNumber(id: string) {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const max = await this.prisma.billingPayment.aggregate({ _max: { receiptNumber: true } });
+      try {
+        await this.prisma.billingPayment.updateMany({
+          where: { id, receiptNumber: null },
+          data: { receiptNumber: (max._max.receiptNumber ?? 0) + 1 },
+        });
+        return;
+      } catch {
+        // taken by a payment confirmed at the same time: try the next one
+      }
+    }
   }
 
   private async fail(id: string) {
@@ -183,6 +230,7 @@ export class BillingService {
       data: { status: 'COMPLETED', paidAt: new Date() },
     });
     if (claimed.count === 0) return;
+    await this.assignReceiptNumber(payment.id);
     if (payment.kind === 'PLAN') {
       await this.subscriptions.activatePaidPlan(payment.organizerId, payment.planId);
     } else {

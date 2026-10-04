@@ -1,6 +1,9 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { ForbiddenException } from '@nestjs/common';
+import { Role } from '@prisma/client';
 import { PAYOUT_DELAY_DAYS, RESERVE_DELAY_DAYS, RESERVE_RATE, addDays, roundMoney } from './pricing';
+import { statementPdf } from './billing-pdf';
 
 export type PayoutPart = 'MAIN' | 'RESERVE';
 
@@ -16,7 +19,7 @@ export class PayoutsService {
   /** Sales of each event, owed amounts and their dates */
   private async summaries(where: { organizerId?: string }) {
     const events = await this.prisma.event.findMany({
-      where: { ...where, payments: { some: { status: 'COMPLETED' } } },
+      where: { ...where, payments: { some: { status: { in: ['COMPLETED', 'REFUNDED'] } } } },
       select: {
         id: true, name: true, endDate: true, status: true, organizerId: true,
         organizer: { select: { id: true, firstName: true, lastName: true, email: true, payoutInfo: true } },
@@ -27,6 +30,13 @@ export class PayoutsService {
     if (events.length === 0) return [];
     const ids = events.map((e) => e.id);
     // Orders since the 9 % fee have their net amount; older ones go to the organizer in full
+    // Refunded orders: the buyer gets everything back, ZAYA's fee on them stays due
+    const refunded = await this.prisma.payment.groupBy({
+      by: ['eventId', 'currency'],
+      where: { eventId: { in: ids }, status: 'REFUNDED' },
+      _sum: { amount: true, feeAmount: true },
+      _count: true,
+    });
     const [withNet, legacy] = await Promise.all([
       this.prisma.payment.groupBy({
         by: ['eventId', 'currency'],
@@ -44,22 +54,28 @@ export class PayoutsService {
     const now = new Date();
     const rows: any[] = [];
     for (const e of events) {
-      const currencies = new Set([...withNet, ...legacy].filter((g) => g.eventId === e.id).map((g) => g.currency));
+      const currencies = new Set([...withNet, ...legacy, ...refunded].filter((g) => g.eventId === e.id).map((g) => g.currency));
       for (const currency of currencies) {
         const a = withNet.find((g) => g.eventId === e.id && g.currency === currency);
         const b = legacy.find((g) => g.eventId === e.id && g.currency === currency);
-        const gross = Number(a?._sum.amount ?? 0) + Number(b?._sum.amount ?? 0);
-        const fees = Number(a?._sum.feeAmount ?? 0);
-        const net = roundMoney(Number(a?._sum.netAmount ?? 0) + Number(b?._sum.amount ?? 0), currency);
-        const reserve = roundMoney(net * RESERVE_RATE, currency);
-        const main = roundMoney(net - reserve, currency);
+        const r = refunded.find((g) => g.eventId === e.id && g.currency === currency);
+        // Everything collected, refunded orders included (shown apart)
+        const gross = Number(a?._sum.amount ?? 0) + Number(b?._sum.amount ?? 0) + Number(r?._sum.amount ?? 0);
+        const refundedFees = Number(r?._sum.feeAmount ?? 0);
+        const fees = Number(a?._sum.feeAmount ?? 0) + refundedFees;
+        const net = roundMoney(Number(a?._sum.netAmount ?? 0) + Number(b?._sum.amount ?? 0) - refundedFees, currency);
+        // The reserve covers what changed after the first payout (refunds): it is what is left
+        const mainPaid = e.payouts.find((p) => p.part === 'MAIN');
+        const main = mainPaid ? Number(mainPaid.amount) : roundMoney(net - roundMoney(net * RESERVE_RATE, currency), currency);
+        const reserve = roundMoney(net - main, currency);
         const part = (kind: 'MAIN' | 'RESERVE', amount: number, dueAt: Date) => {
           const paid = e.payouts.find((p) => p.part === kind);
           return {
             part: kind,
             amount: paid ? Number(paid.amount) : amount,
             dueAt,
-            status: paid ? 'PAID' : dueAt <= now ? 'DUE' : 'UPCOMING',
+            // Negative: refunds exceed what is left, the organizer owes the difference
+            status: paid ? 'PAID' : amount < 0 ? 'OWED' : dueAt <= now ? 'DUE' : 'UPCOMING',
             paidAt: paid?.paidAt ?? null,
             reference: paid?.reference ?? null,
           };
@@ -72,7 +88,9 @@ export class PayoutsService {
           eventStatus: e.status,
           organizer: e.organizer,
           currency,
-          orders: (a?._count ?? 0) + (b?._count ?? 0),
+          orders: (a?._count ?? 0) + (b?._count ?? 0) + (r?._count ?? 0),
+          refundedOrders: r?._count ?? 0,
+          refunded: roundMoney(Number(r?._sum.amount ?? 0), currency),
           gross: roundMoney(gross, currency),
           fees: roundMoney(fees, currency),
           net,
@@ -115,6 +133,37 @@ export class PayoutsService {
         paidById: adminId,
       },
     });
+  }
+
+  /** PDF statement of an event's online sales and payouts */
+  async statement(eventId: string, userId: string, role: Role) {
+    const rows = (await this.summaries({})).filter((r) => r.eventId === eventId);
+    if (rows.length === 0) throw new NotFoundException('Aucune vente en ligne pour cet événement');
+    const row = rows[0];
+    if (role !== Role.SUPER_ADMIN && role !== Role.ADMIN && row.organizer.id !== userId) throw new ForbiddenException('Accès refusé');
+    const STATUS: Record<string, string> = { PAID: 'versé', DUE: 'à verser', UPCOMING: 'prévu', OWED: 'dû par l’organisateur' };
+    const number = `V-${eventId.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+    const buffer = await statementPdf({
+      number,
+      date: new Date(),
+      organizer: { name: `${row.organizer.firstName} ${row.organizer.lastName}`.trim(), email: row.organizer.email },
+      event: { name: row.eventName, end: row.eventEnd },
+      currency: row.currency,
+      orders: row.orders,
+      gross: row.gross,
+      refunded: row.refunded,
+      refundedOrders: row.refundedOrders,
+      fees: row.fees,
+      net: row.net,
+      payouts: row.payouts.map((p: any) => ({
+        label: p.part === 'MAIN' ? 'Versement (90 %)' : 'Réserve (10 %)',
+        amount: p.amount,
+        status: STATUS[p.status] ?? p.status,
+        date: p.status === 'PAID' ? p.paidAt : p.dueAt,
+        reference: p.reference,
+      })),
+    });
+    return { buffer, number };
   }
 
   async getPayoutInfo(userId: string) {

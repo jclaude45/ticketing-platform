@@ -27,7 +27,7 @@ export function routePath(req: Request): string {
 }
 
 // Routes about the signed-in person themselves: never run inside a workspace
-const PERSONAL_PREFIXES = ['/auth', '/notifications', '/workspaces', '/users/me', '/controller-space'];
+const PERSONAL_PREFIXES = ['/auth', '/notifications', '/workspaces', '/users/me', '/controller-space', '/privacy'];
 
 export const isPersonalRoute = (path: string) =>
   PERSONAL_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`));

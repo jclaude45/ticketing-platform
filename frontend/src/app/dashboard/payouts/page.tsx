@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2 } from 'lucide-react';
+import { Download, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { billingApi, type PayoutInfo } from '@/lib/api';
 import { PART_LABELS, PAYOUT_STATUS, dayFr, money, payoutInfoLine } from '@/components/billing/payout-format';
-import { cn } from '@/lib/utils';
+import { cn, downloadFile } from '@/lib/utils';
 
 const NETWORKS = ['M-Pesa', 'Orange Money', 'Airtel Money', 'Afrimoney'];
 
@@ -113,11 +113,24 @@ export default function PayoutsPage() {
             <div key={`${r.eventId}-${r.currency}`} className="border-b border-gray-200 py-5 first:border-t dark:border-gray-800">
               <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
                 <p className="font-semibold text-black dark:text-white">{r.eventName}</p>
-                <p className="text-sm text-gray-500">Fin le {dayFr(r.eventEnd)} · {r.orders} commande{r.orders > 1 ? 's' : ''}</p>
+                <p className="flex items-center gap-3 text-sm text-gray-500">
+                  Fin le {dayFr(r.eventEnd)} · {r.orders} commande{r.orders > 1 ? 's' : ''}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try { downloadFile(await billingApi.statement(r.eventId), `releve-zaya-${r.eventName}.pdf`); }
+                      catch { toast.error('Relevé indisponible'); }
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-1 text-xs font-medium text-black hover:border-black dark:border-gray-700 dark:text-white"
+                  >
+                    <Download className="h-3.5 w-3.5" /> Relevé PDF
+                  </button>
+                </p>
               </div>
-              <div className="mt-3 grid grid-cols-3 gap-4 text-sm sm:max-w-lg">
+              <div className="mt-3 grid grid-cols-2 gap-4 text-sm sm:max-w-2xl sm:grid-cols-4">
                 <div><p className="text-xs text-gray-400">Encaissé</p><p className="text-black dark:text-white">{money(r.gross, r.currency)}</p></div>
-                <div><p className="text-xs text-gray-400">Frais ZAYA</p><p className="text-black dark:text-white">{money(r.fees, r.currency)}</p></div>
+                <div><p className="text-xs text-gray-400">Remboursé</p><p className="text-black dark:text-white">{r.refunded > 0 ? `- ${money(r.refunded, r.currency)}` : '—'}</p></div>
+                <div><p className="text-xs text-gray-400">Frais ZAYA</p><p className="text-black dark:text-white">- {money(r.fees, r.currency)}</p></div>
                 <div><p className="text-xs text-gray-400">Pour vous</p><p className="font-semibold text-black dark:text-white">{money(r.net, r.currency)}</p></div>
               </div>
               <div className="mt-4 space-y-2">
@@ -125,7 +138,7 @@ export default function PayoutsPage() {
                   <div key={p.part} className="flex flex-wrap items-center justify-between gap-3 text-sm">
                     <span className="text-black dark:text-white">{PART_LABELS[p.part]} · {money(p.amount, r.currency)}</span>
                     <span className="flex items-center gap-3 text-gray-500">
-                      {p.status === 'PAID' ? `le ${dayFr(p.paidAt!)}` : `prévu le ${dayFr(p.dueAt)}`}
+                      {p.status === 'PAID' ? `le ${dayFr(p.paidAt!)}` : p.status === 'OWED' ? 'à régler à ZAYA (remboursements)' : `prévu le ${dayFr(p.dueAt)}`}
                       <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-semibold', PAYOUT_STATUS[p.status].cls)}>{PAYOUT_STATUS[p.status].label}</span>
                     </span>
                   </div>

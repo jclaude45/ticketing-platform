@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { AccountNav } from '@/components/account/AccountNav';
+import { CloseAccount } from '@/components/account/CloseAccount';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -277,6 +278,7 @@ function SettingsContent() {
                   </button>
                 </div>
               </form>
+              <CloseAccount />
             </div>
           )}
 

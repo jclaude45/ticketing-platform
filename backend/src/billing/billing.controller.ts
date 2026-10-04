@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Query, Res, UseGuards } from '@nestjs/common';
+import { Response } from 'express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsObject, IsOptional, IsString, MaxLength, Min } from 'class-validator';
@@ -10,6 +11,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { FlexPayWebhookGuard } from '../payment/flexpay-webhook.guard';
 import { BillingService } from './billing.service';
 import { PayoutsService, PayoutPart } from './payouts.service';
+import { RefundsService } from './refunds.service';
 import { PrintKind } from './pricing';
 
 class PayDto {
@@ -30,6 +32,24 @@ class BuyPlanDto extends PayDto {
 class PayoutInfoDto {
   @IsObject() info: Record<string, any>;
 }
+
+class RefundDto {
+  @IsOptional() @IsString() @MaxLength(500) reason?: string;
+}
+
+class RefundPaidDto {
+  @IsOptional() @IsString() @MaxLength(120) reference?: string;
+  @IsOptional() @IsString() @MaxLength(500) note?: string;
+}
+
+const sendPdf = (res: Response, buffer: Buffer, filename: string) => {
+  res.set({
+    'Content-Type': 'application/pdf',
+    'Content-Disposition': `attachment; filename="${filename}"`,
+    'Content-Length': buffer.length,
+  });
+  res.end(buffer);
+};
 
 class MarkPaidDto {
   @IsString() eventId: string;
@@ -74,6 +94,12 @@ export class BillingController {
     return this.billing.history(userId);
   }
 
+  @Get('payments/:reference/receipt')
+  async receipt(@CurrentUser('id') userId: string, @Param('reference') reference: string, @Res() res: Response) {
+    const { buffer, number } = await this.billing.receipt(userId, reference);
+    sendPdf(res, buffer, `recu-zaya-${number}.pdf`);
+  }
+
   @Get('payments/:reference')
   status(@CurrentUser('id') userId: string, @Param('reference') reference: string) {
     return this.billing.status(userId, reference);
@@ -84,6 +110,12 @@ export class BillingController {
     return this.payouts.forOrganizer(userId);
   }
 
+  @Get('payouts/:eventId/statement')
+  async statement(@CurrentUser() user: any, @Param('eventId') eventId: string, @Res() res: Response) {
+    const { buffer, number } = await this.payouts.statement(eventId, user.id, user.role);
+    sendPdf(res, buffer, `releve-zaya-${number}.pdf`);
+  }
+
   @Get('payout-info')
   getPayoutInfo(@CurrentUser('id') userId: string) {
     return this.payouts.getPayoutInfo(userId);
@@ -92,6 +124,51 @@ export class BillingController {
   @Put('payout-info')
   setPayoutInfo(@CurrentUser('id') userId: string, @Body() dto: PayoutInfoDto) {
     return this.payouts.setPayoutInfo(userId, dto.info);
+  }
+}
+
+/** Online orders of an event and their refunds, for its organizer */
+@ApiTags('Billing')
+@ApiBearerAuth('JWT-auth')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.ORGANIZER, Role.ADMIN, Role.SUPER_ADMIN)
+@Controller('events/:eventId/orders')
+export class EventOrdersController {
+  constructor(private readonly refunds: RefundsService) {}
+
+  @Get()
+  list(@CurrentUser() user: any, @Param('eventId') eventId: string) {
+    return this.refunds.orders(eventId, user.id, user.role);
+  }
+
+  @Post('refund-all')
+  refundAll(@CurrentUser() user: any, @Param('eventId') eventId: string, @Body() dto: RefundDto) {
+    return this.refunds.refundAll(eventId, user.id, user.role, dto.reason);
+  }
+
+  @Post(':paymentId/refund')
+  refund(@CurrentUser() user: any, @Param('eventId') eventId: string, @Param('paymentId') paymentId: string, @Body() dto: RefundDto) {
+    return this.refunds.refund(eventId, paymentId, user.id, user.role, dto.reason);
+  }
+}
+
+/** Refunds to transfer to buyers, for the ZAYA team */
+@ApiTags('Billing')
+@ApiBearerAuth('JWT-auth')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.SUPER_ADMIN)
+@Controller('admin/refunds')
+export class AdminRefundsController {
+  constructor(private readonly refunds: RefundsService) {}
+
+  @Get()
+  list() {
+    return this.refunds.forAdmin();
+  }
+
+  @Post(':id/paid')
+  markPaid(@CurrentUser('id') adminId: string, @Param('id') id: string, @Body() dto: RefundPaidDto) {
+    return this.refunds.markPaid(adminId, id, dto.reference, dto.note);
   }
 }
 

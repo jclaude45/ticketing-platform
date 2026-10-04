@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { billingApi, type PayoutPartRow, type PayoutRow } from '@/lib/api';
 import { PART_LABELS, PAYOUT_STATUS, dayFr, money, payoutInfoLine } from '@/components/billing/payout-format';
 import { cn } from '@/lib/utils';
+import { AdminRefunds } from '@/components/billing/AdminRefunds';
 
 type Filter = 'DUE' | 'UPCOMING' | 'PAID' | 'ALL';
 const FILTERS: { id: Filter; label: string }[] = [
@@ -19,6 +20,7 @@ const FILTERS: { id: Filter; label: string }[] = [
 /** Payouts to organizers, made by the ZAYA team and recorded here */
 export default function AdminPayoutsPage() {
   const qc = useQueryClient();
+  const [tab, setTab] = useState<'payouts' | 'refunds'>('payouts');
   const [filter, setFilter] = useState<Filter>('DUE');
   const [marking, setMarking] = useState<{ row: PayoutRow; part: PayoutPartRow } | null>(null);
   const [reference, setReference] = useState('');
@@ -49,6 +51,21 @@ export default function AdminPayoutsPage() {
         </p>
       </div>
 
+      <div className="flex gap-6 border-b border-gray-200 dark:border-gray-800">
+        {([['payouts', 'Versements aux organisateurs'], ['refunds', 'Remboursements aux acheteurs']] as const).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setTab(id)}
+            className={cn('-mb-px border-b-2 pb-3 text-sm font-semibold transition-colors',
+              tab === id ? 'border-[#FFDD00] text-black dark:text-white' : 'border-transparent text-gray-500 hover:text-black dark:hover:text-white')}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'refunds' ? <AdminRefunds /> : (<>
       <div className="flex flex-wrap gap-2">
         {FILTERS.map(f => (
           <button
@@ -91,6 +108,8 @@ export default function AdminPayoutsPage() {
                 <div className="sm:text-right">
                   {part.status === 'PAID' ? (
                     <span className={cn('rounded-full px-3 py-1 text-xs font-semibold', PAYOUT_STATUS.PAID.cls)}>Versé</span>
+                  ) : part.status === 'OWED' ? (
+                    <span className={cn('rounded-full px-3 py-1 text-xs font-semibold', PAYOUT_STATUS.OWED.cls)}>Dû par l’organisateur</span>
                   ) : (
                     <button
                       type="button"
@@ -106,6 +125,8 @@ export default function AdminPayoutsPage() {
           })}
         </div>
       )}
+
+      </>)}
 
       {marking && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

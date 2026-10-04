@@ -19,6 +19,7 @@ export const PAYOUT_STATUS: Record<PayoutPartRow['status'], { label: string; cls
   PAID: { label: 'Versé', cls: 'bg-black text-white dark:bg-white dark:text-black' },
   DUE: { label: 'À verser', cls: 'bg-[#FFDD00] text-black' },
   UPCOMING: { label: 'Prévu', cls: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300' },
+  OWED: { label: 'Dû par l’organisateur', cls: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300' },
 };
 
 /** "M-Pesa · +243 81… · Jean Dupont" */

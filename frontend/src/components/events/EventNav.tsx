@@ -3,8 +3,7 @@
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import {
-  ArrowLeft, BarChart3, FolderKanban, LayoutGrid, Lock, Mail, Send, ShoppingBag, Ticket, Users,
-} from 'lucide-react';
+  ArrowLeft, BarChart3, FolderKanban, LayoutGrid, Lock, Mail, Send, ShoppingBag, Ticket, Users, Receipt } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useEventAccess, EVENT_STATUS_LABELS } from '@/hooks/useEventAccess';
 
@@ -39,6 +38,7 @@ export function EventNav() {
     : [
         { label: 'Aperçu', path: '', icon: LayoutGrid },
         { label: 'Billets', path: '/tickets', icon: Ticket },
+        { label: 'Ventes', path: '/orders', icon: Receipt },
         { label: 'Invitations', path: '/invitations', icon: Send },
         { label: 'Analytique', path: '/analytics', icon: BarChart3 },
         { label: 'Équipe', path: '/team', icon: Users },

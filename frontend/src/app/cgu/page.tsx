@@ -243,8 +243,10 @@ const SECTIONS: LegalSection[] = [
     body: (
       <>
         <p>
-          Les CGU s’appliquent pendant toute la durée d’utilisation. L’utilisateur peut fermer son compte à tout moment en écrivant à{' '}
-          <a href={`mailto:${COMPANY.email}`} className="underline">{COMPANY.email}</a>.
+          Les CGU s’appliquent pendant toute la durée d’utilisation. L’utilisateur peut fermer son compte à tout moment depuis
+          Paramètres → Profil → « Fermer mon compte », ou en écrivant à{' '}
+          <a href={`mailto:${COMPANY.email}`} className="underline">{COMPANY.email}</a>. Ses données personnelles sont alors effacées ;
+          les ventes et paiements passés sont conservés sans son nom.
         </p>
         <p>
           La fermeture d’un compte Organisateur ne dispense pas d’honorer les billets déjà vendus, ni de régler les sommes dues ; les
