@@ -6,6 +6,7 @@ import { SiteFooter } from '@/components/site/SiteFooter';
 import { ContactForm } from '@/components/site/ContactForm';
 import { APP_URL } from '@/components/site/site-config';
 import { cn } from '@/lib/utils';
+import { PRINT_PLANS, SALES_FEE, UNIT_PRICES, type PrintPlan } from '@/components/site/pricing';
 
 export const metadata: Metadata = {
   title: 'ZAYA — Transformez vos événements en expériences inoubliables',
@@ -13,8 +14,6 @@ export const metadata: Metadata = {
     'Créez votre événement, vendez vos billets en ligne et en cash, contrôlez les entrées par QR code. La plateforme événementielle tout-en-un.',
 };
 
-// Pricing comes from the plans managed in the admin: refreshed every 5 minutes
-export const revalidate = 300;
 
 // ─── Toolbox ──────────────────────────────────────────────────────────────────
 
@@ -68,103 +67,21 @@ const TOOLS: { icon: React.ReactNode; title: string; text: string }[] = [
 
 // ─── Pricing ──────────────────────────────────────────────────────────────────
 
-interface Plan {
-  id: string; name: string; price: number;
-  maxTickets: number; maxBadges: number; maxEvents: number;
-  showPoweredBy: boolean; allowBulkExport: boolean; allowCommunication: boolean;
-}
-type PlanCard = { name: string; price: number; features: { label: string; included: boolean }[] };
-
-const FALLBACK_PLANS: PlanCard[] = [
-  {
-    name: 'Standard', price: 0,
-    features: [
-      { label: 'Événement en ligne', included: true },
-      { label: 'Billetterie en ligne et billets à QR code', included: true },
-      { label: 'Paiement Mobile Money et carte', included: true },
-      { label: 'Campagnes email et SMS', included: false },
-      { label: 'Export des données', included: false },
-    ],
-  },
-  {
-    name: 'Professionnel', price: 16,
-    features: [
-      { label: 'Événement en ligne', included: true },
-      { label: 'Billetterie en ligne et billets à QR code', included: true },
-      { label: 'Paiement Mobile Money et carte', included: true },
-      { label: 'Campagnes email et SMS', included: true },
-      { label: 'Export des données', included: true },
-    ],
-  },
-  {
-    name: 'Business', price: 120,
-    features: [
-      { label: 'Événement en ligne', included: true },
-      { label: 'Billetterie en ligne et billets à QR code', included: true },
-      { label: 'Campagnes email et SMS', included: true },
-      { label: 'Export des données', included: true },
-      { label: 'Sans la mention « Powered by ZAYA »', included: true },
-    ],
-  },
-];
-
-const count = (n: number, one: string, many: string) =>
-  n < 0 ? `${many.charAt(0).toUpperCase()}${many.slice(1)} illimités` : `${n.toLocaleString('fr-FR')} ${n > 1 ? many : one}`;
-
-function toCard(p: Plan): PlanCard {
-  return {
-    name: p.name,
-    price: p.price,
-    features: [
-      { label: count(p.maxEvents, 'événement', 'événements'), included: true },
-      { label: `${count(p.maxTickets, 'billet', 'billets')} par événement`, included: true },
-      { label: count(p.maxBadges, "badge d'accréditation", "badges d'accréditation"), included: p.maxBadges !== 0 },
-      { label: 'Campagnes email et SMS', included: p.allowCommunication },
-      { label: 'Export des données', included: p.allowBulkExport },
-      { label: 'Sans la mention « Powered by ZAYA »', included: !p.showPoweredBy },
-    ],
-  };
-}
-
-async function getPlans(): Promise<PlanCard[]> {
-  const base = (process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1').replace(/\/$/, '');
-  try {
-    const res = await fetch(`${base}/public/plans`, { next: { revalidate: 300 } });
-    if (!res.ok) return FALLBACK_PLANS;
-    const body = await res.json();
-    const plans: Plan[] = Array.isArray(body) ? body : body?.data ?? [];
-    return plans.length > 0 ? plans.map(toCard) : FALLBACK_PLANS;
-  } catch {
-    return FALLBACK_PLANS;
-  }
-}
-
-function PriceCard({ plan, popular }: { plan: PlanCard; popular: boolean }) {
-  const whole = Math.floor(plan.price);
-  const cents = Math.round((plan.price - whole) * 100);
+function PriceCard({ plan }: { plan: PrintPlan }) {
   return (
     <div className="flex flex-col">
-      <div className={cn('mb-6 flex h-[26px] items-center justify-center rounded-lg text-[15px] uppercase', popular ? 'bg-black text-white' : 'invisible lg:block')}>
-        {popular && 'Le plus populaire'}
+      <div className={cn('mb-6 flex h-[26px] items-center justify-center rounded-lg text-[15px] uppercase', plan.highlight ? 'bg-black text-white' : 'invisible lg:block')}>
+        {plan.highlight && 'Le plus choisi'}
       </div>
       <div className="flex flex-1 flex-col bg-[#F7F7F7]">
-        <div className="rounded-[32px] bg-[#181818] px-6 pb-14 pt-14 text-center text-white sm:pb-[70px]">
+        <div className="rounded-[32px] bg-[#181818] px-6 pb-12 pt-12 text-center text-white">
           <p className="text-[32px] font-normal tracking-wide sm:text-[34px]">{plan.name}</p>
-          <p className="mt-4 flex items-start justify-center font-light leading-none">
-            <span className="mt-4 text-3xl font-normal">$</span>
-            <span className="text-[110px] tracking-tight sm:text-[128px]">{whole}</span>
-            {cents > 0 && <span className="mt-4 text-3xl">,{String(cents).padStart(2, '0')}</span>}
-            <span className="mt-auto pb-3 text-xl font-normal uppercase">/mois</span>
-          </p>
+          <p className="mt-4 text-[96px] font-light leading-none tracking-tight sm:text-[110px]">{plan.price}</p>
+          <p className="mt-3 text-sm uppercase text-white/70">{plan.priceNote}</p>
         </div>
         <ul className="flex-1">
-          {plan.features.map((f, i) => (
-            <li key={i} className={cn(
-              'border-b border-[#d0d0d0] px-11 py-7 text-[17px] font-semibold last:border-b-0',
-              f.included ? 'text-[#4a4a4a]' : 'text-[#b3b3b3]',
-            )}>
-              {f.label}
-            </li>
+          {plan.features.map(f => (
+            <li key={f} className="border-b border-[#d0d0d0] px-11 py-6 text-[17px] font-semibold text-[#4a4a4a] last:border-b-0">{f}</li>
           ))}
         </ul>
         <a href={`${APP_URL}/auth/register`} className="block bg-black py-4 text-center text-xl font-semibold text-white transition-opacity hover:opacity-85">
@@ -177,9 +94,7 @@ function PriceCard({ plan, popular }: { plan: PlanCard; popular: boolean }) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default async function LandingPage() {
-  const plans = await getPlans();
-  const popularIndex = plans.length >= 3 ? 1 : -1;
+export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-white text-black">
@@ -236,18 +151,23 @@ export default async function LandingPage() {
 
       {/* ── Pricing ── */}
       <section id="tarifs" className="scroll-mt-20 px-6 pb-28 lg:pb-36">
-        <div className="mx-auto max-w-[520px] text-center">
+        <div className="mx-auto max-w-[620px] text-center">
           <h2 className="text-5xl font-black uppercase tracking-tight">Tarifs</h2>
-          <p className="mt-2 text-lg leading-snug text-[#222]">
-            Des forfaits adaptés à toutes les tailles d&apos;événements. Des options flexibles qui permettent à chaque
-            organisateur de trouver la formule idéale pour son événement, sans frais cachés.
+          <p className="mt-3 text-lg leading-snug text-[#222]">
+            La billetterie en ligne est gratuite. Vous ne payez que ce que vous imprimez — et {SALES_FEE} sur les billets que vous vendez,
+            frais de paiement compris.
           </p>
         </div>
-        <div className={cn(
-          'mx-auto mt-14 grid max-w-[1150px] grid-cols-1 gap-8 sm:max-w-[400px] lg:mt-24 lg:max-w-[1150px] lg:gap-6',
-          plans.length >= 3 ? 'lg:grid-cols-3' : plans.length === 2 ? 'lg:max-w-[760px] lg:grid-cols-2' : 'lg:max-w-[380px]',
-        )}>
-          {plans.map((p, i) => <PriceCard key={p.name} plan={p} popular={i === popularIndex} />)}
+        <div className="mx-auto mt-14 grid max-w-[1150px] grid-cols-1 gap-8 sm:max-w-[400px] lg:mt-20 lg:max-w-[1150px] lg:grid-cols-3 lg:gap-6">
+          {PRINT_PLANS.map(p => <PriceCard key={p.name} plan={p} />)}
+        </div>
+        <p className="mx-auto mt-12 max-w-[620px] text-center text-lg text-[#222]">
+          Un seul événement ? {UNIT_PRICES.ticket} le billet et {UNIT_PRICES.badge} le badge, sans engagement.
+        </p>
+        <div className="mt-8 text-center">
+          <a href="/tarifs" className="inline-block rounded-full border border-black px-6 py-3 text-lg uppercase text-black transition-colors hover:bg-black hover:text-white">
+            Tous les détails des tarifs
+          </a>
         </div>
       </section>
 

@@ -136,6 +136,7 @@ export function EventForm({ event, isEdit, draft }: EventFormProps) {
           description: event.description ?? '',
           type: event.type ?? 'OTHER',
           currency: (event as any).currency ?? 'USD',
+          feePayer: (event as any).feePayer ?? 'ORGANIZER',
           venue: event.venue,
           address: event.address ?? '',
           city: event.city,
@@ -145,7 +146,7 @@ export function EventForm({ event, isEdit, draft }: EventFormProps) {
           totalCapacity: event.totalCapacity,
           bannerUrl: event.bannerUrl ?? '',
         }
-      : { totalCapacity: 100, type: 'OTHER', currency: 'USD', ...(draft?.data?.values ?? {}) },
+      : { totalCapacity: 100, type: 'OTHER', currency: 'USD', feePayer: 'ORGANIZER', ...(draft?.data?.values ?? {}) },
   });
 
   // ── Draft (creation only): saved on the server a moment after each change ──
@@ -224,6 +225,7 @@ export function EventForm({ event, isEdit, draft }: EventFormProps) {
   const bannerUrl = watch('bannerUrl');
   const eventType = watch('type');
   const currency = watch('currency') ?? 'USD';
+  const feePayer = (watch('feePayer' as any) as 'ORGANIZER' | 'BUYER' | undefined) ?? 'ORGANIZER';
 
   // Country → its cities, both as drop-down lists
   const countryValue = watch('country') ?? '';
@@ -412,6 +414,38 @@ export function EventForm({ event, isEdit, draft }: EventFormProps) {
                 {EVENT_CURRENCIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
               </SelectField>
               <input type="hidden" {...register('currency' as any)} />
+            </Field>
+
+            {/* ZAYA's 9 % on paid tickets: taken from the price or added to it */}
+            <Field
+              label="Les 9 % sur les ventes en ligne (billets et boutique)"
+              hint="Sur la totalité du paiement, livraison comprise. Frais de paiement Mobile Money et carte inclus. Rien sur les billets gratuits ni sur les billets que vous imprimez."
+            >
+              {(() => {
+                const sample = tariffs.map(t => Number(t.price) || 0).find(p => p > 0) ?? 100;
+                const fmt = (v: number) => `${(Math.round(v * 100) / 100).toLocaleString('fr-FR')} ${currency}`;
+                const options = [
+                  { id: 'ORGANIZER' as const, title: 'Je les prends à ma charge', desc: `L’acheteur paie ${fmt(sample)}, vous recevez ${fmt(sample * 0.91)}.` },
+                  { id: 'BUYER' as const, title: 'L’acheteur les paie', desc: `L’acheteur paie ${fmt(sample * 1.09)}, vous recevez ${fmt(sample)}.` },
+                ];
+                return (
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {options.map(o => (
+                      <button
+                        key={o.id}
+                        type="button"
+                        onClick={() => setValue('feePayer' as any, o.id, { shouldDirty: true })}
+                        className={cn('rounded-xl border p-4 text-left transition-colors',
+                          feePayer === o.id ? 'border-black ring-1 ring-black dark:border-white dark:ring-white' : 'border-gray-200 hover:border-black dark:border-gray-700')}
+                      >
+                        <p className="text-sm font-semibold text-black dark:text-white">{o.title}</p>
+                        <p className="mt-1 text-xs text-gray-500">{o.desc}</p>
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
+              <input type="hidden" {...register('feePayer' as any)} />
             </Field>
 
             <Field

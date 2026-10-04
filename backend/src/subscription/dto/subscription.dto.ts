@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsInt, IsBoolean, IsEnum, IsDateString, Min, IsNumber } from 'class-validator';
+import { IsString, IsOptional, IsInt, IsBoolean, IsEnum, IsDateString, Min, IsNumber, IsIn } from 'class-validator';
 import { SubscriptionStatus } from '@prisma/client';
 
 export class CreatePlanDto {
@@ -11,6 +11,9 @@ export class CreatePlanDto {
   @IsBoolean() showPoweredBy: boolean;
   @IsOptional() @IsBoolean() allowBulkExport?: boolean;
   @IsOptional() @IsBoolean() allowCommunication?: boolean;
+  /** 'EVENT' (quotas per event) or 'MONTH' */
+  @IsOptional() @IsIn(['EVENT', 'MONTH']) period?: string;
+  @IsOptional() @IsInt() @Min(-1) maxControllers?: number;
 }
 
 export class UpdatePlanDto {
@@ -24,6 +27,9 @@ export class UpdatePlanDto {
   @IsOptional() @IsBoolean() allowBulkExport?: boolean;
   @IsOptional() @IsBoolean() allowCommunication?: boolean;
   @IsOptional() @IsBoolean() isActive?: boolean;
+  /** 'EVENT' (quotas per event) or 'MONTH' */
+  @IsOptional() @IsIn(['EVENT', 'MONTH']) period?: string;
+  @IsOptional() @IsInt() @Min(-1) maxControllers?: number;
 }
 
 export class AssignPlanDto {

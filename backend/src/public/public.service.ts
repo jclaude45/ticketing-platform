@@ -1,3 +1,4 @@
+import { buyerUnitPrice } from '../billing/pricing';
 import {
   Injectable, NotFoundException, BadRequestException, Logger,
 } from '@nestjs/common';
@@ -78,7 +79,7 @@ export class PublicService {
           id: true, name: true, description: true,
           venue: true, city: true, country: true, type: true,
           startDate: true, endDate: true,
-          bannerUrl: true, totalCapacity: true,
+          bannerUrl: true, totalCapacity: true, feePayer: true,
           organizer: { select: { firstName: true, lastName: true } },
           ticketTemplates: {
             select: { id: true, name: true, price: true, currency: true, availableCount: true, validDays: true },
@@ -105,7 +106,7 @@ export class PublicService {
         id: true, name: true, description: true,
         venue: true, address: true, city: true, country: true, type: true,
         startDate: true, endDate: true,
-        bannerUrl: true, totalCapacity: true, status: true,
+        bannerUrl: true, totalCapacity: true, status: true, feePayer: true,
         organizer: { select: { firstName: true, lastName: true, avatar: true } },
         ticketTemplates: {
           select: {
@@ -170,8 +171,6 @@ export class PublicService {
     if (templates.some(t => Number(t.price) > 0)) {
       throw new BadRequestException('Ces billets sont payants : utilisez le paiement en ligne');
     }
-
-    await this.ticketGeneration.assertCanSell(event.organizerId, dto.items.reduce((n, i) => n + i.quantity, 0));
 
     // Generate tickets for each item sequentially (each call decrements availableCount)
     const holder = { holderName: dto.holderName, holderEmail: dto.holderEmail };
@@ -330,9 +329,11 @@ export class PublicService {
     const resolveBanner = (url: string | null) =>
       url ? url.replace(/^https?:\/\/localhost:\d+/, appBase) : null;
 
+    // The price a buyer pays: ZAYA's 9 % is already in it when the buyer pays the fee
     const templates = (e.ticketTemplates ?? []).map((t: any) => ({
       ...t,
-      price: Number(t.price),
+      basePrice: Number(t.price),
+      price: buyerUnitPrice(Number(t.price), e.feePayer, t.currency),
     }));
     const minPrice = templates.length > 0 ? Math.min(...templates.map((t: any) => t.price)) : null;
 

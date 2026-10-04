@@ -25,6 +25,8 @@ export interface CheckoutTemplate {
 export interface CheckoutEvent {
   id: string; name: string; venue: string; city: string; country: string;
   startDate: string; bannerUrl?: string; ticketTemplates: CheckoutTemplate[];
+  /** BUYER: ticket prices already include ZAYA's service fee */
+  feePayer?: 'ORGANIZER' | 'BUYER';
 }
 interface PurchasedTicket { ticketId: string; serialNumber: string; templateName: string; price: number; currency: string; qrCode?: string }
 interface MerchOrderSummary {
@@ -440,6 +442,9 @@ export function Checkout({
                   <BuyButton disabled={!canPay} loading={mutation.isPending} onClick={() => mutation.mutate()}>
                     {isPaid ? `Acheter · ${formatPrice(grandTotal, currency)}` : 'Obtenir mes billets'}
                   </BuyButton>
+                  {event.feePayer === 'BUYER' && (ticketTotal > 0 || merchSubtotal > 0) && (
+                    <p className="text-center text-xs text-[#707070]">Frais de service et de paiement inclus dans les prix.</p>
+                  )}
                 </div>
                 {!contactOk && (name || email) && (
                   <p className="mt-3 text-center text-xs text-[#707070]">Indiquez votre nom et un email valide pour recevoir vos billets.</p>

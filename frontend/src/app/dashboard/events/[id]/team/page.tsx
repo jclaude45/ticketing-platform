@@ -1,5 +1,6 @@
 'use client';
 
+import { usePrintPayment, isPrintPaymentError } from '@/components/billing/usePrintPayment';
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -701,13 +702,18 @@ export default function TeamPage() {
     }
   };
 
+  const { ask: askPayment, dialog: paymentDialog } = usePrintPayment();
+
   const handlePrintBadge = async (member: TeamMember) => {
     setPrintingId(member.id);
     try {
       const res = await teamApi.downloadBadge(eventId, member.id);
       printPDFBlob(new Blob([res.data as ArrayBuffer], { type: 'application/pdf' }));
-    } catch {
-      toast.error('Erreur lors de la génération du badge');
+    } catch (err) {
+      // Badge beyond the plan quota: pay, then print
+      const q = isPrintPaymentError(err);
+      if (q) askPayment(q, () => handlePrintBadge(member));
+      else toast.error('Erreur lors de la génération du badge');
     } finally {
       setPrintingId(null);
     }
@@ -719,7 +725,9 @@ export default function TeamPage() {
       await teamApi.sendBadge(eventId, member.id);
       toast.success(`Badge envoyé à ${member.email}`);
     } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? "Erreur lors de l'envoi du badge");
+      const q = isPrintPaymentError(err);
+      if (q) askPayment(q, () => handleSendBadge(member));
+      else toast.error(err?.response?.data?.message ?? "Erreur lors de l'envoi du badge");
     } finally {
       setSendingBadgeId(null);
     }
@@ -952,6 +960,7 @@ export default function TeamPage() {
       {editMember && <MemberModal eventId={eventId} member={editMember} onClose={() => setEditMember(null)} onSaved={invalidate} />}
       {accMember && <AccreditationModal eventId={eventId} member={accMember} onClose={() => setAccMember(null)} onSaved={invalidate} />}
       {importOpen && <ImportExcelModal eventId={eventId} onClose={() => setImportOpen(false)} onImported={invalidate} />}
+      {paymentDialog}
     </div>
   );
 }

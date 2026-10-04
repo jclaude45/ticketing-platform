@@ -504,6 +504,102 @@ export const subscriptionApi = {
     apiClient.post<ApiResponse<OrganizerSubscription>>('/subscriptions/me/subscribe', { planId }),
 };
 
+// --- Billing: what the organizer pays ZAYA (FlexPay) and what ZAYA pays out ---
+export type PrintKind = 'TICKETS' | 'BADGES';
+
+/** Price of a print: plan quota first, then paid credits, then the per-unit price */
+export interface PrintQuote {
+  kind: PrintKind;
+  count: number;
+  included: number;
+  used: number;
+  remaining: number;
+  credits: number;
+  fromQuota: number;
+  fromCredits: number;
+  missing: number;
+  unitPrice: number;
+  amount: number;
+  period: 'EVENT' | 'MONTH' | string;
+}
+
+export interface PayRequest {
+  paymentMethod: 'mobile_money' | 'card';
+  phone?: string;
+  returnPath?: string;
+}
+
+export interface PayStart {
+  status: 'PENDING' | 'COMPLETED';
+  reference?: string;
+  redirectUrl?: string;
+  message?: string;
+}
+
+export interface BillingPaymentRow {
+  id: string;
+  reference: string;
+  kind: 'PLAN' | PrintKind;
+  label: string;
+  quantity: number | null;
+  amount: number;
+  currency: string;
+  paymentMethod: string;
+  status: 'PENDING' | 'COMPLETED' | 'FAILED' | string;
+  date: string;
+}
+
+export interface PayoutPartRow {
+  part: 'MAIN' | 'RESERVE';
+  amount: number;
+  dueAt: string;
+  status: 'PAID' | 'DUE' | 'UPCOMING';
+  paidAt: string | null;
+  reference: string | null;
+}
+
+export interface PayoutRow {
+  eventId: string;
+  eventName: string;
+  eventEnd: string;
+  eventStatus: string;
+  currency: string;
+  orders: number;
+  gross: number;
+  fees: number;
+  net: number;
+  payouts: PayoutPartRow[];
+  organizer?: { id: string; firstName: string; lastName: string; email: string; payoutInfo: PayoutInfo | null };
+}
+
+export interface PayoutInfo {
+  method: 'mobile_money' | 'bank';
+  network?: string;
+  phone?: string;
+  bankName?: string;
+  accountNumber?: string;
+  accountName?: string;
+}
+
+const data = <T,>(res: { data: any }): T => (res.data?.data ?? res.data) as T;
+
+export const billingApi = {
+  quote: async (kind: PrintKind, count: number, eventId?: string) =>
+    data<PrintQuote>(await apiClient.get('/billing/quote', { params: { kind, count, eventId } })),
+  buyCredits: async (kind: PrintKind, quantity: number, pay: PayRequest) =>
+    data<PayStart>(await apiClient.post('/billing/credits', { kind, quantity, ...pay })),
+  buyPlan: async (planId: string, pay: PayRequest) =>
+    data<PayStart>(await apiClient.post('/billing/plan', { planId, ...pay })),
+  payments: async () => data<BillingPaymentRow[]>(await apiClient.get('/billing/payments')),
+  payment: async (reference: string) => data<BillingPaymentRow>(await apiClient.get(`/billing/payments/${reference}`)),
+  payouts: async () => data<PayoutRow[]>(await apiClient.get('/billing/payouts')),
+  getPayoutInfo: async () => data<PayoutInfo | null>(await apiClient.get('/billing/payout-info')),
+  setPayoutInfo: async (info: PayoutInfo) => data<PayoutInfo>(await apiClient.put('/billing/payout-info', { info })),
+  adminPayouts: async () => data<PayoutRow[]>(await apiClient.get('/admin/payouts')),
+  markPaid: async (body: { eventId: string; part: 'MAIN' | 'RESERVE'; reference?: string; note?: string }) =>
+    data<unknown>(await apiClient.post('/admin/payouts', body)),
+};
+
 // --- Project API ---
 export const projectApi = {
   // Tasks

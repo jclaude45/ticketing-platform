@@ -73,6 +73,7 @@ export class SubscriptionController {
   @Post('me/subscribe')
   @Roles(Role.ORGANIZER, Role.ADMIN)
   subscribePlan(@CurrentUser('id') userId: string, @Body() body: { planId: string }) {
-    return this.subscriptionService.assignPlan(userId, { planId: body.planId }, 'self');
+    // Paid plans go through POST /billing/plan (FlexPay); only the free plan applies here
+    return this.subscriptionService.chooseFreePlanIfFree(userId, body.planId);
   }
 }

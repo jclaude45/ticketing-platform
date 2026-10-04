@@ -1,27 +1,45 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, HttpException, HttpStatus } from '@nestjs/common';
+import { SubscriptionPlan } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePlanDto, UpdatePlanDto, AssignPlanDto, UpdateSubscriptionDto } from './dto/subscription.dto';
+import { PRINT_UNIT_PRICES, PrintKind, addMonths } from '../billing/pricing';
 
-const isDev = process.env.NODE_ENV !== 'production';
-
-/** Shown when the free trial is used up: everything but the subscription is locked */
-export const TRIAL_OVER_MESSAGE =
-  "Votre essai gratuit est terminé : choisissez un plan dans « Mon abonnement » pour continuer.";
-
-/** Shown to a buyer when the organizer can no longer issue tickets */
-const SALES_CLOSED_MESSAGE =
-  "La billetterie de cet événement est momentanément indisponible. Réessayez plus tard ou contactez l'organisateur.";
-
-// Free trial: no subscription, no time limit, ends when its ticket or badge quota is used up
-const FREE_PLAN_DEFAULTS = {
+/** Free plan used when the database has none (code FREE): same figures as the pricing page */
+const FREE_PLAN_FALLBACK: SubscriptionPlan = {
+  id: 'free',
   name: 'Gratuit',
-  maxTickets: isDev ? -1 : 200,
-  maxBadges: isDev ? -1 : 50,
+  description: null,
+  price: 0,
+  maxTickets: 100,
+  maxBadges: 20,
   maxEvents: -1,
   showPoweredBy: true,
-  allowBulkExport: isDev ? true : false,
-  allowCommunication: false,
+  allowBulkExport: true,
+  allowCommunication: true,
+  code: 'FREE',
+  period: 'EVENT',
+  maxControllers: 2,
+  isActive: true,
+  createdAt: new Date(0),
+  updatedAt: new Date(0),
 };
+
+/** Tickets that count against the print quota: made by the organizer, never online sales */
+const QUOTA_SOURCES = ['GENERATION', 'INVITATION'];
+
+const KIND_LABELS: Record<PrintKind, { one: string; many: string }> = {
+  TICKETS: { one: 'billet', many: 'billets' },
+  BADGES: { one: 'badge', many: 'badges' },
+};
+
+/** The plan in force for an organizer, and the quota period it counts over */
+export interface EffectivePlan {
+  plan: SubscriptionPlan;
+  subscription: { id: string; startsAt: Date; expiresAt: Date | null; status: string } | null;
+  /** Monthly plans: current month of the subscription. Free plan: null (counted per event) */
+  periodStart: Date | null;
+  periodEnd: Date | null;
+}
 
 @Injectable()
 export class SubscriptionService {
@@ -86,8 +104,6 @@ export class SubscriptionService {
     const data = {
       planId: dto.planId,
       status: 'ACTIVE' as const,
-      ticketsUsed: 0,
-      badgesUsed: 0,
       startsAt: new Date(),
       expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
       notes: dto.notes ?? null,
@@ -197,137 +213,304 @@ export class SubscriptionService {
   async resetQuota(organizerId: string) {
     const sub = await this.prisma.organizerSubscription.findUnique({ where: { organizerId } });
     if (!sub) throw new NotFoundException('No subscription found for this organizer');
+    // Usage is counted from the tickets and badges themselves: a reset starts a new period
     return this.prisma.organizerSubscription.update({
       where: { organizerId },
-      data: { ticketsUsed: 0, badgesUsed: 0 },
+      data: { startsAt: new Date() },
       include: { plan: true },
     });
   }
 
-  // ── Quota enforcement ────────────────────────────────────────────────────
+  // ── Plan in force ────────────────────────────────────────────────────────
 
-  private async getActiveSub(organizerId: string) {
-    const sub = await this.prisma.organizerSubscription.findUnique({
-      where: { organizerId },
-      include: { plan: true },
-    });
-    const isActive = sub && sub.status === 'ACTIVE' && !(sub.expiresAt && sub.expiresAt < new Date());
-    return isActive ? sub : null;
-  }
-
-  async getEffectiveLimits(organizerId: string) {
-    const sub = await this.getActiveSub(organizerId);
-    if (!sub) {
-      // No subscription row to hold counters: usage is counted from the tickets and
-      // badges actually issued on the organizer's events
-      const [ticketsUsed, badgesUsed] = await Promise.all([
-        this.prisma.ticket.count({ where: { event: { organizerId } } }),
-        this.prisma.accreditation.count({ where: { event: { organizerId }, printedAt: { not: null } } }),
-      ]);
-      return {
-        maxTickets:         FREE_PLAN_DEFAULTS.maxTickets,
-        maxBadges:          FREE_PLAN_DEFAULTS.maxBadges,
-        maxEvents:          FREE_PLAN_DEFAULTS.maxEvents,
-        showPoweredBy:      FREE_PLAN_DEFAULTS.showPoweredBy,
-        allowBulkExport:    FREE_PLAN_DEFAULTS.allowBulkExport,
-        allowCommunication: FREE_PLAN_DEFAULTS.allowCommunication,
-        ticketsUsed,
-        badgesUsed,
-        onTrial: true,
-        trialOver:
-          (FREE_PLAN_DEFAULTS.maxTickets !== -1 && ticketsUsed >= FREE_PLAN_DEFAULTS.maxTickets) ||
-          (FREE_PLAN_DEFAULTS.maxBadges !== -1 && badgesUsed >= FREE_PLAN_DEFAULTS.maxBadges),
-      };
-    }
-    return {
-      maxTickets:         sub.plan.maxTickets,
-      maxBadges:          sub.plan.maxBadges,
-      maxEvents:          sub.plan.maxEvents,
-      showPoweredBy:      sub.plan.showPoweredBy,
-      allowBulkExport:    sub.plan.allowBulkExport,
-      allowCommunication: sub.plan.allowCommunication,
-      ticketsUsed:        sub.ticketsUsed,
-      badgesUsed:         sub.badgesUsed,
-      onTrial:            false,
-      trialOver:          false,
-    };
-  }
-
-  /** Refuses any change on an account whose free trial is used up */
-  async assertNotLocked(organizerId: string): Promise<void> {
-    const limits = await this.getEffectiveLimits(organizerId);
-    if (limits.trialOver) throw new ForbiddenException(TRIAL_OVER_MESSAGE);
-  }
-
-  /** Before a buyer pays: the organizer must still be able to issue these tickets */
-  async assertCanSell(organizerId: string, count: number): Promise<void> {
-    const limits = await this.getEffectiveLimits(organizerId);
-    const overQuota = limits.maxTickets !== -1 && limits.ticketsUsed + count > limits.maxTickets;
-    if (limits.trialOver || overQuota) throw new BadRequestException(SALES_CLOSED_MESSAGE);
-  }
-
-  async getShowPoweredBy(organizerId: string): Promise<boolean> {
-    return (await this.getEffectiveLimits(organizerId)).showPoweredBy;
-  }
-
-  async getAllowBulkExport(organizerId: string): Promise<boolean> {
-    return (await this.getEffectiveLimits(organizerId)).allowBulkExport;
-  }
-
-  async getAllowCommunication(organizerId: string): Promise<boolean> {
-    return (await this.getEffectiveLimits(organizerId)).allowCommunication;
+  async getFreePlan(): Promise<SubscriptionPlan> {
+    return (await this.prisma.subscriptionPlan.findFirst({ where: { code: 'FREE' } })) ?? FREE_PLAN_FALLBACK;
   }
 
   /**
-   * Counts issued tickets against the quota. `enforce: false` for tickets already paid
-   * for: the buyer must get them even if the quota was reached since the checkout.
+   * Active subscription (not expired) → its plan; otherwise the free plan.
+   * A monthly plan counts usage from the start of the current month of the subscription.
    */
-  async checkAndIncrementTickets(organizerId: string, count: number, opts: { enforce?: boolean } = {}): Promise<void> {
-    const limits = await this.getEffectiveLimits(organizerId);
-    if (opts.enforce !== false && limits.trialOver) throw new ForbiddenException(TRIAL_OVER_MESSAGE);
-    if (opts.enforce !== false && limits.maxTickets !== -1 && limits.ticketsUsed + count > limits.maxTickets) {
-      const remaining = Math.max(0, limits.maxTickets - limits.ticketsUsed);
-      throw new BadRequestException(
-        `Quota de billets dépassé. ${limits.onTrial ? 'Essai gratuit' : 'Abonnement'} : ${limits.maxTickets} billets. ` +
-        `Utilisés : ${limits.ticketsUsed}, Restants : ${remaining}. Demandés : ${count}.`,
-      );
+  async getEffectivePlan(organizerId: string): Promise<EffectivePlan> {
+    const sub = await this.prisma.organizerSubscription.findUnique({ where: { organizerId }, include: { plan: true } });
+    const now = new Date();
+    const active = sub && sub.status === 'ACTIVE' && !(sub.expiresAt && sub.expiresAt <= now) && sub.plan.code !== 'FREE';
+    if (!active) {
+      return {
+        plan: await this.getFreePlan(),
+        subscription: sub ? { id: sub.id, startsAt: sub.startsAt, expiresAt: sub.expiresAt, status: sub.status } : null,
+        periodStart: null,
+        periodEnd: null,
+      };
     }
-    const sub = await this.prisma.organizerSubscription.findUnique({ where: { organizerId } });
-    if (sub) {
-      await this.prisma.organizerSubscription.update({
-        where: { organizerId },
-        data: { ticketsUsed: { increment: count } },
+    let periodStart: Date | null = null;
+    let periodEnd: Date | null = null;
+    if (sub.plan.period !== 'EVENT') {
+      // Months counted from the start of the subscription (months paid in advance come later)
+      let k = 0;
+      while (addMonths(sub.startsAt, k + 1) <= now && k < 1200) k++;
+      periodStart = addMonths(sub.startsAt, k);
+      periodEnd = addMonths(sub.startsAt, k + 1);
+      if (sub.expiresAt && sub.expiresAt < periodEnd) periodEnd = sub.expiresAt;
+    }
+    return {
+      plan: sub.plan,
+      subscription: { id: sub.id, startsAt: sub.startsAt, expiresAt: sub.expiresAt, status: sub.status },
+      periodStart,
+      periodEnd,
+    };
+  }
+
+  /** Printed tickets or badges counted against the quota (per event or since the period start) */
+  private async printedCount(organizerId: string, kind: PrintKind, eff: EffectivePlan, eventId?: string): Promise<number> {
+    const perEvent = eff.plan.period === 'EVENT';
+    if (perEvent && !eventId) return 0;
+    if (kind === 'TICKETS') {
+      return this.prisma.ticket.count({
+        where: {
+          source: { in: QUOTA_SOURCES },
+          event: { organizerId },
+          ...(perEvent ? { eventId } : { createdAt: { gte: eff.periodStart ?? new Date(0) } }),
+        },
       });
+    }
+    return this.prisma.accreditation.count({
+      where: {
+        event: { organizerId },
+        ...(perEvent ? { eventId, printedAt: { not: null } } : { printedAt: { gte: eff.periodStart ?? new Date(0) } }),
+      },
+    });
+  }
+
+  private async credits(organizerId: string) {
+    const acc = await this.prisma.billingAccount.findUnique({ where: { organizerId } });
+    return { TICKETS: acc?.ticketCredits ?? 0, BADGES: acc?.badgeCredits ?? 0 };
+  }
+
+  /**
+   * What printing `count` tickets or badges costs: first the plan quota, then the paid
+   * credits, and whatever is still missing at the per-unit price.
+   */
+  async quotePrint(organizerId: string, kind: PrintKind, count: number, eventId?: string) {
+    const eff = await this.getEffectivePlan(organizerId);
+    const max = kind === 'TICKETS' ? eff.plan.maxTickets : eff.plan.maxBadges;
+    const credits = (await this.credits(organizerId))[kind];
+    const unitPrice = PRINT_UNIT_PRICES[kind];
+    if (max === -1) {
+      return { kind, count, included: -1, used: 0, remaining: -1, credits, fromQuota: count, fromCredits: 0, missing: 0, unitPrice, amount: 0, period: eff.plan.period };
+    }
+    const used = await this.printedCount(organizerId, kind, eff, eventId);
+    const remaining = Math.max(0, max - used);
+    const fromQuota = Math.min(count, remaining);
+    const beyond = count - fromQuota;
+    const fromCredits = Math.min(beyond, credits);
+    const missing = beyond - fromCredits;
+    return {
+      kind, count, included: max, used, remaining, credits, fromQuota, fromCredits, missing, unitPrice,
+      amount: Math.ceil(missing * unitPrice * 100) / 100,
+      period: eff.plan.period,
+    };
+  }
+
+  /**
+   * Before printing: takes the plan quota then the paid credits. When credits are missing,
+   * answers 402 with the price so the dashboard can show it and let the organizer pay.
+   * Returns the credits taken, to give back if printing fails.
+   */
+  async consumePrint(organizerId: string, kind: PrintKind, count: number, eventId?: string): Promise<number> {
+    const q = await this.quotePrint(organizerId, kind, count, eventId);
+    if (q.missing > 0) throw this.paymentRequired(q);
+    if (q.fromCredits === 0) return 0;
+    const field = kind === 'TICKETS' ? 'ticketCredits' : 'badgeCredits';
+    const taken = await this.prisma.billingAccount.updateMany({
+      where: { organizerId, [field]: { gte: q.fromCredits } },
+      data: { [field]: { decrement: q.fromCredits } },
+    });
+    // Spent meanwhile by another generation: ask again with up-to-date figures
+    if (taken.count === 0) throw this.paymentRequired(await this.quotePrint(organizerId, kind, count, eventId));
+    return q.fromCredits;
+  }
+
+  /** Gives back credits taken for a print that failed */
+  async refundCredits(organizerId: string, kind: PrintKind, credits: number) {
+    if (credits <= 0) return;
+    await this.addCredits(organizerId, kind, credits);
+  }
+
+  async addCredits(organizerId: string, kind: PrintKind, quantity: number) {
+    const field = kind === 'TICKETS' ? 'ticketCredits' : 'badgeCredits';
+    await this.prisma.billingAccount.upsert({
+      where: { organizerId },
+      create: { organizerId, [field]: quantity },
+      update: { [field]: { increment: quantity } },
+    });
+  }
+
+  private paymentRequired(q: Awaited<ReturnType<SubscriptionService['quotePrint']>>) {
+    const l = KIND_LABELS[q.kind as PrintKind];
+    const n = (x: number, w: { one: string; many: string }) => `${x.toLocaleString('fr-FR')} ${x > 1 ? w.many : w.one}`;
+    const scope = q.period === 'EVENT' ? 'pour cet événement' : 'ce mois-ci';
+    return new HttpException(
+      {
+        statusCode: HttpStatus.PAYMENT_REQUIRED,
+        code: 'PRINT_CREDITS_REQUIRED',
+        message:
+          `Votre plan inclut ${n(q.included, l)} à imprimer ${scope} (reste ${q.remaining.toLocaleString('fr-FR')}). ` +
+          `${n(q.missing, l)} à ${q.unitPrice.toFixed(2).replace('.', ',')} $ : ${q.amount.toFixed(2).replace('.', ',')} $.`,
+        quote: q,
+      },
+      HttpStatus.PAYMENT_REQUIRED,
+    );
+  }
+
+  /** Controllers allowed by the plan */
+  async assertCanAddController(organizerId: string) {
+    const { plan } = await this.getEffectivePlan(organizerId);
+    if (plan.maxControllers === -1) return;
+    const count = await this.controllersCount(organizerId);
+    if (count >= plan.maxControllers) {
+      throw new ForbiddenException(
+        `Votre plan ${plan.name} permet ${plan.maxControllers} contrôleur${plan.maxControllers > 1 ? 's' : ''}. ` +
+          'Supprimez-en un ou passez à un plan supérieur dans « Mon abonnement ».',
+      );
     }
   }
 
-  async checkAndIncrementBadges(organizerId: string, count: number): Promise<void> {
-    const limits = await this.getEffectiveLimits(organizerId);
-    if (limits.trialOver) throw new ForbiddenException(TRIAL_OVER_MESSAGE);
-    if (limits.maxBadges !== -1 && limits.badgesUsed + count > limits.maxBadges) {
-      const remaining = Math.max(0, limits.maxBadges - limits.badgesUsed);
-      throw new BadRequestException(
-        `Quota de badges dépassé. ${limits.onTrial ? 'Essai gratuit' : 'Abonnement'} : ${limits.maxBadges} badges. ` +
-        `Utilisés : ${limits.badgesUsed}, Restants : ${remaining}. Demandé : 1.`,
-      );
-    }
-    const sub = await this.prisma.organizerSubscription.findUnique({ where: { organizerId } });
-    if (sub) {
+  /** Controllers of the account; the one made for the organizer scanning in person is free */
+  private async controllersCount(organizerId: string) {
+    const owner = await this.prisma.user.findUnique({ where: { id: organizerId }, select: { email: true } });
+    return this.prisma.controller.count({
+      where: { organizerId, ...(owner ? { NOT: { email: owner.email } } : {}) },
+    });
+  }
+
+  // ── Plans paid by the organizer ──────────────────────────────────────────
+
+  /** After a paid month: starts the plan, or adds a month to the same plan still running */
+  async activatePaidPlan(organizerId: string, planId: string) {
+    const plan = await this.getPlanOrThrow(planId);
+    const sub = await this.prisma.organizerSubscription.findUnique({ where: { organizerId }, include: { plan: true } });
+    const now = new Date();
+    const running = sub && sub.planId === planId && sub.status === 'ACTIVE' && sub.expiresAt && sub.expiresAt > now;
+    const data = running
+      ? { expiresAt: addMonths(sub.expiresAt!, 1) }
+      : { planId, status: 'ACTIVE' as const, startsAt: now, expiresAt: addMonths(now, 1) };
+    const saved = sub
+      ? await this.prisma.organizerSubscription.update({ where: { organizerId }, data, include: { plan: true } })
+      : await this.prisma.organizerSubscription.create({
+          data: { organizerId, planId, status: 'ACTIVE', startsAt: now, expiresAt: addMonths(now, 1) },
+          include: { plan: true },
+        });
+    await this.logChange(organizerId, {
+      kind: running ? 'renew' : sub ? 'change' : 'start',
+      planName: plan.name,
+      price: plan.price,
+      previousPlanName: running ? null : (sub?.plan.name ?? null),
+      expiresAt: saved.expiresAt?.toISOString() ?? null,
+      by: 'self',
+    });
+    return saved;
+  }
+
+  async chooseFreePlanIfFree(organizerId: string, planId: string) {
+    const plan = await this.getPlanOrThrow(planId);
+    if (plan.price > 0) throw new BadRequestException('Ce plan est payant : réglez-le par Mobile Money ou carte.');
+    return this.chooseFreePlan(organizerId);
+  }
+
+  /** Back to the free plan at once (no commitment) */
+  async chooseFreePlan(organizerId: string) {
+    const free = await this.getFreePlan();
+    const sub = await this.prisma.organizerSubscription.findUnique({ where: { organizerId }, include: { plan: true } });
+    if (!sub) return { plan: free };
+    if (free.id === 'free') {
+      await this.prisma.organizerSubscription.delete({ where: { organizerId } });
+    } else {
       await this.prisma.organizerSubscription.update({
         where: { organizerId },
-        data: { badgesUsed: { increment: count } },
+        data: { planId: free.id, status: 'ACTIVE', startsAt: new Date(), expiresAt: null },
       });
     }
+    await this.logChange(organizerId, { kind: 'change', planName: free.name, price: 0, previousPlanName: sub.plan.name, by: 'self' });
+    return { plan: free };
+  }
+
+  // ── Limits and features ──────────────────────────────────────────────────
+
+  /** Plan in force, its period, usage and credits: the "Mon abonnement" page */
+  async getEffectiveLimits(organizerId: string) {
+    const eff = await this.getEffectivePlan(organizerId);
+    const [credits, controllersUsed] = await Promise.all([
+      this.credits(organizerId),
+      this.controllersCount(organizerId),
+    ]);
+    const perEvent = eff.plan.period === 'EVENT';
+    // Free plan: usage of each recent event; monthly plans: usage of the month
+    const events = perEvent
+      ? await this.prisma.event.findMany({
+          where: { organizerId, status: { not: 'CANCELLED' } },
+          orderBy: { startDate: 'desc' },
+          take: 6,
+          select: { id: true, name: true, startDate: true },
+        })
+      : [];
+    const perEventUsage = await Promise.all(
+      events.map(async (e) => ({
+        eventId: e.id,
+        name: e.name,
+        startDate: e.startDate,
+        tickets: await this.printedCount(organizerId, 'TICKETS', eff, e.id),
+        badges: await this.printedCount(organizerId, 'BADGES', eff, e.id),
+      })),
+    );
+    const [ticketsUsed, badgesUsed] = perEvent
+      ? [0, 0]
+      : await Promise.all([
+          this.printedCount(organizerId, 'TICKETS', eff),
+          this.printedCount(organizerId, 'BADGES', eff),
+        ]);
+    return {
+      plan: {
+        id: eff.plan.id, code: eff.plan.code, name: eff.plan.name, price: eff.plan.price, period: eff.plan.period,
+        maxTickets: eff.plan.maxTickets, maxBadges: eff.plan.maxBadges, maxControllers: eff.plan.maxControllers,
+      },
+      periodStart: eff.periodStart,
+      periodEnd: eff.periodEnd,
+      maxTickets: eff.plan.maxTickets,
+      maxBadges: eff.plan.maxBadges,
+      maxEvents: eff.plan.maxEvents,
+      maxControllers: eff.plan.maxControllers,
+      showPoweredBy: eff.plan.showPoweredBy,
+      allowBulkExport: eff.plan.allowBulkExport,
+      allowCommunication: eff.plan.allowCommunication,
+      ticketsUsed,
+      badgesUsed,
+      controllersUsed,
+      perEvent: perEventUsage,
+      credits: { tickets: credits.TICKETS, badges: credits.BADGES },
+      unitPrices: PRINT_UNIT_PRICES,
+    };
+  }
+
+  async getShowPoweredBy(organizerId: string): Promise<boolean> {
+    return (await this.getEffectivePlan(organizerId)).plan.showPoweredBy;
+  }
+
+  async getAllowBulkExport(organizerId: string): Promise<boolean> {
+    return (await this.getEffectivePlan(organizerId)).plan.allowBulkExport;
+  }
+
+  async getAllowCommunication(organizerId: string): Promise<boolean> {
+    return (await this.getEffectivePlan(organizerId)).plan.allowCommunication;
   }
 
   async checkEventCreation(organizerId: string): Promise<void> {
-    const limits = await this.getEffectiveLimits(organizerId);
-    if (limits.trialOver) throw new ForbiddenException(TRIAL_OVER_MESSAGE);
-    if (limits.maxEvents === -1) return;
+    const { plan } = await this.getEffectivePlan(organizerId);
+    if (plan.maxEvents === -1) return;
     const eventCount = await this.prisma.event.count({ where: { organizerId } });
-    if (eventCount >= limits.maxEvents) {
+    if (eventCount >= plan.maxEvents) {
       throw new ForbiddenException(
-        `Limite d'événements atteinte. Votre abonnement permet ${limits.maxEvents} événement(s). ` +
+        `Limite d'événements atteinte. Votre abonnement permet ${plan.maxEvents} événement(s). ` +
         `Vous en avez déjà ${eventCount}.`,
       );
     }

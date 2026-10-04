@@ -614,7 +614,7 @@ export class TeamService {
     // Badge quota: a badge counts once, on its first print (later downloads are free),
     // on the account of the event owner
     if (!member.accreditation.printedAt) {
-      await this.subscriptionService.checkAndIncrementBadges(member.event.organizerId, 1);
+      await this.subscriptionService.consumePrint(member.event.organizerId, 'BADGES', 1, eventId);
     }
 
     const acc = member.accreditation;

@@ -304,6 +304,11 @@ export interface SubscriptionPlan {
   showPoweredBy: boolean;
   allowBulkExport: boolean;
   allowCommunication: boolean;
+  /** FREE / STARTER / PRO */
+  code?: string | null;
+  /** 'EVENT' (per event) or 'MONTH' */
+  period?: string;
+  maxControllers?: number;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -328,18 +333,31 @@ export interface OrganizerSubscription {
 }
 
 export interface OrganizerLimits {
+  /** Plan in force (the free plan when there is no paid subscription) */
+  plan: {
+    id: string; code: string | null; name: string; price: number;
+    /** 'EVENT': quotas per event (free plan) · 'MONTH': quotas per month */
+    period: 'EVENT' | 'MONTH' | string;
+    maxTickets: number; maxBadges: number; maxControllers: number;
+  };
+  periodStart: string | null;
+  periodEnd: string | null;
   maxTickets: number;
   maxBadges: number;
   maxEvents: number;
+  maxControllers: number;
   showPoweredBy: boolean;
   allowBulkExport: boolean;
   allowCommunication: boolean;
+  /** Monthly plans: printed this month */
   ticketsUsed: number;
   badgesUsed: number;
-  /** No active subscription: free trial, without time limit */
-  onTrial?: boolean;
-  /** Trial quota used up: everything but the subscription is locked */
-  trialOver?: boolean;
+  controllersUsed: number;
+  /** Free plan: printed per recent event */
+  perEvent: { eventId: string; name: string; startDate: string; tickets: number; badges: number }[];
+  /** Paid print credits left */
+  credits: { tickets: number; badges: number };
+  unitPrices: { TICKETS: number; BADGES: number };
 }
 
 // Ticket editor canvas element types

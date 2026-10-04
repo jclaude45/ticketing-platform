@@ -6,8 +6,7 @@ import { motion } from 'framer-motion';
 import {
   BarChart3, Calendar, ChevronLeft, ChevronRight,
   History, LayoutDashboard, LogOut, Settings,
-  Shield, Users, Zap, CreditCard, ShieldCheck, LayoutGrid, BadgeCheck, UserCog,
-} from 'lucide-react';
+  Shield, Users, Zap, CreditCard, ShieldCheck, LayoutGrid, BadgeCheck, UserCog, Wallet } from 'lucide-react';
 import { useWorkspace } from '@/hooks/useWorkspace';
 import { useAuthStore } from '@/store/auth.store';
 import { useUIStore } from '@/store/ui.store';
@@ -60,6 +59,7 @@ const baseNavSections: { title: string; items: NavItem[]; roles?: string[]; owne
     ownerOnly: true,
     items: [
       { label: 'Mon abonnement', href: '/dashboard/subscription', icon: BadgeCheck },
+      { label: 'Mes versements', href: '/dashboard/payouts', icon: Wallet },
     ],
   },
   {
@@ -68,6 +68,7 @@ const baseNavSections: { title: string; items: NavItem[]; roles?: string[]; owne
     items: [
       { label: 'Vue d\'ensemble', href: '/dashboard/admin', icon: LayoutGrid, exact: true },
       { label: 'Abonnements', href: '/dashboard/admin/subscriptions', icon: CreditCard },
+      { label: 'Versements', href: '/dashboard/admin/payouts', icon: Wallet },
     ],
   },
   {

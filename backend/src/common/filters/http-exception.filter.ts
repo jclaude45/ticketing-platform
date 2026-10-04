@@ -20,6 +20,9 @@ export class HttpExceptionFilter implements ExceptionFilter {
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = 'Internal server error';
     let errors: any = undefined;
+    // Machine-readable details some errors carry (e.g. the price of a print beyond the quota)
+    let code: string | undefined;
+    let details: any = undefined;
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
@@ -30,6 +33,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
       } else if (typeof exceptionResponse === 'object') {
         const responseObj = exceptionResponse as any;
         message = responseObj.message || message;
+        if (typeof responseObj.code === 'string') code = responseObj.code;
+        if (responseObj.quote) details = { quote: responseObj.quote };
         if (Array.isArray(responseObj.message)) {
           errors = responseObj.message;
           message = 'Validation failed';
@@ -45,6 +50,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
       statusCode: status,
       message,
       errors,
+      ...(code && { code }),
+      ...(details && details),
       path: request.url,
       method: request.method,
       timestamp: new Date().toISOString(),

@@ -12,7 +12,7 @@ type NavLink = { label: string; href: string };
 const LANDING_LINKS: NavLink[] = [
   { label: 'Accueil', href: '/#accueil' },
   { label: 'Fonctionnalités', href: '/#fonctionnalites' },
-  { label: 'Tarifs', href: '/#tarifs' },
+  { label: 'Tarifs', href: '/tarifs' },
   { label: 'Billetterie', href: '/billetterie' },
   { label: 'Contact', href: '/#contact' },
 ];

@@ -46,6 +46,7 @@ export class EventsService {
         // was saved as OTHER / USD)
         ...(dto.type && { type: dto.type }),
         ...(dto.currency && { currency: dto.currency }),
+        ...(dto.feePayer && { feePayer: dto.feePayer }),
         bannerUrl: dto.bannerUrl,
         organizerId,
       },
@@ -185,6 +186,7 @@ export class EventsService {
         ...(dto.status && { status: dto.status }),
         ...(dto.type && { type: dto.type }),
         ...(dto.currency && { currency: dto.currency }),
+        ...(dto.feePayer && { feePayer: dto.feePayer }),
         ...(dto.bannerUrl !== undefined && { bannerUrl: dto.bannerUrl }),
       },
       include: {

@@ -10,6 +10,7 @@ import * as crypto from 'crypto';
 import { InitiatePaymentDto } from './dto/initiate-payment.dto';
 import { ShopService } from '../shop/shop.service';
 import { tariffLabel } from '../tickets/event-days';
+import { flexPayAmount, roundMoney, ticketFeeSplit } from '../billing/pricing';
 
 export type PaymentMethod = 'mobile_money' | 'card';
 
@@ -37,7 +38,7 @@ export class PaymentService {
   async initiatePayment(eventId: string, dto: InitiatePaymentDto) {
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
-      select: { id: true, name: true, organizerId: true, status: true, startDate: true, endDate: true, city: true, venue: true },
+      select: { id: true, name: true, organizerId: true, status: true, startDate: true, endDate: true, city: true, venue: true, feePayer: true },
     });
     if (!event) throw new NotFoundException('Événement introuvable');
     if (event.status !== 'PUBLISHED') throw new BadRequestException('Cet événement n\'accepte plus d\'inscriptions');
@@ -70,15 +71,6 @@ export class PaymentService {
         throw new BadRequestException(`Seulement ${tpl.availableCount} place(s) restante(s) pour "${tpl.name}"`);
       }
     }
-    // Checked before the buyer pays: once paid, the tickets are always issued
-    const ticketCount = ticketItems.reduce((n, i) => n + i.quantity, 0);
-    if (ticketCount > 0) await this.ticketGeneration.assertCanSell(event.organizerId, ticketCount);
-
-    const ticketTotal = ticketItems.reduce((sum, item) => {
-      const tpl = templates.find(t => t.id === item.templateId)!;
-      return sum + Number(tpl.price) * item.quantity;
-    }, 0);
-
     // ── Shop items (priced and checked from the database) ──
     const merchQuote = merchItems.length
       ? await this.shop.quote(eventId, merchItems, dto.fulfillment, {
@@ -92,7 +84,16 @@ export class PaymentService {
       throw new BadRequestException('Les articles d\'une même commande doivent avoir la même devise');
     }
     const currency = [...currencies][0];
-    const total = ticketTotal + (merchQuote?.total ?? 0);
+    // ZAYA's 9 % on paid tickets: added to the price (BUYER) or taken from it (ORGANIZER)
+    const split = ticketFeeSplit(
+      ticketItems.map(item => ({ price: Number(templates.find(t => t.id === item.templateId)!.price), quantity: item.quantity })),
+      event.feePayer,
+      currency,
+    );
+    // Shop items and delivery carry the same 9 %: ZAYA's share is on the whole payment
+    const merchTotal = merchQuote?.total ?? 0;
+    const merchNet = merchQuote?.organizerGets ?? 0;
+    const total = roundMoney(split.buyerPays + merchTotal, currency);
 
     // Free tickets only — generate directly without payment
     if (total === 0 && !merchQuote) {
@@ -118,6 +119,10 @@ export class PaymentService {
         amount: total,
         currency,
         paymentMethod: dto.paymentMethod,
+        ticketAmount: split.listed,
+        feeAmount: roundMoney(split.fee + (merchQuote?.fee ?? 0), currency),
+        feePayer: event.feePayer,
+        netAmount: roundMoney(split.organizerGets + merchNet, currency),
         items: ticketItems as any,
       },
     });
@@ -154,7 +159,7 @@ export class PaymentService {
           type: '1',
           phone,
           reference: payment.reference,
-          amount: String(Math.round(total)),
+          amount: flexPayAmount(total, currency),
           currency,
           callbackUrl: `${apiBackend}/api/v1/public/payments/callback`,
         },
@@ -187,7 +192,7 @@ export class PaymentService {
           authorization: `Bearer ${this.FLEXPAY_TOKEN}`,
           merchant: this.FLEXPAY_MERCHANT,
           reference: payment.reference,
-          amount: String(Math.round(total)),
+          amount: flexPayAmount(total, currency),
           currency,
           description: `Billets — ${event.name}`,
           callback_url: `${apiBackend}/api/v1/public/payments/callback`,
@@ -362,7 +367,7 @@ export class PaymentService {
       const result = await this.ticketGeneration.generateTickets(
         payment.eventId, event.organizerId, Role.ORGANIZER,
         { templateId: item.templateId, holders: Array.from({ length: item.quantity }, () => holder) },
-        { source: 'ONLINE', paid: true },
+        { source: 'ONLINE' },
       );
       allTicketIds.push(...result.tickets.map((t: any) => t.id));
     }

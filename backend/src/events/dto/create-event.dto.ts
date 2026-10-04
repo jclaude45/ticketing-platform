@@ -78,6 +78,11 @@ export class CreateEventDto {
   @IsIn(['CDF','USD','EUR','XAF','GBP'])
   currency?: string;
 
+  @ApiPropertyOptional({ enum: ['ORGANIZER', 'BUYER'], description: "Who pays ZAYA's 9 % on paid tickets" })
+  @IsOptional()
+  @IsIn(['ORGANIZER', 'BUYER'])
+  feePayer?: 'ORGANIZER' | 'BUYER';
+
   @ApiPropertyOptional({ example: 'https://example.com/banner.jpg' })
   @IsOptional()
   @IsString()

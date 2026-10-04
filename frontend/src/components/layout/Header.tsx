@@ -39,6 +39,8 @@ function getPageTitle(pathname: string): string {
   if (last === 'administration') return 'Administration';
   if (last === 'subscription') return 'Mon abonnement';
   if (last === 'subscriptions') return 'Abonnements';
+  if (last === 'payouts') return segments.includes('admin') ? 'Versements' : 'Mes versements';
+  if (last === 'return' && segments.includes('billing')) return 'Paiement';
   if (last === 'events') return 'Événements';
   if (last === 'new') return 'Créer';
   if (last === 'edit') return 'Modifier';

@@ -128,6 +128,11 @@ model User {
   accountMemberships    AccountMember[] @relation("AccountMemberships")
   accessZones           AccessZone[]
   eventDrafts           EventDraft[]
+  billingAccount        BillingAccount?
+  billingPayments       BillingPayment[]
+  payouts               Payout[]
+  /// Where sales are paid out: { method: 'mobile_money'|'bank', phone?, network?, bankName?, accountNumber?, accountName? }
+  payoutInfo            Json?
 }
 
 model Event {
@@ -167,6 +172,9 @@ model Event {
   // Shop settings: delivery is offered when merchDeliveryFee is set (0 = free delivery)
   merchDeliveryFee Decimal? @db.Decimal(10, 2)
   merchPickupInfo  String?
+  /// Who pays ZAYA's 9 % on paid tickets: 'ORGANIZER' (taken from the price) or 'BUYER' (added to it)
+  feePayer         String   @default("ORGANIZER")
+  payouts          Payout[]
 }
 
 model TeamMember {
@@ -241,6 +249,8 @@ model Ticket {
   checkedInAt      DateTime?
   cancelledAt      DateTime?
   metadata         Json?
+  /// GENERATION / INVITATION (count against the print quota) or ONLINE (sale or registration: never counted)
+  source           String       @default("GENERATION")
   eventId          String
   templateId       String
   createdAt        DateTime     @default(now())
@@ -345,6 +355,12 @@ model SubscriptionPlan {
   showPoweredBy        Boolean  @default(true)
   allowBulkExport      Boolean  @default(true)
   allowCommunication   Boolean  @default(false)
+  /// FREE / STARTER / PRO: the plans of the pricing page
+  code            String?  @unique
+  /// Quota period: 'EVENT' (per event, free plan) or 'MONTH' (paid plans)
+  period          String   @default("MONTH")
+  /// Controllers the organizer can have (-1 = unlimited)
+  maxControllers  Int      @default(-1)
   isActive        Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -556,6 +572,12 @@ model Payment {
   amount        Decimal       @db.Decimal(10, 2)
   currency      String        @default("USD")
   paymentMethod String
+  /// Tickets subtotal at the listed prices, ZAYA's fee on it, and who paid that fee
+  ticketAmount  Decimal?      @db.Decimal(10, 2)
+  feeAmount     Decimal       @default(0) @db.Decimal(10, 2)
+  feePayer      String?
+  /// What the organizer is owed for this order (tickets net of the fee, plus shop items)
+  netAmount     Decimal?      @db.Decimal(10, 2)
   status        PaymentStatus @default(PENDING)
   items         Json
   providerRef   String?
@@ -715,4 +737,57 @@ model EventDraft {
   updatedAt DateTime @updatedAt
 
   @@index([ownerId])
+}
+
+/// Paid print credits of an organizer, used once the plan quota is reached
+model BillingAccount {
+  organizerId   String   @id
+  organizer     User     @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  ticketCredits Int      @default(0)
+  badgeCredits  Int      @default(0)
+  updatedAt     DateTime @updatedAt
+}
+
+/// What an organizer pays ZAYA: a plan month or print credits (FlexPay)
+model BillingPayment {
+  id            String        @id @default(uuid())
+  reference     String        @unique
+  orderNumber   String?
+  organizerId   String
+  organizer     User          @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  /// PLAN, TICKETS or BADGES
+  kind          String
+  planId        String?
+  quantity      Int?
+  unitPrice     Decimal?      @db.Decimal(10, 4)
+  amount        Decimal       @db.Decimal(10, 2)
+  currency      String        @default("USD")
+  paymentMethod String
+  phone         String?
+  status        PaymentStatus @default(PENDING)
+  paidAt        DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([organizerId])
+}
+
+/// Sales paid out to an organizer for an event: MAIN (90 %, 3 days after the end), RESERVE (10 %, 7 days later)
+model Payout {
+  id          String   @id @default(uuid())
+  organizerId String
+  organizer   User     @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  part        String
+  amount      Decimal  @db.Decimal(12, 2)
+  currency    String
+  /// Transfer reference (mobile money transaction, bank wire)
+  reference   String?
+  note        String?
+  paidById    String?
+  paidAt      DateTime @default(now())
+
+  @@unique([eventId, part])
+  @@index([organizerId])
 }

@@ -68,6 +68,8 @@ function PlanForm({ plan, onClose, onSave, saving }: PlanFormProps) {
     maxTickets:           plan?.maxTickets           ?? 200,
     maxBadges:            plan?.maxBadges            ?? 50,
     maxEvents:            plan?.maxEvents            ?? -1,
+    maxControllers:       plan?.maxControllers       ?? -1,
+    period:               plan?.period               ?? 'MONTH',
     showPoweredBy:        plan?.showPoweredBy        ?? true,
     allowBulkExport:      plan?.allowBulkExport      ?? true,
     allowCommunication:   plan?.allowCommunication   ?? false,
@@ -114,6 +116,15 @@ function PlanForm({ plan, onClose, onSave, saving }: PlanFormProps) {
             </div>
           </div>
 
+          {/* Quotas period: the free plan counts per event, paid plans per month */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Quotas de billets et badges</label>
+            <select className={field} value={form.period} onChange={e => set('period', e.target.value)}>
+              <option value="EVENT">Par événement</option>
+              <option value="MONTH">Par mois</option>
+            </select>
+          </div>
+
           {/* Limites — utilise defaultValue (non contrôlé) pour éviter le blocage
               lors de la saisie : le DOM gère l'affichage intermédiaire librement */}
           <div className="grid grid-cols-3 gap-3">
@@ -121,6 +132,7 @@ function PlanForm({ plan, onClose, onSave, saving }: PlanFormProps) {
               { key: 'maxTickets', label: 'Max billets' },
               { key: 'maxBadges',  label: 'Max badges'  },
               { key: 'maxEvents',  label: 'Max événements' },
+              { key: 'maxControllers', label: 'Max contrôleurs' },
             ].map(({ key, label }) => (
               <div key={key}>
                 <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">

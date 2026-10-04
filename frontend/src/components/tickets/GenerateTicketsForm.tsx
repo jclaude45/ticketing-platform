@@ -12,7 +12,9 @@ import {
   Users, Hash, CheckCircle2, Sparkles, AlertTriangle, Upload, Download, Check
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { apiClient } from '@/lib/api';
+import { apiClient, billingApi } from '@/lib/api';
+import { usePrintPayment, isPrintPaymentError } from '@/components/billing/usePrintPayment';
+import { usd } from '@/components/billing/FlexPayDialog';
 import toast from 'react-hot-toast';
 import { UpgradePlanModal } from '@/components/subscription/UpgradePlanModal';
 
@@ -98,6 +100,17 @@ export function GenerateTicketsForm({ eventId }: Props) {
 
   const selectedTemplate = templates.find((t: any) => t.id === templateId);
 
+  // Price shown before generating: plan quota, then credits, then the per-unit price
+  const quantity = mode === 'count' ? Number(count) || 0 : namedCount;
+  const { data: quote } = useQuery({
+    queryKey: ['print-quote', eventId, quantity],
+    queryFn: () => billingApi.quote('TICKETS', quantity, eventId),
+    enabled: quantity > 0,
+    placeholderData: prev => prev,
+  });
+  const toPay = quote && quote.count === quantity && quote.missing > 0 ? quote : null;
+  const { ask: askPayment, dialog: paymentDialog } = usePrintPayment();
+
   // ── Generate mutation ────────────────────────────────────────────────────
   const generate = useMutation({
     mutationFn: async (data: FormData) => {
@@ -130,7 +143,13 @@ export function GenerateTicketsForm({ eventId }: Props) {
       queryClient.invalidateQueries({ queryKey: ['events', eventId], refetchType: 'all' });
       queryClient.invalidateQueries({ queryKey: ['event', eventId], refetchType: 'all' });
     },
-    onError: (err: any) => {
+    onError: (err: any, variables) => {
+      // Credits missing (quota reached meanwhile): show the price, generate once paid
+      const q = isPrintPaymentError(err);
+      if (q) {
+        askPayment(q, () => generate.mutate(variables));
+        return;
+      }
       if (err?.response?.status === 403) {
         setUpgradeOpen(true);
       } else {
@@ -253,7 +272,10 @@ export function GenerateTicketsForm({ eventId }: Props) {
 
   return (
     <>
-    <form onSubmit={handleSubmit((d) => generate.mutate(d))} className="space-y-6">
+    <form
+      onSubmit={handleSubmit((d) => (toPay ? askPayment(toPay, () => generate.mutate(d)) : generate.mutate(d)))}
+      className="space-y-6"
+    >
 
       {/* Progress steps */}
       <div className="flex items-center gap-2">
@@ -551,7 +573,21 @@ export function GenerateTicketsForm({ eventId }: Props) {
                       <li>Template : <span className="font-medium">{selectedTemplate?.name}</span></li>
                       <li>Quantité : <span className="font-medium">{(mode === 'count' ? count : namedCount).toLocaleString('fr-FR')} billet{(mode === 'count' ? count : namedCount) > 1 ? 's' : ''}</span></li>
                       <li>Numérotation : <span className="font-mono font-medium">EVT…-000001 → EVT…-{String(mode === 'count' ? count : namedCount).padStart(6, '0')}</span></li>
-                      <li>Signature : <span className="font-medium">RSA-4096 par billet</span></li>
+                      <li>Signature : <span className="font-medium">Ed25519 par billet</span></li>
+                      {quote && quote.count === quantity && (
+                        <li>
+                          Coût :{' '}
+                          {quote.missing > 0 ? (
+                            <span className="font-semibold">
+                              {quote.missing.toLocaleString('fr-FR')} billet{quote.missing > 1 ? 's' : ''} au-delà de votre plan · {usd(quote.amount)}
+                            </span>
+                          ) : (
+                            <span className="font-medium">
+                              compris dans votre plan{quote.fromCredits > 0 ? ` (dont ${quote.fromCredits.toLocaleString('fr-FR')} sur vos crédits)` : ''}
+                            </span>
+                          )}
+                        </li>
+                      )}
                     </ul>
                   </div>
                 </div>
@@ -574,7 +610,7 @@ export function GenerateTicketsForm({ eventId }: Props) {
                 {generate.isPending ? (
                   <><Loader2 className="h-4 w-4 animate-spin" /> Génération en cours…</>
                 ) : (
-                  <><Sparkles className="h-4 w-4" /> Générer les billets</>
+                  <><Sparkles className="h-4 w-4" /> {toPay ? `Payer ${usd(toPay.amount)} et générer` : 'Générer les billets'}</>
                 )}
               </button>
             </div>
@@ -582,6 +618,7 @@ export function GenerateTicketsForm({ eventId }: Props) {
         )}
       </AnimatePresence>
     </form>
+    {paymentDialog}
     <UpgradePlanModal
       open={upgradeOpen}
       onClose={() => setUpgradeOpen(false)}

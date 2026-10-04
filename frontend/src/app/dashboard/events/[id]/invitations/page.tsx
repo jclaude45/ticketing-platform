@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { usePrintPayment, isPrintPaymentError } from '@/components/billing/usePrintPayment';
 import {
   ArrowLeft, Mail, Plus, Trash2, Upload, Download, Loader2, Send, FileSpreadsheet,
   CheckCircle2, AlertTriangle, RotateCw, UserPlus, Clock, XCircle,
@@ -94,7 +95,14 @@ export default function InvitationsPage() {
     queryClient.invalidateQueries({ queryKey: ['event', eventId], refetchType: 'all' });
   };
 
-  const onError = (err: any) => {
+  const { ask: askPayment, dialog: paymentDialog } = usePrintPayment();
+  // Invitations count against the print quota: beyond it, pay then send again
+  const onError = (err: any, retry?: () => void) => {
+    const q = isPrintPaymentError(err);
+    if (q && retry) {
+      askPayment(q, retry);
+      return;
+    }
     const msg = err?.response?.data?.message;
     toast.error(Array.isArray(msg) ? msg[0] : msg ?? err?.message ?? "Erreur lors de l'envoi");
   };
@@ -107,7 +115,7 @@ export default function InvitationsPage() {
         guests: validRows.map((r) => ({ name: r.name.trim(), email: r.email.trim() })),
       })) as SendResult,
     onSuccess: onSent,
-    onError,
+    onError: (err: any) => onError(err, () => sendManual.mutate()),
   });
 
   const sendImport = useMutation({
@@ -121,7 +129,7 @@ export default function InvitationsPage() {
       })) as SendResult;
     },
     onSuccess: onSent,
-    onError,
+    onError: (err: any) => onError(err, () => sendImport.mutate()),
   });
 
   const resend = useMutation({
@@ -131,7 +139,7 @@ export default function InvitationsPage() {
       toast.success('Invitation renvoyée');
       queryClient.invalidateQueries({ queryKey: ['invitations', eventId] });
     },
-    onError,
+    onError: (err: any) => onError(err),
   });
 
   const downloadTemplate = async () => {
@@ -431,6 +439,7 @@ export default function InvitationsPage() {
         )}
       </div>
 
+      {paymentDialog}
     </div>
   );
 }

@@ -76,6 +76,8 @@ export const createEventSchema = z.object({
   description: z.string().min(10, 'La description doit contenir au moins 10 caractères').max(2000).optional().or(z.literal('')),
   type: z.enum(['CONCERT','CONFERENCE','FESTIVAL','SPORT','PARTY','EXHIBITION','THEATER','WORKSHOP','OTHER']).default('OTHER'),
   currency: z.enum(['CDF','USD','EUR','XAF','GBP']).default('USD'),
+  /** Who pays ZAYA's 9 % on paid tickets */
+  feePayer: z.enum(['ORGANIZER', 'BUYER']).default('ORGANIZER'),
   venue: z.string().min(2, 'Le lieu est requis').max(200),
   address: z.string().max(300).optional(),
   city: z.string().min(1, 'La ville est requise').max(100),

@@ -1,3 +1,4 @@
+import { buyerUnitPrice, roundMoney, ticketFeeSplit } from '../billing/pricing';
 import {
   Injectable, NotFoundException, ForbiddenException, BadRequestException, Logger,
 } from '@nestjs/common';
@@ -45,10 +46,14 @@ export interface MerchQuote {
   }[];
   fulfillment: 'PICKUP' | 'DELIVERY';
   delivery: { address: string; city: string; notes: string | null } | null;
+  /** Items at the prices the buyer pays (ZAYA's 9 % included when the buyer pays it) */
   subtotal: number;
   deliveryFee: number;
   total: number;
   currency: string;
+  /** ZAYA's 9 % on the items and the delivery, and what the organizer gets for them */
+  fee: number;
+  organizerGets: number;
 }
 
 @Injectable()
@@ -316,7 +321,7 @@ export class ShopService {
   async publicCatalog(eventId: string) {
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
-      select: { status: true, merchDeliveryFee: true, merchPickupInfo: true },
+      select: { status: true, merchDeliveryFee: true, merchPickupInfo: true, feePayer: true },
     });
     if (!event || event.status !== 'PUBLISHED') throw new NotFoundException('Événement introuvable');
     await this.expireStaleOrders(eventId);
@@ -335,11 +340,16 @@ export class ShopService {
     return {
       products: products.map((p) => ({
         ...p,
-        price: Number(p.price),
+        // The price the buyer pays: ZAYA's 9 % is already in it when the buyer pays the fee
+        basePrice: Number(p.price),
+        price: buyerUnitPrice(Number(p.price), event.feePayer, p.currency),
         // Exact stock stays private: just how many can still be bought (capped)
         variants: p.variants.map((v) => ({ id: v.id, size: v.size, color: v.color, available: Math.min(v.stock, 20) })),
       })),
-      delivery: event.merchDeliveryFee !== null ? { fee: Number(event.merchDeliveryFee) } : null,
+      // The 9 % applies to the delivery too: included in the fee shown when the buyer pays it
+      delivery: event.merchDeliveryFee !== null
+        ? { fee: buyerUnitPrice(Number(event.merchDeliveryFee), event.feePayer, products[0]?.currency ?? 'USD') }
+        : null,
       pickupInfo: event.merchPickupInfo,
     };
   }
@@ -357,7 +367,7 @@ export class ShopService {
     if (new Set(ids).size !== ids.length) throw new BadRequestException('Chaque article ne doit apparaître qu\'une fois');
     if (!fulfillment) throw new BadRequestException('Choisissez le retrait sur place ou la livraison');
 
-    const event = await this.prisma.event.findUnique({ where: { id: eventId }, select: { merchDeliveryFee: true } });
+    const event = await this.prisma.event.findUnique({ where: { id: eventId }, select: { merchDeliveryFee: true, feePayer: true } });
     const variants = await this.prisma.productVariant.findMany({
       where: { id: { in: ids }, product: { eventId, isActive: true } },
       include: { product: { select: { name: true, price: true, currency: true } } },
@@ -387,14 +397,22 @@ export class ShopService {
       deliveryInfo = { address: delivery.address.trim(), city: delivery.city.trim(), notes: delivery.notes?.trim() || null };
     }
 
-    const subtotal = lines.reduce((s, l) => s + l.unitPrice * l.quantity, 0);
+    // Same 9 % as the tickets, on the items and the delivery: added to the prices (BUYER)
+    // or taken from them (ORGANIZER)
+    const priced = [...lines.map((l) => ({ price: l.unitPrice, quantity: l.quantity })), ...(deliveryFee > 0 ? [{ price: deliveryFee, quantity: 1 }] : [])];
+    const split = ticketFeeSplit(priced, event.feePayer, currency);
+    const buyerLines = lines.map((l) => ({ ...l, unitPrice: buyerUnitPrice(l.unitPrice, event.feePayer, currency) }));
+    const subtotal = roundMoney(buyerLines.reduce((s, l) => s + l.unitPrice * l.quantity, 0), currency);
+    deliveryFee = buyerUnitPrice(deliveryFee, event.feePayer, currency);
     return {
-      lines: lines.map(({ currency: _c, ...l }) => l),
+      lines: buyerLines.map(({ currency: _c, ...l }) => l),
+      fee: split.fee,
+      organizerGets: split.organizerGets,
       fulfillment,
       delivery: deliveryInfo,
       subtotal,
       deliveryFee,
-      total: subtotal + deliveryFee,
+      total: roundMoney(subtotal + deliveryFee, currency),
       currency,
     };
   }

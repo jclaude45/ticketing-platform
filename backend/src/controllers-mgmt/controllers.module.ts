@@ -1,3 +1,4 @@
+import { SubscriptionModule } from '../subscription/subscription.module';
 import { Module } from '@nestjs/common';
 import { ControllersController } from './controllers.controller';
 import { ControllersService } from './controllers.service';
@@ -10,6 +11,7 @@ import { InvitationsModule } from '../invitations/invitations.module';
 
 @Module({
   imports: [
+    SubscriptionModule,
     ConfigModule,
     AuthModule,
     InvitationsModule,

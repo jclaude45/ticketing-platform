@@ -36,8 +36,6 @@ export class TicketGenerationService {
       metadata?: Prisma.InputJsonValue;
       /** For the ticket history: where the batch comes from (default: the organizer) */
       source?: TicketSource;
-      /** Order already paid: issue the tickets even if the quota was reached meanwhile */
-      paid?: boolean;
     },
   ) {
     // Validate event
@@ -77,8 +75,12 @@ export class TicketGenerationService {
       );
     }
 
-    // Enforce subscription quota
-    await this.subscriptionService.checkAndIncrementTickets(event.organizerId, count, { enforce: !options?.paid });
+    // Print quota: tickets made by the organizer (batches, invitations) use the plan quota,
+    // then paid credits. Online sales and registrations never count.
+    const source: TicketSource = options?.source ?? 'GENERATION';
+    const creditsTaken = source === 'ONLINE'
+      ? 0
+      : await this.subscriptionService.consumePrint(event.organizerId, 'TICKETS', count, eventId);
 
     // Get the active key pair for the organizer — auto-generate if none exists
     // resolveEncKey() returns the KMS-decrypted DEK (or raw env var as fallback)
@@ -151,6 +153,7 @@ export class TicketGenerationService {
         eventId,
         templateId: dto.templateId,
         ...(options?.metadata !== undefined && { metadata: options.metadata }),
+        source,
       });
     }
 
@@ -173,6 +176,10 @@ export class TicketGenerationService {
       }
 
       return tickets;
+    }).catch(async (err) => {
+      // Nothing was issued: give back the credits taken for this batch
+      await this.subscriptionService.refundCredits(event.organizerId, 'TICKETS', creditsTaken);
+      throw err;
     });
 
     // Regenerate QR codes with actual ticket IDs
@@ -202,7 +209,6 @@ export class TicketGenerationService {
 
     this.logger.log(`Generated ${count} tickets for event ${eventId}`);
 
-    const source: TicketSource = options?.source ?? 'GENERATION';
     await logTicketAction(this.prisma, {
       action: 'ticket.generate',
       eventId,
@@ -230,11 +236,6 @@ export class TicketGenerationService {
         holderEmail: t.holderEmail,
       })),
     };
-  }
-
-  /** Public sales: refused before the buyer pays when the organizer cannot issue them */
-  async assertCanSell(organizerId: string, count: number) {
-    await this.subscriptionService.assertCanSell(organizerId, count);
   }
 
   async cancelTicket(ticketId: string, organizerId: string, organizerRole: Role) {

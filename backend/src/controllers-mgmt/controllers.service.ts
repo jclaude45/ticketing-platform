@@ -1,3 +1,4 @@
+import { SubscriptionService } from '../subscription/subscription.service';
 import {
   Injectable,
   NotFoundException,
@@ -27,6 +28,7 @@ export class ControllersService {
     private readonly redisService: RedisService,
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
+    private readonly subscriptions: SubscriptionService,
   ) {
     this.mailer = nodemailer.createTransport({
       host: configService.get<string>('email.host'),
@@ -40,6 +42,7 @@ export class ControllersService {
   }
 
   async create(organizerId: string, dto: CreateControllerDto) {
+    await this.subscriptions.assertCanAddController(organizerId);
     const existing = await this.prisma.controller.findUnique({
       where: { email: dto.email },
     });
@@ -244,6 +247,7 @@ export class ControllersService {
   }
 
   async invite(organizerId: string, dto: InviteControllerDto) {
+    await this.subscriptions.assertCanAddController(organizerId);
     const existing = await this.prisma.controller.findUnique({ where: { email: dto.email } });
     if (existing) throw new ConflictException('A controller with this email already exists');
 
