@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { Menu, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -86,8 +87,10 @@ export function SiteHeader({ variant }: { variant: 'landing' | 'billetterie' }) 
         </button>
       </div>
 
-      {open && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-white lg:hidden">
+      {/* Rendered in <body>: the header's backdrop blur would otherwise confine this fixed
+          panel to the header bar (a backdrop-filter makes it the containing block) */}
+      {open && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[60] flex flex-col bg-white lg:hidden" role="dialog" aria-modal="true" aria-label="Menu">
           <div className="flex h-[72px] items-center justify-between px-6">
             <ZayaLogo className="text-[26px]" />
             <button
@@ -107,7 +110,8 @@ export function SiteHeader({ variant }: { variant: 'landing' | 'billetterie' }) 
             ))}
             <div className="flex flex-col items-start gap-4 py-8" onClick={() => setOpen(false)}>{actions}</div>
           </nav>
-        </div>
+        </div>,
+        document.body,
       )}
     </header>
   );
