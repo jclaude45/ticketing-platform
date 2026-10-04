@@ -8,6 +8,7 @@ import { motion } from 'framer-motion';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { registerSchema, type RegisterFormData } from '@/lib/validations';
 import { useRegister } from '@/hooks/useAuth';
+import { SITE_URL } from '@/components/site/site-config';
 
 function PasswordStrength({ password }: { password: string }) {
   const strength = useMemo(() => {
@@ -166,6 +167,19 @@ export function RegisterForm() {
         </div>
         {errors.confirmPassword && <p className="mt-1 text-sm text-red-600">{errors.confirmPassword.message}</p>}
       </div>
+
+      <label className="flex items-start gap-3 text-sm leading-snug text-[#333]">
+        <input type="checkbox" {...register('acceptTerms')} className="mt-0.5 h-4 w-4 flex-shrink-0 accent-black" />
+        <span>
+          J’accepte les{' '}
+          <a href={`${SITE_URL}/cgu`} target="_blank" rel="noopener noreferrer" className="font-semibold text-black underline underline-offset-2">conditions générales d’utilisation</a>,
+          les{' '}
+          <a href={`${SITE_URL}/cgv`} target="_blank" rel="noopener noreferrer" className="font-semibold text-black underline underline-offset-2">conditions générales de vente</a>{' '}
+          et la{' '}
+          <a href={`${SITE_URL}/politique-de-confidentialite`} target="_blank" rel="noopener noreferrer" className="font-semibold text-black underline underline-offset-2">politique de confidentialité</a>.
+        </span>
+      </label>
+      {errors.acceptTerms && <p className="-mt-2 text-sm text-red-600">{errors.acceptTerms.message}</p>}
 
       <button
         type="submit"

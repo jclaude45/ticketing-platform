@@ -10,7 +10,7 @@ import * as crypto from 'crypto';
 import { InitiatePaymentDto } from './dto/initiate-payment.dto';
 import { ShopService } from '../shop/shop.service';
 import { tariffLabel } from '../tickets/event-days';
-import { flexPayAmount, roundMoney, ticketFeeSplit } from '../billing/pricing';
+import { buyerUnitPrice, flexPayAmount, roundMoney, ticketFeeSplit } from '../billing/pricing';
 
 export type PaymentMethod = 'mobile_money' | 'card';
 
@@ -353,13 +353,22 @@ export class PaymentService {
       select: {
         id: true, name: true, organizerId: true,
         startDate: true, endDate: true, city: true, venue: true,
-        address: true, description: true, bannerUrl: true,
+        address: true, description: true, bannerUrl: true, feePayer: true,
         organizer: { select: { firstName: true, lastName: true, email: true } },
       },
     });
     if (!event) return;
 
     const items = payment.items as { templateId: string; quantity: number }[];
+    // The ticket shows what the buyer paid: the 9 % is in it when the buyer pays the fee
+    const templates = await this.prisma.ticketTemplate.findMany({
+      where: { id: { in: items.map(i => i.templateId) } },
+      select: { id: true, price: true, currency: true },
+    });
+    const paidPrice = (templateId: string) => {
+      const t = templates.find(x => x.id === templateId);
+      return t ? buyerUnitPrice(Number(t.price), payment.feePayer ?? event.feePayer, t.currency) : undefined;
+    };
     const holder = { holderName: payment.holderName, holderEmail: payment.holderEmail };
     const allTicketIds: string[] = [];
 
@@ -367,19 +376,19 @@ export class PaymentService {
       const result = await this.ticketGeneration.generateTickets(
         payment.eventId, event.organizerId, Role.ORGANIZER,
         { templateId: item.templateId, holders: Array.from({ length: item.quantity }, () => holder) },
-        { source: 'ONLINE' },
+        { source: 'ONLINE', price: paidPrice(item.templateId) },
       );
       allTicketIds.push(...result.tickets.map((t: any) => t.id));
     }
 
     const tickets = await this.prisma.ticket.findMany({
       where: { id: { in: allTicketIds } },
-      select: { id: true, serialNumber: true, holderName: true, holderEmail: true, qrCode: true, template: { select: { id: true, name: true, price: true, currency: true, validDays: true } } },
+      select: { id: true, serialNumber: true, holderName: true, holderEmail: true, qrCode: true, price: true, template: { select: { id: true, name: true, price: true, currency: true, validDays: true } } },
     });
 
     const ticketRows = tickets.map(t => ({
       ticketId: t.id, serialNumber: t.serialNumber,
-      templateName: tariffLabel(t.template.name, t.template.validDays), price: Number(t.template.price),
+      templateName: tariffLabel(t.template.name, t.template.validDays), price: Number(t.price),
       currency: t.template.currency, qrCode: t.qrCode,
     }));
 

@@ -22,7 +22,7 @@ const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
     links: [
       { label: "Centre d'Assistance", href: '/#contact' },
       { label: 'Contactez-nous', href: '/#contact' },
-      { label: 'Demander un remboursement', href: '/#contact' },
+      { label: 'Demander un remboursement', href: '/cgv#annulation' },
       { label: 'Tutoriels', href: '/#fonctionnalites' },
     ],
   },
@@ -87,7 +87,7 @@ export function SiteFooter() {
         <nav className="flex flex-wrap gap-x-3 gap-y-2 text-sm text-[#1a1a1a]">
           <Link href="/politique-de-confidentialite" className="hover:underline">Politique de Confidentialité</Link>
           <Link href="/cgu" className="hover:underline">Conditions Générales d&apos;Utilisation</Link>
-          <Link href="/cgu" className="hover:underline">Conditions d&apos;Achat</Link>
+          <Link href="/cgv" className="hover:underline">Conditions Générales de Vente</Link>
           <button type="button" onClick={openCookieSettings} className="hover:underline">Paramètres des cookies</button>
         </nav>
         <div className="flex items-center gap-3">

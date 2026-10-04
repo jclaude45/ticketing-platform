@@ -18,6 +18,8 @@ export const registerSchema = z
       .regex(/[0-9]/, 'Doit contenir au moins un chiffre')
       .regex(/[^A-Za-z0-9]/, 'Doit contenir au moins un caractère spécial'),
     confirmPassword: z.string(),
+    /** CGU, CGV and privacy policy accepted (electronic contract) */
+    acceptTerms: z.boolean({ required_error: 'Acceptez les conditions pour créer votre compte', invalid_type_error: 'Acceptez les conditions pour créer votre compte' }).refine(v => v === true, { message: 'Acceptez les conditions pour créer votre compte' }),
   })
   .refine(data => data.password === data.confirmPassword, {
     message: 'Les mots de passe ne correspondent pas',

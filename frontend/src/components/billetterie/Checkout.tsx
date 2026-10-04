@@ -445,6 +445,11 @@ export function Checkout({
                   {event.feePayer === 'BUYER' && (ticketTotal > 0 || merchSubtotal > 0) && (
                     <p className="text-center text-xs text-[#707070]">Frais de service et de paiement inclus dans les prix.</p>
                   )}
+                  <p className="text-center text-xs text-[#707070]">
+                    En validant, vous acceptez les{' '}
+                    <a href="/cgv" target="_blank" rel="noopener noreferrer" className="underline">conditions générales de vente</a>{' '}
+                    et la <a href="/politique-de-confidentialite" target="_blank" rel="noopener noreferrer" className="underline">politique de confidentialité</a>.
+                  </p>
                 </div>
                 {!contactOk && (name || email) && (
                   <p className="mt-3 text-center text-xs text-[#707070]">Indiquez votre nom et un email valide pour recevoir vos billets.</p>
