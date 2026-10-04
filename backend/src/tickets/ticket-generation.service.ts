@@ -128,6 +128,7 @@ export class TicketGenerationService {
 
       const holderName = holders[i]?.holderName?.trim();
       const holderEmail = holders[i]?.holderEmail?.trim();
+      const holderPhone = holders[i]?.holderPhone?.trim();
 
       // The id is chosen here, so the ticket is signed once with its final id. No QR image is
       // stored: it is drawn from the id and serial wherever it is shown (PDF, e-mail, page).
@@ -144,6 +145,7 @@ export class TicketGenerationService {
         qrCodeSignature: signature,
         holderName: holderName || null,
         holderEmail: holderEmail || null,
+        holderPhone: holderPhone || null,
         status: TicketStatus.VALID,
         price: options?.price ?? template.price,
         currency: template.currency,
@@ -175,7 +177,7 @@ export class TicketGenerationService {
       await this.subscriptionService.refundCredits(event.organizerId, 'TICKETS', creditsTaken);
       throw err;
     });
-    const ticketsWithQR = ticketsData as { id: string; serialNumber: string; status: TicketStatus; holderName: string | null; holderEmail: string | null }[];
+    const ticketsWithQR = ticketsData as { id: string; serialNumber: string; status: TicketStatus; holderName: string | null; holderEmail: string | null; holderPhone: string | null }[];
 
     this.logger.log(`Generated ${count} tickets for event ${eventId}`);
 
@@ -204,6 +206,7 @@ export class TicketGenerationService {
         status: t.status,
         holderName: t.holderName,
         holderEmail: t.holderEmail,
+        holderPhone: t.holderPhone,
       })),
     };
   }

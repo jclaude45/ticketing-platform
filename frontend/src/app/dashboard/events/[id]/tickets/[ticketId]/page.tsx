@@ -7,9 +7,10 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import {
   ArrowLeft, Ticket, CheckCircle2, XCircle, Clock,
-  AlertTriangle, User, Mail, Calendar, MapPin,
+  AlertTriangle, User, Mail, Phone, Calendar, MapPin,
   Ban, Download, RefreshCw,
 } from 'lucide-react';
+import { formatDrcPhone } from '@/lib/phone';
 import { cn } from '@/lib/utils';
 import { apiClient } from '@/lib/api';
 import { PrintButton } from '@/components/tickets/PrintButton';
@@ -215,6 +216,13 @@ export default function TicketDetailPage() {
                 <div>
                   <p className="text-xs text-gray-400">Email</p>
                   <p className="text-sm font-medium text-gray-800">{ticket.holderEmail ?? <span className="text-gray-400 italic">Non renseigné</span>}</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <Phone className="h-4 w-4 text-indigo-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-xs text-gray-400">Téléphone</p>
+                  <p className="text-sm font-medium text-gray-800">{ticket.holderPhone ? formatDrcPhone(ticket.holderPhone) : <span className="text-gray-400 italic">Non renseigné</span>}</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">

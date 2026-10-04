@@ -269,7 +269,7 @@ export class ValidationService {
           id: ticket.id,
           serialNumber: ticket.serialNumber,
           holderName: ticket.holderName,
-          ...(isPrivileged && { holderEmail: ticket.holderEmail }),
+          ...(isPrivileged && { holderEmail: ticket.holderEmail, holderPhone: ticket.holderPhone }),
           templateName: ticket.template.name,
           checkedInAt: entryAt,
         },
@@ -312,7 +312,7 @@ export class ValidationService {
         serialNumber: ticket.serialNumber,
         holderName: ticket.holderName,
         // Controllers only need what identifies the guest at the door
-        ...(isPrivileged && { holderEmail: ticket.holderEmail }),
+        ...(isPrivileged && { holderEmail: ticket.holderEmail, holderPhone: ticket.holderPhone }),
         templateName: ticket.template.name,
         checkedInAt,
       },

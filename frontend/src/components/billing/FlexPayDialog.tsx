@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, CreditCard, Loader2, Smartphone, X } from 'lucide-react';
 import { billingApi, type PayRequest, type PayStart } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { normalizeDrcPhone, formatDrcPhone, PHONE_PLACEHOLDER } from '@/lib/phone';
 
 export interface PayLine {
   label: string;
@@ -75,7 +76,7 @@ export function FlexPayDialog({ title, lines, amount, start, onClose, onPaid, no
 
   const pay = async () => {
     setError(null);
-    if (method === 'mobile_money' && phone.replace(/\D/g, '').length < 9) {
+    if (method === 'mobile_money' && !normalizeDrcPhone(phone)) {
       setError('Indiquez le numéro Mobile Money qui va payer.');
       return;
     }
@@ -162,15 +163,19 @@ export function FlexPayDialog({ title, lines, amount, start, onClose, onPaid, no
                 </button>
               ))}
             </div>
-            {method === 'mobile_money' && (
+            {method === 'mobile_money' && (<>
               <input
                 type="tel"
                 value={phone}
                 onChange={e => setPhone(e.target.value)}
-                placeholder="Numéro Mobile Money, ex. 0812345678"
+                inputMode="tel"
+                placeholder={PHONE_PLACEHOLDER}
                 className="mt-3 w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-[15px] text-black placeholder:text-gray-400 focus:border-black focus:outline-none focus:ring-1 focus:ring-black dark:border-gray-700 dark:bg-gray-800 dark:text-white"
               />
-            )}
+              {phone.trim() && (normalizeDrcPhone(phone)
+                ? <p className="mt-1.5 text-xs text-gray-500">Numéro débité : <strong className="text-black dark:text-white">{formatDrcPhone(normalizeDrcPhone(phone)!)}</strong></p>
+                : <p className="mt-1.5 text-xs text-red-600">Numéro invalide : 089…, +24389… ou 89…</p>)}
+            </>)}
             {method === 'card' && (
               <p className="mt-3 text-xs text-gray-500">Vous serez redirigé vers la page sécurisée FlexPay, puis ramené ici.</p>
             )}

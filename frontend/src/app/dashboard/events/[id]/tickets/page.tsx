@@ -22,6 +22,7 @@ import {
   Ban,
   Printer,
 } from 'lucide-react';
+import { formatDrcPhone } from '@/lib/phone';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -41,6 +42,7 @@ interface TicketRow {
   status: TicketStatus;
   holderName: string | null;
   holderEmail: string | null;
+  holderPhone: string | null;
   price: number;
   currency: string;
   purchasedAt: string | null;
@@ -541,6 +543,11 @@ export default function TicketsPage() {
                           {ticket.holderEmail && (
                             <p className="text-xs text-gray-400 truncate max-w-[140px]">
                               {ticket.holderEmail}
+                            </p>
+                          )}
+                          {ticket.holderPhone && (
+                            <p className="text-xs text-gray-400 truncate max-w-[140px]">
+                              {formatDrcPhone(ticket.holderPhone)}
                             </p>
                           )}
                         </div>

@@ -5,10 +5,11 @@ import Image from 'next/image';
 import { useMutation } from '@tanstack/react-query';
 import {
   X, ChevronDown, ChevronRight, ChevronLeft, Minus, Plus, Loader2, AlertCircle, CheckCircle2,
-  Ticket, Smartphone, ShoppingBag, Store, Truck,
+  Ticket, Smartphone, ShoppingBag, Store, Truck, CreditCard,
 } from 'lucide-react';
 import { publicApi, resolveMediaUrl } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { normalizeDrcPhone, formatDrcPhone } from '@/lib/phone';
 import { TicketVisual, ExportPDFButton, type TicketData } from './TicketCard';
 import { ProductCard, CartSummary, cartLines, money, variantLabel, type Cart, type ShopCatalog } from './Shop';
 import { StoreButtons } from '@/components/site/StoreButtons';
@@ -86,6 +87,36 @@ function AccordionRow({
       </span>
       {badge && !open && <span className="rounded-full bg-black px-2 py-0.5 text-xs font-bold text-white">{badge}</span>}
       {open ? <ChevronDown className="h-7 w-7 flex-shrink-0" strokeWidth={2} /> : <ChevronRight className="h-7 w-7 flex-shrink-0" strokeWidth={2} />}
+    </button>
+  );
+}
+
+/** One payment method: a row with a round selection button (radio) on the right */
+function PaymentMethodRow({
+  selected, onSelect, icon, title, subtitle,
+}: { selected: boolean; onSelect: () => void; icon: React.ReactNode; title: string; subtitle: string }) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      onClick={onSelect}
+      className={cn(
+        'flex w-full items-center gap-3 rounded-2xl border px-4 py-3.5 text-left transition-colors',
+        selected ? 'border-black bg-[#F7F7F7]' : 'border-[#c9c9c9] hover:border-black',
+      )}
+    >
+      <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-black text-white">{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-lg leading-tight">{title}</span>
+        <span className="block text-xs text-[#707070]">{subtitle}</span>
+      </span>
+      <span
+        aria-hidden="true"
+        className={cn('flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2', selected ? 'border-black' : 'border-[#9a9a9a]')}
+      >
+        {selected && <span className="h-3 w-3 rounded-full bg-black" />}
+      </span>
     </button>
   );
 }
@@ -215,16 +246,17 @@ export function Checkout({
   const isPaid = grandTotal > 0;
   const hasProducts = (catalog?.products.length ?? 0) > 0;
 
-  const contactOk = name.trim().length >= 2 && /\S+@\S+\.\S+/.test(email.trim());
+  const phoneOk = !!normalizeDrcPhone(phone);
+  const contactOk = name.trim().length >= 2 && /\S+@\S+\.\S+/.test(email.trim()) && phoneOk;
   const deliveryOk = merchCount === 0 || fulfillment === 'PICKUP' || (deliveryAddress.trim().length > 3 && deliveryCity.trim().length > 1);
-  const methodOk = !isPaid || (method === 'card') || (method === 'mobile_money' && phone.trim().length >= 8);
+  const methodOk = !isPaid || method !== null;
   const canPay = (ticketCount > 0 || merchCount > 0) && contactOk && deliveryOk && methodOk && !honeypot;
 
   const finish = (r: PurchaseResult) => { setResult(r); setStep('application'); onDone(); };
 
   const mutation = useMutation({
     mutationFn: () => {
-      const holder = { holderName: name.trim(), holderEmail: email.trim(), holderPhone: phone.trim() || undefined };
+      const holder = { holderName: name.trim(), holderEmail: email.trim(), holderPhone: normalizeDrcPhone(phone)! };
       if (!isPaid) return publicApi.purchaseTicket(event.id, { ...holder, items });
       return publicApi.initiatePayment(event.id, {
         ...holder,
@@ -399,6 +431,10 @@ export function Checkout({
                 <div className="space-y-5">
                   <input value={name} onChange={e => setName(e.target.value)} placeholder="Nom complet" autoComplete="name" maxLength={100} className={underline} />
                   <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email (pour recevoir vos billets)" autoComplete="email" maxLength={160} className={underline} />
+                  <div>
+                    <input type="tel" inputMode="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="Téléphone (089…, +24389… ou 89…)" autoComplete="tel" maxLength={30} aria-invalid={!!phone.trim() && !phoneOk} className={underline} />
+                    {phone.trim() && !phoneOk && <p className="mt-1.5 text-xs text-red-600">Numéro invalide : 089…, +24389… ou 89…</p>}
+                  </div>
                   {/* honeypot — hidden from people, bots fill it */}
                   <input value={honeypot} onChange={e => setHoneypot(e.target.value)} name="website" tabIndex={-1} autoComplete="off" aria-hidden="true"
                     style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }} />
@@ -430,15 +466,32 @@ export function Checkout({
                 )}
 
                 {isPaid && (
-                  <div className="mt-6">
-                    <AccordionRow open={method === 'card'} onToggle={() => setMethod(m => (m === 'card' ? null : 'card'))} title="Visa" detail={<span className="text-sm font-normal text-[#555]">Visa, Mastercard</span>} />
-                    <AccordionRow open={method === 'mobile_money'} onToggle={() => setMethod(m => (m === 'mobile_money' ? null : 'mobile_money'))} title="Mobile money" detail={<span className="text-sm font-normal text-[#555]">M-Pesa, Airtel Money, Orange Money</span>} />
+                  <div className="mt-6 space-y-2.5" role="radiogroup" aria-label="Moyen de paiement">
+                    <p className="text-[15px] text-[#555]">Moyen de paiement</p>
+                    <PaymentMethodRow
+                      selected={method === 'mobile_money'}
+                      onSelect={() => setMethod('mobile_money')}
+                      icon={<Smartphone className="h-5 w-5" />}
+                      title="Mobile Money"
+                      subtitle="M-Pesa, Airtel Money, Orange Money"
+                    />
+                    <PaymentMethodRow
+                      selected={method === 'card'}
+                      onSelect={() => setMethod('card')}
+                      icon={<CreditCard className="h-5 w-5" />}
+                      title="Carte bancaire"
+                      subtitle="Visa, Mastercard"
+                    />
                   </div>
                 )}
 
                 <div className="mt-8 space-y-4 rounded-[20px] border border-[#707070] px-6 pb-3 pt-4">
                   {method === 'mobile_money' && isPaid && (
-                    <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="Numéro" autoComplete="tel" maxLength={30} className={cn(underline, 'text-xl')} />
+                    <p className="text-center text-sm text-[#555]">
+                      {phoneOk
+                        ? <>La demande de paiement sera envoyée au <strong className="text-black">{formatDrcPhone(normalizeDrcPhone(phone)!)}</strong>.</>
+                        : 'La demande de paiement sera envoyée au numéro de téléphone indiqué plus haut.'}
+                    </p>
                   )}
                   {method === 'card' && isPaid && (
                     <p className="text-center text-sm text-[#555]">Vous serez redirigé vers la page de paiement sécurisée.</p>
@@ -458,8 +511,8 @@ export function Checkout({
                     et la <a href="/politique-de-confidentialite" target="_blank" rel="noopener noreferrer" className="underline">politique de confidentialité</a>.
                   </p>
                 </div>
-                {!contactOk && (name || email) && (
-                  <p className="mt-3 text-center text-xs text-[#707070]">Indiquez votre nom et un email valide pour recevoir vos billets.</p>
+                {!contactOk && (name || email || phone) && (
+                  <p className="mt-3 text-center text-xs text-[#707070]">Indiquez votre nom, un email et un numéro de téléphone valides pour recevoir vos billets.</p>
                 )}
               </>
             )}

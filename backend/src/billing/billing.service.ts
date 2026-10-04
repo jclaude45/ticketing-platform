@@ -6,6 +6,7 @@ import { SubscriptionService } from '../subscription/subscription.service';
 import { FlexPayClient } from './flexpay.client';
 import { PRINT_UNIT_PRICES, PrintKind, flexPayAmount } from './pricing';
 import { receiptPdf } from './billing-pdf';
+import { normalizeDrcPhone } from '../common/phone';
 
 export interface PayInput {
   paymentMethod: 'mobile_money' | 'card';
@@ -70,8 +71,10 @@ export class BillingService {
     pay: PayInput,
     description: string,
   ) {
-    if (pay.paymentMethod === 'mobile_money' && !pay.phone?.replace(/\D/g, '')) {
-      throw new BadRequestException('Le numéro de téléphone est requis pour Mobile Money');
+    if (pay.paymentMethod === 'mobile_money') {
+      const phone = normalizeDrcPhone(pay.phone);
+      if (!phone) throw new BadRequestException('Numéro Mobile Money invalide : utilisez 089…, +24389… ou 89…');
+      pay = { ...pay, phone };
     }
     const reference = `ZAYAB-${crypto.randomBytes(12).toString('hex').toUpperCase()}`;
     const currency = 'USD';

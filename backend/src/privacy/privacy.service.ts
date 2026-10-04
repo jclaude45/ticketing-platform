@@ -54,8 +54,8 @@ export class PrivacyService {
     // Participants, guests, team and shop customers of events ended more than 3 years ago
     const oldEvents = { endDate: { lt: before(RETENTION.eventDataYears * YEAR_MS) } };
     report.tickets = (await this.prisma.ticket.updateMany({
-      where: { event: oldEvents, OR: [{ holderName: { not: null } }, { holderEmail: { not: null } }, { qrCode: { not: null } }] },
-      data: { holderName: null, holderEmail: null, qrCode: null, metadata: Prisma.DbNull },
+      where: { event: oldEvents, OR: [{ holderName: { not: null } }, { holderEmail: { not: null } }, { holderPhone: { not: null } }, { qrCode: { not: null } }] },
+      data: { holderName: null, holderEmail: null, holderPhone: null, qrCode: null, metadata: Prisma.DbNull },
     })).count;
     report.teamMembers = (await this.prisma.teamMember.updateMany({
       where: { event: oldEvents, NOT: { name: 'Membre anonymisé' } },

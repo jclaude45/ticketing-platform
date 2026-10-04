@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Receipt, Search, X } from 'lucide-react';
+import { formatDrcPhone } from '@/lib/phone';
 import toast from 'react-hot-toast';
 import { billingApi, eventsApi, type EventOrder } from '@/lib/api';
 import { PageHeader } from '@/components/common/PageHeader';
@@ -53,7 +54,7 @@ export default function EventOrdersPage() {
 
   const list = (orders ?? []).filter(o => {
     const q = search.trim().toLowerCase();
-    return !q || [o.holderName, o.holderEmail, o.reference, o.holderPhone ?? ''].some(v => v.toLowerCase().includes(q));
+    return !q || [o.holderName, o.holderEmail, o.reference, o.holderPhone ?? '', o.holderPhone ? formatDrcPhone(o.holderPhone) : ''].some(v => v.toLowerCase().includes(q));
   });
   const paid = (orders ?? []).filter(o => o.status === 'COMPLETED');
   const currency = orders?.[0]?.currency ?? event?.currency ?? 'USD';
@@ -118,7 +119,7 @@ export default function EventOrdersPage() {
                 <span className="text-gray-500 lg:text-black lg:dark:text-white">{dayFr(o.date)}</span>
                 <span className="order-first min-w-0 lg:order-none">
                   <span className="block truncate font-semibold text-black dark:text-white">{o.holderName}</span>
-                  <span className="block truncate text-xs text-gray-500">{o.holderEmail}{o.holderPhone ? ` · ${o.holderPhone}` : ''}</span>
+                  <span className="block truncate text-xs text-gray-500">{o.holderEmail}{o.holderPhone ? ` · ${formatDrcPhone(o.holderPhone)}` : ''}</span>
                 </span>
                 <span className="text-gray-500">
                   {o.tickets > 0 && `${o.tickets} billet${o.tickets > 1 ? 's' : ''}`}

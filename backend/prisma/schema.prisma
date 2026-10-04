@@ -242,6 +242,7 @@ model Ticket {
   qrCodeSignature  String?      @db.Text
   holderName       String?
   holderEmail      String?
+  holderPhone      String?
   status           TicketStatus @default(PENDING)
   price            Decimal      @db.Decimal(10, 2)
   currency         String       @default("USD")

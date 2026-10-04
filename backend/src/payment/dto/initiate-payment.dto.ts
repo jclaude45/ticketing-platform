@@ -9,7 +9,7 @@ import { MerchItemDto } from '../../shop/dto/shop.dto';
 export class InitiatePaymentDto {
   @IsString() @MinLength(2) @MaxLength(100) holderName: string;
   @IsEmail() holderEmail: string;
-  @IsOptional() @IsString() @MaxLength(30) holderPhone?: string;
+  @IsString() @MaxLength(30) holderPhone: string;
 
   @IsOptional() @IsArray() @ArrayMaxSize(20)
   @ValidateNested({ each: true }) @Type(() => TicketItemDto)

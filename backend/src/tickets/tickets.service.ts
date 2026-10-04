@@ -39,6 +39,7 @@ export class TicketsService {
         { serialNumber: { contains: search, mode: 'insensitive' } },
         { holderName: { contains: search, mode: 'insensitive' } },
         { holderEmail: { contains: search, mode: 'insensitive' } },
+        { holderPhone: { contains: search.replace(/\D/g, '') || search } },
       ];
     }
 

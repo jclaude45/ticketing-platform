@@ -836,7 +836,7 @@ export const publicApi = {
   purchaseTicket: (eventId: string, data: {
     holderName: string;
     holderEmail: string;
-    holderPhone?: string;
+    holderPhone: string;
     items: { templateId: string; quantity: number }[];
   }) =>
     publicClient.post(`/public/events/${eventId}/register`, data),
@@ -844,7 +844,7 @@ export const publicApi = {
   initiatePayment: (eventId: string, data: {
     holderName: string;
     holderEmail: string;
-    holderPhone?: string;
+    holderPhone: string;
     items: { templateId: string; quantity: number }[];
     merch?: { variantId: string; quantity: number }[];
     fulfillment?: 'PICKUP' | 'DELIVERY';

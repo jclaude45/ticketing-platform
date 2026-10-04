@@ -1,5 +1,6 @@
 import { button, details, emailLayout, emailText, esc, note, p, quote } from '../common/email/layout';
 import { buyerUnitPrice } from '../billing/pricing';
+import { formatDrcPhone, normalizeDrcPhone } from '../common/phone';
 import {
   Injectable, NotFoundException, BadRequestException, Logger,
 } from '@nestjs/common';
@@ -144,6 +145,8 @@ export class PublicService {
     });
     if (!event) throw new NotFoundException('Événement introuvable');
     if (event.status !== 'PUBLISHED') throw new BadRequestException('Cet événement n\'accepte plus d\'inscriptions');
+    const holderPhone = normalizeDrcPhone(dto.holderPhone);
+    if (!holderPhone) throw new BadRequestException('Numéro de téléphone invalide : utilisez 089…, +24389… ou 89…');
 
     // Load and validate all requested templates in one query
     const templateIds = dto.items.map(i => i.templateId);
@@ -174,7 +177,7 @@ export class PublicService {
     }
 
     // Generate tickets for each item sequentially (each call decrements availableCount)
-    const holder = { holderName: dto.holderName, holderEmail: dto.holderEmail };
+    const holder = { holderName: dto.holderName, holderEmail: dto.holderEmail, holderPhone };
     const allTicketIds: string[] = [];
 
     for (const item of dto.items) {
@@ -216,7 +219,7 @@ export class PublicService {
     }));
 
     this.sendConfirmationEmail(
-      { holderName: dto.holderName, holderEmail: dto.holderEmail },
+      holder,
       event,
       ticketRows,
       total,
@@ -230,6 +233,7 @@ export class PublicService {
       eventName:  event.name,
       holderName: dto.holderName,
       holderEmail: dto.holderEmail,
+      holderPhone,
       tickets:    ticketRows,
       total,
       currency,
@@ -350,7 +354,7 @@ export class PublicService {
   }
 
   async sendConfirmationEmail(
-    holder: { holderName: string; holderEmail: string },
+    holder: { holderName: string; holderEmail: string; holderPhone?: string | null },
     event: {
       id: string; name: string; startDate: Date; endDate: Date;
       city: string; venue: string;
@@ -436,6 +440,7 @@ export class PublicService {
       try {
         const pdfBuf = await this.buildTicketPdf({ ...t, isInvitation: !!invitation }, event, holder.holderName, bannerUrl, {
           holderEmail: holder.holderEmail,
+          holderPhone: holder.holderPhone,
           purchasedAt: new Date(),
           organizer,
         });
@@ -530,6 +535,7 @@ export class PublicService {
     bannerUrl?: string | null,
     extra?: {
       holderEmail?: string | null;
+      holderPhone?: string | null;
       purchasedAt?: Date | null;
       organizer?: { firstName: string; lastName: string; email?: string | null } | null;
     },
@@ -638,7 +644,7 @@ export class PublicService {
         [['Événement', event.name],        ['Prix', priceLabel]],
         [['Lieu', place],                   ['Date et heure', `${fmtDate(startDate)}\nà ${fmtTime(startDate)}`]],
         [['Participant', holderName],       ['Catégorie', ticket.templateName]],
-        [['Contact', extra?.holderEmail || '—'], ['Organisateur', organizerName]],
+        [['Contact', [extra?.holderEmail, extra?.holderPhone && formatDrcPhone(extra.holderPhone)].filter(Boolean).join('\n') || '—'], ['Organisateur', organizerName]],
       ];
 
       const PAD = 12;

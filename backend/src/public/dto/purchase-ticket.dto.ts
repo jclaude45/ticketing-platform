@@ -12,7 +12,7 @@ export class TicketItemDto {
 export class PurchaseTicketDto {
   @IsString() @MinLength(2) @MaxLength(100) holderName: string;
   @IsEmail() holderEmail: string;
-  @IsOptional() @IsString() @MaxLength(30) holderPhone?: string;
+  @IsString() @MaxLength(30) holderPhone: string;
 
   @IsArray()
   @ArrayMinSize(1)

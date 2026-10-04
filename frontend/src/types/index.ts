@@ -110,6 +110,7 @@ export interface Ticket {
   qrCode: string;
   holderName?: string;
   holderEmail?: string;
+  holderPhone?: string | null;
   scannedAt?: string;
   scannedBy?: string;
   createdAt: string;

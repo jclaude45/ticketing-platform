@@ -11,6 +11,7 @@ import { InitiatePaymentDto } from './dto/initiate-payment.dto';
 import { ShopService } from '../shop/shop.service';
 import { tariffLabel } from '../tickets/event-days';
 import { buyerUnitPrice, flexPayAmount, roundMoney, ticketFeeSplit } from '../billing/pricing';
+import { normalizeDrcPhone } from '../common/phone';
 
 export type PaymentMethod = 'mobile_money' | 'card';
 
@@ -48,9 +49,10 @@ export class PaymentService {
     if (!ticketItems.length && !merchItems.length) {
       throw new BadRequestException('Votre commande est vide');
     }
-    if (dto.paymentMethod === 'mobile_money' && !dto.holderPhone) {
-      throw new BadRequestException('Le numéro de téléphone est requis pour Mobile Money');
-    }
+    // Required for every order, like the e-mail; with Mobile Money it is also the paying number
+    const holderPhone = normalizeDrcPhone(dto.holderPhone);
+    if (!holderPhone) throw new BadRequestException('Numéro de téléphone invalide : utilisez 089…, +24389… ou 89…');
+    dto = { ...dto, holderPhone };
 
     // ── Tickets ──
     const templateIds = ticketItems.map(i => i.templateId);
@@ -149,7 +151,8 @@ export class PaymentService {
   private async initiateMobileMoney(payment: any, dto: InitiatePaymentDto, total: number, currency: string, apiBackend: string) {
     if (!dto.holderPhone) throw new BadRequestException('Le numéro de téléphone est requis pour Mobile Money');
 
-    const phone = dto.holderPhone.replace(/\D/g, '');
+    const phone = normalizeDrcPhone(dto.holderPhone);
+    if (!phone) throw new BadRequestException('Numéro Mobile Money invalide : utilisez 089…, +24389… ou 89…');
 
     try {
       const res = await axios.post(
@@ -240,6 +243,7 @@ export class PaymentService {
 
     const buffer = await this.publicService.buildTicketPdf(ticket, event, payment.holderName, event.bannerUrl, {
       holderEmail: payment.holderEmail,
+      holderPhone: payment.holderPhone,
       purchasedAt: payment.createdAt,
       organizer: event.organizer,
     });
@@ -291,7 +295,7 @@ export class PaymentService {
       where: { id: found.eventId },
       select: { name: true, startDate: true, venue: true, city: true },
     });
-    return { ...result, holderName: found.holderName, holderEmail: found.holderEmail, event };
+    return { ...result, holderName: found.holderName, holderEmail: found.holderEmail, holderPhone: found.holderPhone, event };
   }
 
   private async paymentStatusCore(payment: Payment) {
@@ -380,7 +384,7 @@ export class PaymentService {
       const t = templates.find(x => x.id === templateId);
       return t ? buyerUnitPrice(Number(t.price), payment.feePayer ?? event.feePayer, t.currency) : undefined;
     };
-    const holder = { holderName: payment.holderName, holderEmail: payment.holderEmail };
+    const holder = { holderName: payment.holderName, holderEmail: payment.holderEmail, holderPhone: payment.holderPhone ?? undefined };
     const allTicketIds: string[] = [];
 
     for (const item of items) {
@@ -419,7 +423,7 @@ export class PaymentService {
     // Send confirmation email via PublicService
     try {
       await (this.publicService as any).sendConfirmationEmail(
-        { holderName: payment.holderName, holderEmail: payment.holderEmail },
+        { holderName: payment.holderName, holderEmail: payment.holderEmail, holderPhone: payment.holderPhone },
         event,
         ticketRows,
         Number(payment.amount),

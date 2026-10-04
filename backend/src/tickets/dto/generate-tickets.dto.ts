@@ -9,6 +9,7 @@ import {
   IsArray,
   ValidateNested,
   ArrayMinSize,
+  MaxLength,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -23,6 +24,12 @@ export class TicketHolderDto {
   @IsOptional()
   @IsEmail()
   holderEmail?: string;
+
+  @ApiPropertyOptional({ example: '243891234567' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  holderPhone?: string;
 }
 
 export class GenerateTicketsDto {
