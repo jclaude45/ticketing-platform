@@ -2,28 +2,21 @@
 
 import { useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { Bell, CreditCard, Key, Lock, Shield, User } from 'lucide-react';
-import { useAuthStore } from '@/store/auth.store';
-import { resolveMediaUrl } from '@/lib/api';
+import { Bell, Key, Lock, Shield, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-/** Sections of the account: the settings tabs and the subscription page */
+/** Sections of the settings page */
 export const ACCOUNT_SECTIONS = [
   { id: 'profile', label: 'Profil', icon: User, href: '/dashboard/settings?tab=profile' },
   { id: 'security', label: 'Mot de passe', icon: Lock, href: '/dashboard/settings?tab=security' },
   { id: '2fa', label: 'Double auth.', icon: Shield, href: '/dashboard/settings?tab=2fa' },
   { id: 'keys', label: 'Clés RSA', icon: Key, href: '/dashboard/settings?tab=keys' },
   { id: 'notifications', label: 'Notifications', icon: Bell, href: '/dashboard/settings?tab=notifications' },
-  { id: 'subscription', label: 'Abonnement', icon: CreditCard, href: '/dashboard/subscription' },
 ] as const;
 export type AccountSection = typeof ACCOUNT_SECTIONS[number]['id'];
 
-/** Left column of the account pages: who is signed in, then the sections */
+/** Left column of the settings page */
 export function AccountNav({ active }: { active: AccountSection }) {
-  const user = useAuthStore(s => s.user);
-  const name = [user?.firstName, user?.lastName].filter(Boolean).join(' ');
-  const initials = `${user?.firstName?.[0] ?? ''}${user?.lastName?.[0] ?? ''}`.toUpperCase();
-  const avatar = resolveMediaUrl(user?.avatar);
   // On phones the menu scrolls sideways: bring the active section into view
   const navRef = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -34,19 +27,6 @@ export function AccountNav({ active }: { active: AccountSection }) {
 
   return (
     <aside className="lg:w-56 lg:flex-shrink-0">
-      <div className="mb-6 hidden items-center gap-3 lg:flex">
-        {avatar ? (
-          <img src={avatar} alt="" className="h-11 w-11 flex-shrink-0 rounded-xl object-cover" />
-        ) : (
-          <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-black text-sm font-bold text-white dark:bg-white dark:text-black">
-            {initials || '?'}
-          </span>
-        )}
-        <div className="min-w-0">
-          <p className="truncate text-sm font-bold text-black dark:text-white">{name || 'Mon compte'}</p>
-          <p className="truncate text-xs text-gray-500">{user?.email}</p>
-        </div>
-      </div>
       <nav ref={navRef} className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 lg:mx-0 lg:flex-col lg:gap-0.5 lg:overflow-visible lg:px-0">
         {ACCOUNT_SECTIONS.map(s => {
           const on = s.id === active;

@@ -5,7 +5,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { eventsApi, subscriptionApi, type SubscriptionHistoryEntry } from '@/lib/api';
-import { AccountNav } from '@/components/account/AccountNav';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { cn } from '@/lib/utils';
 import type { SubscriptionPlan } from '@/types';
@@ -129,10 +128,8 @@ export default function SubscriptionPage() {
   const visible = showAll ? rows : rows.slice(0, HISTORY_PREVIEW);
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-8 lg:flex-row lg:gap-10">
-      <AccountNav active="subscription" />
-
-      <div className="min-w-0 flex-1">
+    <div className="mx-auto max-w-6xl">
+      <div className="min-w-0">
         <h1 className="mb-8 text-3xl font-black uppercase tracking-tight text-black sm:text-4xl xl:mb-10 dark:text-white">Abonnement</h1>
         <div className="grid grid-cols-1 gap-10 xl:grid-cols-[minmax(0,1fr)_280px] xl:items-start">
           {/* Current plan: on top on small screens, on the right on wide ones */}
