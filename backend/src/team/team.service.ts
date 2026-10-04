@@ -611,8 +611,11 @@ export class TeamService {
     if (!member) throw new NotFoundException('Team member not found');
     if (!member.accreditation) throw new NotFoundException('No accreditation found for this member');
 
-    // Enforce badge quota
-    await this.subscriptionService.checkAndIncrementBadges(organizerId, 1);
+    // Badge quota: a badge counts once, on its first print (later downloads are free),
+    // on the account of the event owner
+    if (!member.accreditation.printedAt) {
+      await this.subscriptionService.checkAndIncrementBadges(member.event.organizerId, 1);
+    }
 
     const acc = member.accreditation;
     const cfg = mergeConfig(member.role, acc.badgeConfig);

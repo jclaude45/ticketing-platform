@@ -171,6 +171,8 @@ export class PublicService {
       throw new BadRequestException('Ces billets sont payants : utilisez le paiement en ligne');
     }
 
+    await this.ticketGeneration.assertCanSell(event.organizerId, dto.items.reduce((n, i) => n + i.quantity, 0));
+
     // Generate tickets for each item sequentially (each call decrements availableCount)
     const holder = { holderName: dto.holderName, holderEmail: dto.holderEmail };
     const allTicketIds: string[] = [];

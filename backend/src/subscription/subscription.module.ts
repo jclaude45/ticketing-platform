@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { TrialLockInterceptor } from './trial-lock.interceptor';
 import { SubscriptionService } from './subscription.service';
 import { SubscriptionController } from './subscription.controller';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -18,7 +20,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
     }),
   ],
   controllers: [SubscriptionController],
-  providers: [SubscriptionService],
+  providers: [SubscriptionService, { provide: APP_INTERCEPTOR, useClass: TrialLockInterceptor }],
   exports: [SubscriptionService],
 })
 export class SubscriptionModule {}

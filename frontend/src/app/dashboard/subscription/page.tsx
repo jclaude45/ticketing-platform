@@ -108,7 +108,10 @@ export default function SubscriptionPage() {
   // Events created, for the events quota
   const { data: eventCount } = useQuery({
     queryKey: ['events-count'],
-    queryFn: () => eventsApi.list({ page: 1, limit: 1 }).then(r => (r.data as any)?.total ?? (r.data as any)?.data?.total ?? 0),
+    queryFn: () => eventsApi.list({ page: 1, limit: 1 }).then(r => {
+      const body = r.data as any;
+      return Number(body?.data?.meta?.total ?? body?.meta?.total ?? body?.data?.total ?? body?.total ?? 0);
+    }),
   });
 
   const subscribe = useMutation({
@@ -124,6 +127,8 @@ export default function SubscriptionPage() {
   const subscription = mine?.subscription ?? null;
   const limits = mine?.limits;
   const status = subscription?.status ?? 'ACTIVE';
+  const onTrial = limits?.onTrial ?? !subscription;
+  const trialOver = !!limits?.trialOver;
   const rows = history ?? [];
   const visible = showAll ? rows : rows.slice(0, HISTORY_PREVIEW);
 
@@ -140,7 +145,31 @@ export default function SubscriptionPage() {
                 <div className="mt-2 h-8 w-32 animate-pulse rounded bg-black/10" />
               ) : (
                 <>
-                  <p className="mt-1 text-2xl font-black tracking-tight">{subscription?.plan.name ?? 'Gratuit'}</p>
+                  {onTrial ? (
+                    <>
+                      <p className="mt-1 text-2xl font-black tracking-tight">Essai gratuit</p>
+                      <p className="mt-0.5 text-sm font-semibold">Sans limite de durée</p>
+                      <div className="mt-3 space-y-0.5 text-xs">
+                        {trialOver && (
+                          <p className="mb-1.5 inline-block rounded-full bg-black px-2.5 py-0.5 font-semibold text-[#FFDD00]">Essai terminé</p>
+                        )}
+                        {limits && (
+                          <p>
+                            Jusqu’à {limits.maxTickets < 0 ? 'des billets illimités' : `${limits.maxTickets.toLocaleString('fr-FR')} billets`}
+                            {' et '}
+                            {limits.maxBadges < 0 ? 'des badges illimités' : `${limits.maxBadges.toLocaleString('fr-FR')} badges`}
+                          </p>
+                        )}
+                        <p>
+                          {trialOver
+                            ? 'Choisissez un plan pour continuer à créer des événements, des billets et des badges.'
+                            : 'L’essai prend fin quand l’un de ces quotas est atteint.'}
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                  <>
+                  <p className="mt-1 text-2xl font-black tracking-tight">{subscription?.plan.name}</p>
                   <p className="mt-0.5 text-sm font-semibold">{planPrice(subscription?.plan.price ?? 0)}</p>
                   <div className="mt-3 space-y-0.5 text-xs">
                     {status !== 'ACTIVE' && (
@@ -155,13 +184,15 @@ export default function SubscriptionPage() {
                         : 'Sans date d’expiration'}
                     </p>
                   </div>
+                  </>
+                  )}
                 </>
               )}
               <a
                 href="#plans"
                 className="mt-5 flex h-10 items-center justify-center rounded-full border border-black/80 text-sm font-semibold transition-colors hover:bg-black hover:text-[#FFDD00]"
               >
-                Changer de plan
+                {onTrial ? 'Choisir un plan' : 'Changer de plan'}
               </a>
             </div>
           </aside>
@@ -180,7 +211,7 @@ export default function SubscriptionPage() {
                 </div>
               ) : rows.length === 0 ? (
                 <p className="border-b border-gray-200 px-3 py-6 text-sm text-gray-500 dark:border-gray-800">
-                  Aucun changement de plan pour l’instant : vous êtes sur le plan gratuit.
+                  Aucun changement de plan pour l’instant : vous êtes en essai gratuit.
                 </p>
               ) : (
                 visible.map(h => (

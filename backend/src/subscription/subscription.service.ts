@@ -4,6 +4,15 @@ import { CreatePlanDto, UpdatePlanDto, AssignPlanDto, UpdateSubscriptionDto } fr
 
 const isDev = process.env.NODE_ENV !== 'production';
 
+/** Shown when the free trial is used up: everything but the subscription is locked */
+export const TRIAL_OVER_MESSAGE =
+  "Votre essai gratuit est terminé : choisissez un plan dans « Mon abonnement » pour continuer.";
+
+/** Shown to a buyer when the organizer can no longer issue tickets */
+const SALES_CLOSED_MESSAGE =
+  "La billetterie de cet événement est momentanément indisponible. Réessayez plus tard ou contactez l'organisateur.";
+
+// Free trial: no subscription, no time limit, ends when its ticket or badge quota is used up
 const FREE_PLAN_DEFAULTS = {
   name: 'Gratuit',
   maxTickets: isDev ? -1 : 200,
@@ -209,6 +218,12 @@ export class SubscriptionService {
   async getEffectiveLimits(organizerId: string) {
     const sub = await this.getActiveSub(organizerId);
     if (!sub) {
+      // No subscription row to hold counters: usage is counted from the tickets and
+      // badges actually issued on the organizer's events
+      const [ticketsUsed, badgesUsed] = await Promise.all([
+        this.prisma.ticket.count({ where: { event: { organizerId } } }),
+        this.prisma.accreditation.count({ where: { event: { organizerId }, printedAt: { not: null } } }),
+      ]);
       return {
         maxTickets:         FREE_PLAN_DEFAULTS.maxTickets,
         maxBadges:          FREE_PLAN_DEFAULTS.maxBadges,
@@ -216,8 +231,12 @@ export class SubscriptionService {
         showPoweredBy:      FREE_PLAN_DEFAULTS.showPoweredBy,
         allowBulkExport:    FREE_PLAN_DEFAULTS.allowBulkExport,
         allowCommunication: FREE_PLAN_DEFAULTS.allowCommunication,
-        ticketsUsed: 0,
-        badgesUsed:  0,
+        ticketsUsed,
+        badgesUsed,
+        onTrial: true,
+        trialOver:
+          (FREE_PLAN_DEFAULTS.maxTickets !== -1 && ticketsUsed >= FREE_PLAN_DEFAULTS.maxTickets) ||
+          (FREE_PLAN_DEFAULTS.maxBadges !== -1 && badgesUsed >= FREE_PLAN_DEFAULTS.maxBadges),
       };
     }
     return {
@@ -229,7 +248,22 @@ export class SubscriptionService {
       allowCommunication: sub.plan.allowCommunication,
       ticketsUsed:        sub.ticketsUsed,
       badgesUsed:         sub.badgesUsed,
+      onTrial:            false,
+      trialOver:          false,
     };
+  }
+
+  /** Refuses any change on an account whose free trial is used up */
+  async assertNotLocked(organizerId: string): Promise<void> {
+    const limits = await this.getEffectiveLimits(organizerId);
+    if (limits.trialOver) throw new ForbiddenException(TRIAL_OVER_MESSAGE);
+  }
+
+  /** Before a buyer pays: the organizer must still be able to issue these tickets */
+  async assertCanSell(organizerId: string, count: number): Promise<void> {
+    const limits = await this.getEffectiveLimits(organizerId);
+    const overQuota = limits.maxTickets !== -1 && limits.ticketsUsed + count > limits.maxTickets;
+    if (limits.trialOver || overQuota) throw new BadRequestException(SALES_CLOSED_MESSAGE);
   }
 
   async getShowPoweredBy(organizerId: string): Promise<boolean> {
@@ -244,12 +278,17 @@ export class SubscriptionService {
     return (await this.getEffectiveLimits(organizerId)).allowCommunication;
   }
 
-  async checkAndIncrementTickets(organizerId: string, count: number): Promise<void> {
+  /**
+   * Counts issued tickets against the quota. `enforce: false` for tickets already paid
+   * for: the buyer must get them even if the quota was reached since the checkout.
+   */
+  async checkAndIncrementTickets(organizerId: string, count: number, opts: { enforce?: boolean } = {}): Promise<void> {
     const limits = await this.getEffectiveLimits(organizerId);
-    if (limits.maxTickets !== -1 && limits.ticketsUsed + count > limits.maxTickets) {
+    if (opts.enforce !== false && limits.trialOver) throw new ForbiddenException(TRIAL_OVER_MESSAGE);
+    if (opts.enforce !== false && limits.maxTickets !== -1 && limits.ticketsUsed + count > limits.maxTickets) {
       const remaining = Math.max(0, limits.maxTickets - limits.ticketsUsed);
       throw new BadRequestException(
-        `Quota de billets dépassé. Abonnement : ${limits.maxTickets} billets. ` +
+        `Quota de billets dépassé. ${limits.onTrial ? 'Essai gratuit' : 'Abonnement'} : ${limits.maxTickets} billets. ` +
         `Utilisés : ${limits.ticketsUsed}, Restants : ${remaining}. Demandés : ${count}.`,
       );
     }
@@ -264,10 +303,11 @@ export class SubscriptionService {
 
   async checkAndIncrementBadges(organizerId: string, count: number): Promise<void> {
     const limits = await this.getEffectiveLimits(organizerId);
+    if (limits.trialOver) throw new ForbiddenException(TRIAL_OVER_MESSAGE);
     if (limits.maxBadges !== -1 && limits.badgesUsed + count > limits.maxBadges) {
       const remaining = Math.max(0, limits.maxBadges - limits.badgesUsed);
       throw new BadRequestException(
-        `Quota de badges dépassé. Abonnement : ${limits.maxBadges} badges. ` +
+        `Quota de badges dépassé. ${limits.onTrial ? 'Essai gratuit' : 'Abonnement'} : ${limits.maxBadges} badges. ` +
         `Utilisés : ${limits.badgesUsed}, Restants : ${remaining}. Demandé : 1.`,
       );
     }
@@ -282,6 +322,7 @@ export class SubscriptionService {
 
   async checkEventCreation(organizerId: string): Promise<void> {
     const limits = await this.getEffectiveLimits(organizerId);
+    if (limits.trialOver) throw new ForbiddenException(TRIAL_OVER_MESSAGE);
     if (limits.maxEvents === -1) return;
     const eventCount = await this.prisma.event.count({ where: { organizerId } });
     if (eventCount >= limits.maxEvents) {

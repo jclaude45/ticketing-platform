@@ -36,6 +36,8 @@ export class TicketGenerationService {
       metadata?: Prisma.InputJsonValue;
       /** For the ticket history: where the batch comes from (default: the organizer) */
       source?: TicketSource;
+      /** Order already paid: issue the tickets even if the quota was reached meanwhile */
+      paid?: boolean;
     },
   ) {
     // Validate event
@@ -76,7 +78,7 @@ export class TicketGenerationService {
     }
 
     // Enforce subscription quota
-    await this.subscriptionService.checkAndIncrementTickets(event.organizerId, count);
+    await this.subscriptionService.checkAndIncrementTickets(event.organizerId, count, { enforce: !options?.paid });
 
     // Get the active key pair for the organizer — auto-generate if none exists
     // resolveEncKey() returns the KMS-decrypted DEK (or raw env var as fallback)
@@ -228,6 +230,11 @@ export class TicketGenerationService {
         holderEmail: t.holderEmail,
       })),
     };
+  }
+
+  /** Public sales: refused before the buyer pays when the organizer cannot issue them */
+  async assertCanSell(organizerId: string, count: number) {
+    await this.subscriptionService.assertCanSell(organizerId, count);
   }
 
   async cancelTicket(ticketId: string, organizerId: string, organizerRole: Role) {

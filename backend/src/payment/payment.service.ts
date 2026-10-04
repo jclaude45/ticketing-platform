@@ -70,6 +70,10 @@ export class PaymentService {
         throw new BadRequestException(`Seulement ${tpl.availableCount} place(s) restante(s) pour "${tpl.name}"`);
       }
     }
+    // Checked before the buyer pays: once paid, the tickets are always issued
+    const ticketCount = ticketItems.reduce((n, i) => n + i.quantity, 0);
+    if (ticketCount > 0) await this.ticketGeneration.assertCanSell(event.organizerId, ticketCount);
+
     const ticketTotal = ticketItems.reduce((sum, item) => {
       const tpl = templates.find(t => t.id === item.templateId)!;
       return sum + Number(tpl.price) * item.quantity;
@@ -358,7 +362,7 @@ export class PaymentService {
       const result = await this.ticketGeneration.generateTickets(
         payment.eventId, event.organizerId, Role.ORGANIZER,
         { templateId: item.templateId, holders: Array.from({ length: item.quantity }, () => holder) },
-        { source: 'ONLINE' },
+        { source: 'ONLINE', paid: true },
       );
       allTicketIds.push(...result.tickets.map((t: any) => t.id));
     }

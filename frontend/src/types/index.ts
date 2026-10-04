@@ -336,6 +336,10 @@ export interface OrganizerLimits {
   allowCommunication: boolean;
   ticketsUsed: number;
   badgesUsed: number;
+  /** No active subscription: free trial, without time limit */
+  onTrial?: boolean;
+  /** Trial quota used up: everything but the subscription is locked */
+  trialOver?: boolean;
 }
 
 // Ticket editor canvas element types
