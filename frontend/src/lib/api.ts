@@ -861,7 +861,7 @@ export const publicApi = {
 
   /** "Parle-nous" form of the landing page */
   sendContact: (data: {
-    lastName: string; firstName: string; email: string; company?: string;
+    lastName: string; firstName: string; email: string; phone?: string; service?: string; company?: string;
     country?: string; profile?: string; message: string; newsletter?: boolean; website?: string;
   }) =>
     publicClient.post('/public/contact', data),

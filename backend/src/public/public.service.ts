@@ -338,29 +338,35 @@ export class PublicService {
 
     const rows: [string, string | undefined][] = [
       ['Nom', `${dto.firstName} ${dto.lastName}`],
+      ['Devis demandé', dto.service],
       ['E-mail', dto.email],
+      ['Téléphone', dto.phone],
       ['Entreprise', dto.company],
       ['Pays', dto.country],
       ['Profil', dto.profile],
       ['Mises à jour ZAYA', dto.newsletter ? 'Oui' : 'Non'],
     ];
 
+    const isQuote = !!dto.service && dto.service !== 'Autre demande';
+    const title = isQuote ? 'Demande de devis' : 'Nouveau message';
     await this.mailer.sendMail({
       from: this.config.get<string>('email.from') || this.config.get<string>('email.user'),
       to: recipients,
       replyTo: dto.email,
-      subject: `Contact zaya.live — ${dto.firstName} ${dto.lastName}${dto.profile ? ` (${dto.profile})` : ''}`,
+      subject: isQuote
+        ? `Demande de devis — ${dto.service} — ${dto.firstName} ${dto.lastName}${dto.company ? ` (${dto.company})` : ''}`
+        : `Contact zaya.live — ${dto.firstName} ${dto.lastName}${dto.profile ? ` (${dto.profile})` : ''}`,
       html: emailLayout({
-        preheader: `Message de ${dto.firstName} ${dto.lastName}`,
+        preheader: `${title} de ${dto.firstName} ${dto.lastName}`,
         eyebrow: 'Formulaire « Parle-nous »',
-        title: 'Nouveau message',
+        title,
         body:
           details(rows.filter(([, v]) => v).map(([k, v]) => [k, esc(v)] as [string, string])) +
           quote(dto.message) +
           note('Répondez directement à cet e-mail pour écrire à la personne.'),
         reason: 'Message envoyé depuis le formulaire de contact de zaya.live.',
       }),
-      text: emailText('Nouveau message', [...rows.filter(([, v]) => v).map(([k, v]) => `${k} : ${v}`), '', dto.message]),
+      text: emailText(title, [...rows.filter(([, v]) => v).map(([k, v]) => `${k} : ${v}`), '', dto.message]),
     });
     return { sent: true };
   }

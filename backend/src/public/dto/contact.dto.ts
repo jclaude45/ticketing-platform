@@ -5,6 +5,9 @@ export class ContactDto {
   @IsString() @MinLength(1) @MaxLength(80) lastName: string;
   @IsString() @MinLength(1) @MaxLength(80) firstName: string;
   @IsEmail() @MaxLength(160) email: string;
+  @IsOptional() @IsString() @MaxLength(30) phone?: string;
+  /** Service a quote is asked for (services of the landing page) */
+  @IsOptional() @IsString() @MaxLength(80) service?: string;
   @IsOptional() @IsString() @MaxLength(120) company?: string;
   @IsOptional() @IsString() @MaxLength(80) country?: string;
   @IsOptional() @IsString() @MaxLength(80) profile?: string;
