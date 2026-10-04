@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { TicketGenerationService } from '../tickets/ticket-generation.service';
 import { PublicService } from '../public/public.service';
-import { Role } from '@prisma/client';
+import { Payment, Role } from '@prisma/client';
 import axios from 'axios';
 import * as crypto from 'crypto';
 
@@ -283,8 +283,19 @@ export class PaymentService {
   }
 
   async getPaymentStatus(reference: string) {
-    const payment = await this.prisma.payment.findUnique({ where: { reference } });
-    if (!payment) throw new NotFoundException('Paiement introuvable');
+    const found = await this.prisma.payment.findUnique({ where: { reference } });
+    if (!found) throw new NotFoundException('Paiement introuvable');
+    const result = await this.paymentStatusCore(found);
+    // What the success page needs to show the tickets (the reference itself is the secret)
+    const event = await this.prisma.event.findUnique({
+      where: { id: found.eventId },
+      select: { name: true, startDate: true, venue: true, city: true },
+    });
+    return { ...result, holderName: found.holderName, holderEmail: found.holderEmail, event };
+  }
+
+  private async paymentStatusCore(payment: Payment) {
+    const reference = payment.reference;
 
     // If still pending, check with FlexPay (the callback may be late or lost)
     if (payment.status === 'PENDING' && payment.orderNumber) {

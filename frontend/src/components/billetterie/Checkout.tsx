@@ -28,7 +28,7 @@ export interface CheckoutEvent {
   /** BUYER: ticket prices already include ZAYA's service fee */
   feePayer?: 'ORGANIZER' | 'BUYER';
 }
-interface PurchasedTicket { ticketId: string; serialNumber: string; templateName: string; price: number; currency: string; qrCode?: string }
+interface PurchasedTicket { ticketId: string; serialNumber: string; templateName: string; price: number; currency: string; qrCode?: string | null }
 interface MerchOrderSummary {
   code: string; status: string; fulfillment: 'PICKUP' | 'DELIVERY'; total: number; currency: string;
   items: { productName: string; size: string | null; color: string | null; quantity: number }[];
@@ -257,8 +257,15 @@ export function Checkout({
   const tabs: { id: Step; label: string }[] = [
     { id: 'billet', label: shopOnly ? 'Articles' : 'Billet' },
     { id: 'paiement', label: 'Paiement' },
-    { id: 'application', label: 'Application' },
+    { id: 'application', label: 'Télécharger' },
   ];
+  // The title follows the step
+  const title =
+    step === 'application' && result
+      ? result.tickets.length > 1 ? 'Vos billets' : result.tickets.length === 1 ? 'Votre billet' : 'Commande confirmée'
+      : step === 'paiement'
+        ? waiting ? 'Confirmation du paiement' : isPaid ? 'Paiement' : 'Vos coordonnées'
+        : shopOnly ? 'Commander des articles' : 'Sélectionner des billets';
   const canGoTo = (s: Step) =>
     !waiting && !result && (s === 'billet' || (s === 'paiement' && (ticketCount > 0 || merchCount > 0)));
 
@@ -268,9 +275,9 @@ export function Checkout({
   ].filter(Boolean).join(' + ');
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-white" role="dialog" aria-modal="true" aria-label="Sélectionner des billets">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-white" role="dialog" aria-modal="true" aria-label={title}>
       <div className="mx-auto flex max-w-[920px] items-center justify-between px-6 pt-6 sm:pt-8">
-        <p className="text-xl sm:text-[23px]">{shopOnly ? 'Commander des articles' : 'Sélectionner des billets'}</p>
+        <p className="text-xl sm:text-[23px]">{title}</p>
         <button type="button" onClick={onClose} disabled={!!waiting} aria-label="Fermer" className="p-1 disabled:opacity-30">
           <X className="h-7 w-7" strokeWidth={2.2} />
         </button>
@@ -480,7 +487,7 @@ export function Checkout({
                   tickets={result.tickets.map((t, i): TicketData => ({
                     serialNumber: t.serialNumber, holderName: result.holderName, holderEmail: result.holderEmail,
                     eventName: result.eventName, templateName: t.templateName, price: t.price, currency: t.currency,
-                    qrCode: t.qrCode, eventDate: new Date(event.startDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }),
+                    ticketId: t.ticketId, qrCode: t.qrCode, eventStart: event.startDate,
                     eventVenue: event.venue, eventCity: event.city, ticketIndex: i + 1, totalTickets: result.tickets.length,
                   }))}
                 />
@@ -493,7 +500,7 @@ export function Checkout({
                   <TicketVisual data={{
                     serialNumber: t.serialNumber, holderName: result.holderName, holderEmail: result.holderEmail,
                     eventName: result.eventName, templateName: t.templateName, price: t.price, currency: t.currency,
-                    qrCode: t.qrCode, eventDate: new Date(event.startDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }),
+                    ticketId: t.ticketId, qrCode: t.qrCode, eventStart: event.startDate,
                     eventVenue: event.venue, eventCity: event.city, ticketIndex: i + 1, totalTickets: result.tickets.length,
                   }} />
                 </div>
