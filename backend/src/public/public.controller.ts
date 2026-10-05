@@ -48,6 +48,12 @@ export class PublicController {
     return this.service.getCities();
   }
 
+  @Get('events/highlights')
+  @ApiOperation({ summary: 'Best sellers, most viewed and this week (ticketing home page)' })
+  getHighlights() {
+    return this.service.getHighlights();
+  }
+
   @Get('events/:id')
   @ApiOperation({ summary: 'Get a published event with ticket templates' })
   getEvent(@Param('id') id: string) {

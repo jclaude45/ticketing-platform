@@ -70,6 +70,10 @@ enum EventType {
   EXHIBITION
   THEATER
   WORKSHOP
+  GALA
+  COMEDY
+  WORSHIP
+  FAIR
   OTHER
 }
 

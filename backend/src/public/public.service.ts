@@ -30,6 +30,20 @@ const ZAYA_LOGO_Z_PATH =
 /** Free tickets one person can take over 24 hours */
 export const FREE_TICKETS_PER_DAY = 5;
 
+/** What the event lists of the ticketing pages show */
+const LIST_SELECT = {
+  id: true, name: true, description: true,
+  venue: true, city: true, country: true, type: true,
+  startDate: true, endDate: true,
+  bannerUrl: true, totalCapacity: true, feePayer: true,
+  organizer: { select: { firstName: true, lastName: true } },
+  ticketTemplates: {
+    select: { id: true, name: true, price: true, currency: true, availableCount: true, validDays: true },
+    orderBy: { price: 'asc' as const },
+  },
+  _count: { select: { tickets: true } },
+};
+
 @Injectable()
 export class PublicService {
   private readonly logger = new Logger(PublicService.name);
@@ -57,7 +71,8 @@ export class PublicService {
 
   async listEvents(page = 1, limit = 12, search?: string, city?: string, type?: string) {
     const skip = (page - 1) * limit;
-    const where: any = { status: 'PUBLISHED', AND: [] };
+    // Events already over stay reachable by their link, but are no longer listed
+    const where: any = { status: 'PUBLISHED', endDate: { gte: new Date() }, AND: [] };
 
     if (search) {
       where.AND.push({
@@ -82,18 +97,7 @@ export class PublicService {
         skip,
         take: limit,
         orderBy: { startDate: 'asc' },
-        select: {
-          id: true, name: true, description: true,
-          venue: true, city: true, country: true, type: true,
-          startDate: true, endDate: true,
-          bannerUrl: true, totalCapacity: true, feePayer: true,
-          organizer: { select: { firstName: true, lastName: true } },
-          ticketTemplates: {
-            select: { id: true, name: true, price: true, currency: true, availableCount: true, validDays: true },
-            orderBy: { price: 'asc' },
-          },
-          _count: { select: { tickets: true } },
-        },
+        select: LIST_SELECT,
       }),
       this.prisma.event.count({ where }),
     ]);
@@ -101,6 +105,55 @@ export class PublicService {
     return {
       data: events.map(e => this.formatEvent(e)),
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  // ─── Highlights of the ticketing home page ──────────────────────────────────
+
+  /**
+   * Upcoming events in three rails: most tickets sold online, most seen on their public page over
+   * the last 30 days, and starting within 7 days. Only the order is public, never the figures.
+   */
+  async getHighlights() {
+    const now = new Date();
+    const upcoming = { status: 'PUBLISHED' as const, endDate: { gte: now } };
+    const take = 8;
+
+    const [sold, viewed, thisWeek] = await Promise.all([
+      this.prisma.ticket.groupBy({
+        by: ['eventId'],
+        where: { source: 'ONLINE', status: { in: ['VALID', 'USED'] }, event: upcoming },
+        _count: { eventId: true },
+        orderBy: { _count: { eventId: 'desc' } },
+        take,
+      }),
+      this.prisma.eventView.groupBy({
+        by: ['eventId'],
+        where: { createdAt: { gte: new Date(now.getTime() - 30 * 24 * 3600 * 1000) }, event: upcoming },
+        _count: { eventId: true },
+        orderBy: { _count: { eventId: 'desc' } },
+        take,
+      }),
+      this.prisma.event.findMany({
+        where: { ...upcoming, startDate: { lte: new Date(now.getTime() + 7 * 24 * 3600 * 1000) } },
+        orderBy: { startDate: 'asc' },
+        take,
+        select: LIST_SELECT,
+      }),
+    ]);
+
+    const ids = [...new Set([...sold, ...viewed].map(r => r.eventId))];
+    const ranked = ids.length
+      ? await this.prisma.event.findMany({ where: { id: { in: ids } }, select: LIST_SELECT })
+      : [];
+    const byId = new Map(ranked.map(e => [e.id, e]));
+    const inOrder = (rows: { eventId: string }[]) =>
+      rows.map(r => byId.get(r.eventId)).filter(Boolean).map(e => this.formatEvent(e));
+
+    return {
+      bestSellers: inOrder(sold),
+      mostViewed: inOrder(viewed),
+      thisWeek: thisWeek.map(e => this.formatEvent(e)),
     };
   }
 
@@ -281,7 +334,7 @@ export class PublicService {
 
   async getCities() {
     const rows = await this.prisma.event.findMany({
-      where: { status: 'PUBLISHED' },
+      where: { status: 'PUBLISHED', endDate: { gte: new Date() } },
       select: { city: true },
       distinct: ['city'],
       orderBy: { city: 'asc' },

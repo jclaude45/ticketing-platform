@@ -60,6 +60,10 @@ export const EVENT_TYPES = [
   { value: 'EXHIBITION', label: 'Exposition'          },
   { value: 'THEATER',    label: 'Théâtre / Spectacle' },
   { value: 'WORKSHOP',   label: 'Atelier / Formation' },
+  { value: 'GALA',       label: 'Gala / Dîner'        },
+  { value: 'COMEDY',     label: 'Humour / Stand-up'   },
+  { value: 'WORSHIP',    label: 'Culte / Gospel'      },
+  { value: 'FAIR',       label: 'Salon / Foire'       },
   { value: 'OTHER',      label: 'Autre'               },
 ] as const;
 
@@ -76,7 +80,7 @@ export type EventTypeValue = typeof EVENT_TYPES[number]['value'];
 export const createEventSchema = z.object({
   name: z.string().min(3, 'Le nom doit contenir au moins 3 caractères').max(200),
   description: z.string().min(10, 'La description doit contenir au moins 10 caractères').max(2000).optional().or(z.literal('')),
-  type: z.enum(['CONCERT','CONFERENCE','FESTIVAL','SPORT','PARTY','EXHIBITION','THEATER','WORKSHOP','OTHER']).default('OTHER'),
+  type: z.enum(['CONCERT','CONFERENCE','FESTIVAL','SPORT','PARTY','EXHIBITION','THEATER','WORKSHOP','GALA','COMEDY','WORSHIP','FAIR','OTHER']).default('OTHER'),
   currency: z.enum(['CDF','USD','EUR','XAF','GBP']).default('USD'),
   /** Who pays ZAYA's 9 % on paid tickets */
   feePayer: z.enum(['ORGANIZER', 'BUYER']).default('ORGANIZER'),

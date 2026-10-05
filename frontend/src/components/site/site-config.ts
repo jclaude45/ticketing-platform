@@ -30,5 +30,9 @@ export const EVENT_TYPE_LABELS: Record<string, string> = {
   EXHIBITION: 'Exposition',
   THEATER: 'Théâtre',
   WORKSHOP: 'Atelier',
+  GALA: 'Gala',
+  COMEDY: 'Humour',
+  WORSHIP: 'Culte & gospel',
+  FAIR: 'Salon',
   OTHER: 'Événement',
 };

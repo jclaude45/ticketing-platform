@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Search, X, Loader2, Ticket } from 'lucide-react';
+import {
+  Building2, CalendarClock, Church, Drama, Eye, Flame, GraduationCap, Laugh, Loader2, Music, Palette, Presentation, Search, Ticket, Trophy, Wine, X,
+} from 'lucide-react';
 import { publicApi, resolveMediaUrl } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { capitalize, formatEventDay, fromPriceLabel } from '@/components/site/format';
@@ -22,12 +24,20 @@ type Page = { data: PublicEvent[]; meta: { total: number; page: number; totalPag
 
 const unwrap = (r: any) => (r.data?.data ?? r.data) as any;
 
-/** The four categories of the mockup, mapped to the event types of the API */
-const CATEGORIES = [
+/** Event types of the API, as categories (two with a photo, the others with an icon) */
+const CATEGORIES: { type: string; label: string; title: string; bg: string; image?: string; icon?: React.ReactNode }[] = [
   { type: 'PARTY', label: 'Night Club', title: 'Night Club', bg: 'bg-[#B8062C]', image: '/zaya-site/nightclub.webp' },
   { type: 'FESTIVAL', label: 'Festival', title: 'Festivals', bg: 'bg-[#D77D2C]', image: '/zaya-site/festival.webp' },
-  { type: 'SPORT', label: 'Sport', title: 'Sport', bg: 'bg-gradient-to-b from-[#119C65] to-[#58C93F]' },
-  { type: 'CONFERENCE', label: 'Conférence', title: 'Conférences', bg: 'bg-gradient-to-b from-[#601399] to-[#9A65BB]' },
+  { type: 'CONCERT', label: 'Concert', title: 'Concerts', bg: 'bg-gradient-to-b from-[#C2185B] to-[#EC5C93]', icon: <Music /> },
+  { type: 'SPORT', label: 'Sport', title: 'Sport', bg: 'bg-gradient-to-b from-[#119C65] to-[#58C93F]', icon: <Trophy /> },
+  { type: 'CONFERENCE', label: 'Conférence', title: 'Conférences', bg: 'bg-gradient-to-b from-[#601399] to-[#9A65BB]', icon: <Presentation /> },
+  { type: 'THEATER', label: 'Théâtre', title: 'Théâtre', bg: 'bg-gradient-to-b from-[#1D3E9E] to-[#4F78DB]', icon: <Drama /> },
+  { type: 'EXHIBITION', label: 'Exposition', title: 'Expositions', bg: 'bg-gradient-to-b from-[#0E7C86] to-[#35B3B0]', icon: <Palette /> },
+  { type: 'WORKSHOP', label: 'Atelier & formation', title: 'Ateliers & formations', bg: 'bg-gradient-to-b from-[#B45309] to-[#E89B2E]', icon: <GraduationCap /> },
+  { type: 'GALA', label: 'Gala & dîner', title: 'Galas & dîners', bg: 'bg-gradient-to-b from-[#1A1A1A] to-[#7A6630]', icon: <Wine /> },
+  { type: 'COMEDY', label: 'Humour', title: 'Humour', bg: 'bg-gradient-to-b from-[#4D7C0F] to-[#86C21B]', icon: <Laugh /> },
+  { type: 'WORSHIP', label: 'Culte & gospel', title: 'Culte & gospel', bg: 'bg-gradient-to-b from-[#334155] to-[#6B7A90]', icon: <Church /> },
+  { type: 'FAIR', label: 'Salon & foire', title: 'Salons & foires', bg: 'bg-gradient-to-b from-[#0369A1] to-[#38A6E0]', icon: <Building2 /> },
 ];
 
 // ─── Hero carousel: upcoming events with a picture ───────────────────────────
@@ -43,67 +53,89 @@ function HeroCarousel({ events }: { events: PublicEvent[] }) {
   }, [events.length, paused]);
 
   if (events.length === 0) return null;
-  const current = events[Math.min(index, events.length - 1)];
+  const shown = Math.min(index, events.length - 1);
 
   return (
     <section
-      className="relative h-[760px] overflow-hidden bg-white sm:h-[640px] lg:h-[694px]"
+      className="relative overflow-hidden"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       aria-roledescription="carrousel"
     >
-      {events.map((e, i) => (
-        <div
-          key={e.id}
-          className={cn('absolute inset-0 transition-opacity duration-700', i === index ? 'opacity-100' : 'pointer-events-none opacity-0')}
-          aria-hidden={i !== index}
-        >
-          <div className="absolute inset-x-0 top-0 h-[560px] sm:inset-y-0 sm:left-auto sm:right-0 sm:h-auto sm:w-[70%] lg:w-[62%]">
-            <Image src={resolveMediaUrl(e.bannerUrl)!} alt="" fill sizes="(min-width: 640px) 70vw, 100vw" priority={i === 0} className="object-cover object-center" />
-          </div>
-        </div>
-      ))}
-      {/* White fades: left side for the text, bottom towards the page */}
-      <div className="absolute inset-y-0 left-0 hidden w-[62%] bg-gradient-to-r from-white from-40% via-white/60 to-transparent sm:block" />
-      <div className="absolute inset-x-0 bottom-0 h-[55%] bg-gradient-to-b from-transparent via-white/85 to-white sm:h-[40%]" />
-
-      <div className="relative mx-auto flex h-full max-w-[1366px] flex-col justify-end px-6 pb-10 text-center sm:px-[110px] sm:pb-[60px] sm:text-left">
-        <h1 className="line-clamp-2 break-words text-[56px] font-black uppercase leading-[0.95] tracking-tight sm:max-w-[700px] sm:text-[72px] lg:text-[80px]">
-          {current.name}
-        </h1>
-        <div className="mt-6 space-y-1 text-xl font-light text-[#111] sm:mt-4 sm:space-y-1.5 sm:text-[31px] sm:leading-tight">
-          <p>{capitalize(formatEventDay(current.startDate))}</p>
-          <p>{current.city}, {current.venue}</p>
-          <p>{fromPriceLabel(current)}</p>
-        </div>
-        <div className="mt-6 flex flex-col items-center gap-8 sm:mt-6 sm:flex-row sm:justify-between">
-          <Link href={`/billetterie/${current.id}`} className="rounded-full bg-black px-9 py-3 text-lg font-bold uppercase text-white transition-opacity hover:opacity-85">
-            Acheter
-          </Link>
-          {events.length > 1 && (
-            <div className="flex items-center gap-1.5 sm:self-end sm:pb-2">
-              {events.map((e, i) => (
-                <button
-                  key={e.id}
-                  onClick={() => setIndex(i)}
-                  aria-label={`Afficher ${e.name}`}
-                  className={cn('h-[10px] rounded-full bg-[#707070] transition-all', i === index ? 'w-8' : 'w-[10px]')}
-                />
-              ))}
+      {/* All slides share one grid cell: the band takes the height of the tallest */}
+      <div className="grid">
+        {events.map((e, i) => (
+          <div
+            key={e.id}
+            className={cn('relative [grid-area:1/1] transition-opacity duration-700', i === shown ? 'opacity-100' : 'pointer-events-none opacity-0')}
+            aria-hidden={i !== shown}
+          >
+            {/* Backdrop: the same cover, blurred, so that a cover of any shape fills the band */}
+            <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
+              <Image src={resolveMediaUrl(e.bannerUrl)!} alt="" fill sizes="40vw" className="scale-125 object-cover blur-3xl" />
+              <div className="absolute inset-0 bg-white/70" />
+              <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-transparent to-white" />
             </div>
-          )}
-        </div>
+
+            <div className="relative mx-auto grid max-w-[1366px] items-center gap-8 px-6 pb-16 pt-8 lg:grid-cols-[1fr_1.15fr] lg:gap-14 lg:px-[110px] lg:pb-20 lg:pt-14">
+              {/* The cover, whole: never cut, whatever its shape */}
+              <div className="flex justify-center lg:order-2 lg:justify-end">
+                <Image
+                  src={resolveMediaUrl(e.bannerUrl)!}
+                  alt={e.name}
+                  width={1200}
+                  height={800}
+                  sizes="(min-width: 1024px) 640px, 100vw"
+                  priority={i === 0}
+                  className="h-auto max-h-[300px] w-auto max-w-full rounded-[24px] shadow-[0_20px_50px_-20px_rgba(0,0,0,0.45)] sm:max-h-[420px] lg:max-h-[480px]"
+                />
+              </div>
+
+              <div className="text-center lg:text-left">
+                <h1 className="line-clamp-2 break-words text-[44px] font-black uppercase leading-[0.95] tracking-tight sm:text-[64px] lg:text-[72px]">
+                  {e.name}
+                </h1>
+                <div className="mt-5 space-y-1 text-xl font-light text-[#111] sm:text-[26px] sm:leading-tight">
+                  <p>{capitalize(formatEventDay(e.startDate))}</p>
+                  <p>{e.city}, {e.venue}</p>
+                  <p>{fromPriceLabel(e)}</p>
+                </div>
+                <Link href={`/billetterie/${e.id}`} tabIndex={i === shown ? 0 : -1} className="mt-7 inline-block rounded-full bg-black px-9 py-3 text-lg font-bold uppercase text-white transition-opacity hover:opacity-85">
+                  Acheter
+                </Link>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
+
+      {events.length > 1 && (
+        <div className="absolute inset-x-0 bottom-6 flex justify-center gap-1.5">
+          {events.map((e, i) => (
+            <button
+              key={e.id}
+              onClick={() => setIndex(i)}
+              aria-label={`Afficher ${e.name}`}
+              className={cn('h-[10px] rounded-full bg-[#707070] transition-all', i === shown ? 'w-8' : 'w-[10px]')}
+            />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
 
 // ─── Event card ───────────────────────────────────────────────────────────────
 
-function EventCard({ event }: { event: PublicEvent }) {
+function EventCard({ event, rank }: { event: PublicEvent; rank?: number }) {
   return (
     <Link href={`/billetterie/${event.id}`} className="group block">
       <div className="relative aspect-square overflow-hidden rounded-[20px] bg-[#eee]">
+        {rank !== undefined && (
+          <span className="absolute left-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black text-base font-bold text-white">
+            {rank}
+          </span>
+        )}
         {event.bannerUrl ? (
           <Image src={resolveMediaUrl(event.bannerUrl)!} alt={event.name} fill sizes="(min-width: 1024px) 230px, 45vw"
             className="object-cover transition-transform duration-500 group-hover:scale-105" />
@@ -118,6 +150,30 @@ function EventCard({ event }: { event: PublicEvent }) {
         <p>{fromPriceLabel(event)}</p>
       </div>
     </Link>
+  );
+}
+
+// ─── Highlight rails ──────────────────────────────────────────────────────────
+
+type Highlights = { bestSellers: PublicEvent[]; mostViewed: PublicEvent[]; thisWeek: PublicEvent[] };
+
+/** One row of events: scrolls sideways on a phone, four columns on a computer */
+function Rail({ title, icon, events, ranked = false }: { title: string; icon: React.ReactNode; events: PublicEvent[]; ranked?: boolean }) {
+  if (events.length === 0) return null;
+  return (
+    <section className="mx-auto max-w-[1366px] px-6 pt-14 lg:px-[147px] lg:pt-20">
+      <h2 className="flex items-center gap-3 text-[28px] font-light uppercase leading-none lg:text-[34px]">
+        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black text-white [&>svg]:h-5 [&>svg]:w-5">{icon}</span>
+        {title}
+      </h2>
+      <div className="-mx-6 mt-7 flex snap-x gap-5 overflow-x-auto px-6 pb-2 lg:mx-0 lg:grid lg:grid-cols-4 lg:gap-x-[51px] lg:overflow-visible lg:px-0 [&::-webkit-scrollbar]:hidden">
+        {events.slice(0, 8).map((e, i) => (
+          <div key={e.id} className={cn('w-[44vw] max-w-[230px] flex-shrink-0 snap-start lg:w-auto lg:max-w-none', i >= 4 && 'lg:hidden')}>
+            <EventCard event={e} rank={ranked ? i + 1 : undefined} />
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -144,6 +200,12 @@ export default function BilletteriePage() {
     staleTime: 60_000,
   });
 
+  const { data: highlights } = useQuery({
+    queryKey: ['public-highlights'],
+    queryFn: () => publicApi.getHighlights().then(r => unwrap(r) as Highlights),
+    staleTime: 60_000,
+  });
+
   const { data: cities = [] } = useQuery({
     queryKey: ['public-cities'],
     queryFn: () => publicApi.getCities().then(r => unwrap(r) as string[]),
@@ -165,7 +227,7 @@ export default function BilletteriePage() {
   const filtered = !!(type || city || search);
   const category = CATEGORIES.find(c => c.type === type);
   const onlyCity = city || (events.length > 0 && events.every(e => e.city === events[0].city) ? events[0].city : '');
-  const title = `${search ? 'Résultats' : category ? category.title : 'Événements populaires'}${onlyCity ? ` à ${onlyCity}` : ''}`;
+  const title = `${search ? 'Résultats' : category ? category.title : 'Tous les événements'}${onlyCity ? ` à ${onlyCity}` : ''}`;
 
   return (
     <>
@@ -177,7 +239,10 @@ export default function BilletteriePage() {
           {CATEGORIES.map(c => (
             <button
               key={c.type}
-              onClick={() => setType(t => (t === c.type ? '' : c.type))}
+              onClick={() => {
+                setType(t => (t === c.type ? '' : c.type));
+                document.getElementById('evenements')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }}
               aria-pressed={type === c.type}
               className={cn(
                 'relative h-[80px] w-[185px] flex-shrink-0 snap-start overflow-hidden rounded-[22px] text-left transition-transform hover:-translate-y-0.5 lg:h-[107px] lg:w-auto lg:rounded-[30px]',
@@ -186,11 +251,25 @@ export default function BilletteriePage() {
               )}
             >
               {c.image && <Image src={c.image} alt="" fill sizes="250px" className="object-cover opacity-30 mix-blend-luminosity" />}
-              <span className="absolute bottom-3 left-4 text-sm font-bold text-white lg:bottom-4 lg:left-5 lg:text-lg">{c.label}</span>
+              {c.icon && (
+                <span aria-hidden="true" className="absolute right-4 top-3 text-white/80 lg:right-5 lg:top-4 [&>svg]:h-7 [&>svg]:w-7 lg:[&>svg]:h-9 lg:[&>svg]:w-9 [&>svg]:stroke-[1.6]">
+                  {c.icon}
+                </span>
+              )}
+              <span className="absolute bottom-3 left-4 pr-4 text-sm font-bold leading-tight text-white lg:bottom-4 lg:left-5 lg:text-lg">{c.label}</span>
             </button>
           ))}
         </div>
       </section>
+
+      {/* ── Highlights (only on the unfiltered page) ── */}
+      {!filtered && highlights && (
+        <>
+          <Rail title="Meilleures ventes" icon={<Flame />} events={highlights.bestSellers} ranked />
+          <Rail title="Les plus regardés" icon={<Eye />} events={highlights.mostViewed} />
+          <Rail title="Cette semaine" icon={<CalendarClock />} events={highlights.thisWeek} />
+        </>
+      )}
 
       {/* ── Events ── */}
       <section id="evenements" className="mx-auto max-w-[1366px] scroll-mt-24 px-6 pb-20 pt-12 lg:px-[147px] lg:pt-[88px]">

@@ -825,6 +825,9 @@ export const publicApi = {
     publicClient.get('/public/events', { params }),
   getCities: () =>
     publicClient.get('/public/events/cities'),
+  /** Ticketing home page rails: best sellers, most viewed, this week */
+  getHighlights: () =>
+    publicClient.get('/public/events/highlights'),
   getEvent: (id: string) =>
     publicClient.get(`/public/events/${id}`),
   /** Event shop: products on sale, delivery options */
