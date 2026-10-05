@@ -1,12 +1,12 @@
-import Image from 'next/image';
 import type { Metadata } from 'next';
 import {
-  ArrowRight, Banknote, BarChart3, ChevronsDown, Contact, Fence, Monitor, Printer, QrCode, ScanLine, ShieldCheck, Smartphone, Megaphone, Store, Ticket, UserCheck,
+  ArrowRight, Banknote, BarChart3, Contact, Fence, Monitor, Printer, QrCode, ScanLine, ShieldCheck, Smartphone, Megaphone, Store, Ticket, UserCheck,
 } from 'lucide-react';
 import { SiteHeader } from '@/components/site/SiteHeader';
 import { SiteFooter } from '@/components/site/SiteFooter';
 import { ContactForm } from '@/components/site/ContactForm';
 import { QuoteButton } from '@/components/site/QuoteButton';
+import { HeroAnimation } from '@/components/site/HeroAnimation';
 import { SERVICES, type Service } from '@/components/site/services';
 import { APP_URL } from '@/components/site/site-config';
 import { cn } from '@/lib/utils';
@@ -139,17 +139,13 @@ export default function LandingPage() {
     <div className="min-h-screen bg-white text-black">
       <SiteHeader variant="landing" />
 
-      {/* ── Hero picture (under the translucent header) ── */}
-      <section id="accueil" className="relative -mt-[72px] h-[400px] overflow-hidden sm:h-[560px] lg:-mt-[76px] lg:h-[770px]">
-        <Image src="/zaya-site/hero-ville.webp" alt="" fill priority sizes="100vw" className="object-cover" />
-        <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-b from-transparent via-white/70 to-white" />
-        <a href="#intro" aria-label="Défiler" className="absolute bottom-6 left-1/2 hidden -translate-x-1/2 text-[#555] sm:block">
-          <ChevronsDown className="h-9 w-9 animate-bounce" strokeWidth={2} />
-        </a>
+      {/* ── Animated banner (square, white like the page) ── */}
+      <section id="accueil" className="relative px-6">
+        <HeroAnimation className="hero-fade mx-auto aspect-square w-full max-w-[560px] lg:max-w-[680px]" />
       </section>
 
       {/* ── Headline ── */}
-      <section id="intro" className="px-6 pb-24 pt-10 text-center lg:pb-32 lg:pt-36">
+      <section id="intro" className="px-6 pb-24 pt-10 text-center lg:pb-32 lg:pt-16">
         <h1 className="mx-auto max-w-[860px] text-[38px] font-black uppercase leading-[1.05] tracking-tight sm:text-6xl lg:text-[88px] lg:leading-[0.95]">
           Transformez vos événements en expériences inoubliables&nbsp;!
         </h1>

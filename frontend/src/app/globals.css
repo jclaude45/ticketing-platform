@@ -289,3 +289,13 @@
 :where(.dark) .bg-lime-50, :where(.dark) .bg-lime-100 { background-color: rgb(132 204 22 / 0.14); }
 :where(.dark) .text-lime-600, :where(.dark) .text-lime-700, :where(.dark) .text-lime-800, :where(.dark) .text-lime-900 { color: #a3e635; }
 :where(.dark) .border-lime-100, :where(.dark) .border-lime-200, :where(.dark) .border-lime-300 { border-color: rgb(132 204 22 / 0.35); }
+
+/* Landing banner: the square animation melts into the white page instead of ending on a hard edge */
+.hero-fade {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 14%, #000 86%, transparent),
+    linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent);
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(to right, transparent, #000 14%, #000 86%, transparent),
+    linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent);
+  mask-composite: intersect;
+}

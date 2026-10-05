@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { CheckCircle2, Loader2 } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Loader2 } from 'lucide-react';
 import { publicApi } from '@/lib/api';
 import { QUOTE_EVENT, QUOTE_OTHER, SERVICES } from './services';
 
@@ -14,6 +14,27 @@ const PROFILES = ["Organisateur d'événements", 'Participant', 'Partenaire / sp
 const field = 'w-full border-0 border-b border-[#9a9a9a] bg-transparent px-0.5 pb-2 pt-1 text-lg text-black placeholder:text-[#707070] focus:border-black focus:outline-none focus:ring-0';
 
 const SERVICE_NAMES = SERVICES.map(s => s.name);
+
+/** Underlined list with a thin chevron, like the other fields */
+function Select({ value, onChange, placeholder, options, label, selectRef }: {
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+  placeholder: string;
+  options: string[];
+  label?: string;
+  selectRef?: React.Ref<HTMLSelectElement>;
+}) {
+  return (
+    <div className="relative">
+      <select ref={selectRef} value={value} onChange={onChange} aria-label={label ?? placeholder}
+        className={`${field} cursor-pointer appearance-none truncate pr-8 ${value ? '' : 'text-[#707070]'}`}>
+        <option value="">{placeholder}</option>
+        {options.map(o => <option key={o} value={o} className="text-black">{o}</option>)}
+      </select>
+      <ChevronDown aria-hidden="true" className="pointer-events-none absolute bottom-3 right-0.5 h-5 w-5 text-[#707070]" strokeWidth={1.75} />
+    </div>
+  );
+}
 
 /** "Parle-nous" form, also the quote request form: underlined fields, sent to the ZAYA team by email */
 export function ContactForm() {
@@ -91,39 +112,20 @@ export function ContactForm() {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-14 lg:space-y-[88px]">
-      <input value={form.lastName} onChange={set('lastName')} required maxLength={80} placeholder="Nom" autoComplete="family-name" className={field} />
-      <input value={form.firstName} onChange={set('firstName')} required maxLength={80} placeholder="Prénom" autoComplete="given-name" className={field} />
-      <input type="email" value={form.email} onChange={set('email')} required maxLength={160} placeholder="Email" autoComplete="email" className={field} />
-      <input type="tel" value={form.phone} onChange={set('phone')} maxLength={30} placeholder="Téléphone (facultatif)" autoComplete="tel" className={field} />
-      <input value={form.company} onChange={set('company')} maxLength={120} placeholder="Entreprise" autoComplete="organization" className={field} />
-
-      <div className="relative">
-        <select value={form.country} onChange={set('country')} className={`${field} appearance-none pr-8 ${form.country ? '' : 'text-[#707070]'}`}>
-          <option value="">Vous nous écrivez depuis</option>
-          {COUNTRIES.map(c => <option key={c} value={c} className="text-black">{c}</option>)}
-        </select>
-        <span className="pointer-events-none absolute bottom-3 right-1 h-0 w-0 border-x-[13px] border-t-[18px] border-x-transparent border-t-black" />
+    <form onSubmit={submit} className="space-y-10">
+      <div className="grid grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-2">
+        <input value={form.lastName} onChange={set('lastName')} required maxLength={80} placeholder="Nom" autoComplete="family-name" className={field} />
+        <input value={form.firstName} onChange={set('firstName')} required maxLength={80} placeholder="Prénom" autoComplete="given-name" className={field} />
+        <input type="email" value={form.email} onChange={set('email')} required maxLength={160} placeholder="Email" autoComplete="email" className={field} />
+        <input type="tel" value={form.phone} onChange={set('phone')} maxLength={30} placeholder="Téléphone (facultatif)" autoComplete="tel" className={field} />
+        <input value={form.company} onChange={set('company')} maxLength={120} placeholder="Entreprise" autoComplete="organization" className={field} />
+        <Select value={form.country} onChange={set('country')} placeholder="Vous nous écrivez depuis" options={COUNTRIES} />
+        <Select value={form.profile} onChange={set('profile')} placeholder="Vous êtes" options={PROFILES} />
+        <Select selectRef={serviceRef} value={form.service} onChange={set('service')} placeholder="Service souhaité (devis)"
+          options={[...SERVICE_NAMES, ...QUOTE_OTHER]} label="Service souhaité" />
       </div>
 
-      <div className="relative">
-        <select value={form.profile} onChange={set('profile')} className={`${field} appearance-none pr-8 ${form.profile ? '' : 'text-[#707070]'}`}>
-          <option value="">Vous êtes</option>
-          {PROFILES.map(p => <option key={p} value={p} className="text-black">{p}</option>)}
-        </select>
-        <span className="pointer-events-none absolute bottom-3 right-1 h-0 w-0 border-x-[13px] border-t-[18px] border-x-transparent border-t-black" />
-      </div>
-
-      <div className="relative">
-        <select ref={serviceRef} value={form.service} onChange={set('service')} aria-label="Service souhaité" className={`${field} appearance-none pr-8 ${form.service ? '' : 'text-[#707070]'}`}>
-          <option value="">Service souhaité (devis)</option>
-          {SERVICE_NAMES.map(s => <option key={s} value={s} className="text-black">{s}</option>)}
-          {QUOTE_OTHER.map(s => <option key={s} value={s} className="text-black">{s}</option>)}
-        </select>
-        <span className="pointer-events-none absolute bottom-3 right-1 h-0 w-0 border-x-[13px] border-t-[18px] border-x-transparent border-t-black" />
-      </div>
-
-      <div className="space-y-6 !mt-14">
+      <div className="space-y-6 !mt-12">
         <label htmlFor="contact-message" className="block text-lg text-[#707070]">
           {isQuote ? 'Décrivez votre événement : date, lieu, nombre de participants, vos besoins' : 'Expliquez-nous pourquoi vous nous contactez'}
         </label>
