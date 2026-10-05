@@ -56,7 +56,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
       title: `${event.name} — ${where}`,
       description,
       path: `/billetterie/${event.id}`,
-      image: absoluteMedia(event.bannerUrl),
+      // No image here: the preview card is drawn by ./opengraph-image.tsx (poster + name + date)
     }),
     // An event already over stays reachable, but is no longer offered to search engines
     ...(new Date(event.endDate).getTime() < Date.now() && { robots: { index: false, follow: true } }),
@@ -78,7 +78,7 @@ function eventJsonLd(event: SeoEvent) {
     endDate: event.endDate,
     eventStatus: event.status === 'CANCELLED' ? 'https://schema.org/EventCancelled' : 'https://schema.org/EventScheduled',
     eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
-    image: absoluteMedia(event.bannerUrl) ? [absoluteMedia(event.bannerUrl)] : undefined,
+    image: [absoluteMedia(event.bannerUrl) ?? siteUrl(`/billetterie/${event.id}/opengraph-image`)],
     url,
     location: {
       '@type': 'Place',

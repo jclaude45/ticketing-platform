@@ -24,9 +24,9 @@ export async function fetchPublic<T>(path: string, revalidate = 300): Promise<T 
   }
 }
 
-/** Banner URL usable by crawlers: absolute, never localhost */
+/** Banner URL usable by crawlers: absolute, never localhost, never an inline (data:) image */
 export function absoluteMedia(url?: string | null): string | undefined {
-  if (!url) return undefined;
+  if (!url || url.startsWith('data:')) return undefined;
   if (/^https?:\/\/localhost(:\d+)?/.test(url)) return url.replace(/^https?:\/\/localhost(:\d+)?/, SITE_URL);
   return /^https?:\/\//.test(url) ? url : siteUrl(url);
 }
