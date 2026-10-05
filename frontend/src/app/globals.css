@@ -4,6 +4,25 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
+/*
+ * Type scale of the public site, the same for the organizers' pages and the event pages.
+ * Use these classes rather than free sizes, so that one title level looks alike everywhere.
+ */
+@layer components {
+  /* Page title (one per page) */
+  .t-display { @apply text-[44px] font-black uppercase leading-[0.95] tracking-tight sm:text-[64px] lg:text-[88px]; }
+  /* Section title, event name */
+  .t-title { @apply text-[34px] font-black uppercase leading-none tracking-tight sm:text-[44px] lg:text-[56px]; }
+  /* Sub-section title (rails, « À propos », « Organisé par »…) */
+  .t-heading { @apply text-2xl font-black uppercase leading-[1.1] tracking-tight lg:text-[32px]; }
+  /* Card title (event, service) */
+  .t-card { @apply text-xl font-medium leading-tight lg:text-2xl; }
+  /* Introduction and important paragraphs */
+  .t-lead { @apply text-lg leading-relaxed lg:text-xl; }
+  /* Key facts under a title (date, organizer, venue) */
+  .t-fact { @apply text-xl leading-snug lg:text-2xl; }
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;

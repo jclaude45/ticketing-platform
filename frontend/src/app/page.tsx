@@ -27,8 +27,8 @@ function PriceCard({ plan }: { plan: PrintPlan }) {
       </div>
       <div className="flex flex-1 flex-col bg-[#F7F7F7]">
         <div className="rounded-[32px] bg-[#181818] px-6 pb-12 pt-12 text-center text-white">
-          <p className="text-[32px] font-normal tracking-wide sm:text-[34px]">{plan.name}</p>
-          <p className="mt-4 text-[96px] font-light leading-none tracking-tight sm:text-[110px]">{plan.price}</p>
+          <p className="text-[32px] tracking-wide">{plan.name}</p>
+          <p className="mt-4 text-[80px] font-light leading-none tracking-tight sm:text-[96px]">{plan.price}</p>
           <p className="mt-3 text-sm uppercase text-white/70">{plan.priceNote}</p>
         </div>
         <ul className="flex-1">
@@ -63,10 +63,10 @@ export default function LandingPage() {
 
       {/* ── Headline ── */}
       <section id="intro" className="px-6 pb-24 pt-10 text-center lg:pb-32 lg:pt-16">
-        <h1 className="mx-auto max-w-[860px] text-[38px] font-black uppercase leading-[1.05] tracking-tight sm:text-6xl lg:text-[88px] lg:leading-[0.95]">
+        <h1 className="t-display mx-auto max-w-[860px]">
           Transformez vos événements en expériences inoubliables&nbsp;!
         </h1>
-        <p className="mx-auto mt-10 max-w-[500px] text-lg leading-relaxed text-[#222]">
+        <p className="t-lead mx-auto mt-10 max-w-[560px] text-[#222]">
           Plonge dans l&apos;extraordinaire avec Zaya, la plateforme qui transforme chaque événement en une
           aventure mémorable&nbsp;! Prépare-toi à vivre une expérience où chaque détail est pensé pour t&apos;émerveiller.
         </p>
@@ -80,10 +80,10 @@ export default function LandingPage() {
         {/* Old links to #fonctionnalites land here too */}
         <span id="fonctionnalites" className="block scroll-mt-20" aria-hidden="true" />
         <div className="mx-auto max-w-[900px] text-center">
-          <h2 className="text-[38px] font-black uppercase leading-[1.05] tracking-tight sm:text-6xl lg:text-[80px] lg:leading-[0.98]">
+          <h2 className="t-title">
             Nos services pour organisateurs
           </h2>
-          <p className="mt-3 text-xl text-[#222] lg:text-[21px]">
+          <p className="t-lead mt-4 text-[#222]">
             12 ans d’expérience sur le terrain, avec des partenaires parmi les meilleurs dans leur domaine.
           </p>
         </div>
@@ -109,8 +109,8 @@ export default function LandingPage() {
       {/* ── Pricing ── */}
       <section id="tarifs" className="scroll-mt-20 px-6 pb-28 lg:pb-36">
         <div className="mx-auto max-w-[620px] text-center">
-          <h2 className="text-5xl font-black uppercase tracking-tight">Tarifs</h2>
-          <p className="mt-3 text-lg leading-snug text-[#222]">
+          <h2 className="t-title">Tarifs</h2>
+          <p className="t-lead mt-4 text-[#222]">
             La billetterie en ligne est gratuite. Vous ne payez que ce que vous imprimez — et {SALES_FEE} sur les billets que vous vendez,
             frais de paiement compris.
           </p>
@@ -118,7 +118,7 @@ export default function LandingPage() {
         <div className="mx-auto mt-14 grid max-w-[1150px] grid-cols-1 gap-8 sm:max-w-[400px] lg:mt-20 lg:max-w-[1150px] lg:grid-cols-3 lg:gap-6">
           {PRINT_PLANS.map(p => <PriceCard key={p.name} plan={p} />)}
         </div>
-        <p className="mx-auto mt-12 max-w-[620px] text-center text-lg text-[#222]">
+        <p className="t-lead mx-auto mt-12 max-w-[620px] text-center text-[#222]">
           Un seul événement ? {UNIT_PRICES.ticket} le billet et {UNIT_PRICES.badge} le badge, sans engagement.
         </p>
         <div className="mt-8 text-center">

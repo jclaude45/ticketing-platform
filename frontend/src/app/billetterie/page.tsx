@@ -92,10 +92,10 @@ function HeroCarousel({ events }: { events: PublicEvent[] }) {
               </div>
 
               <div className="text-center lg:text-left">
-                <h1 className="line-clamp-2 break-words text-[44px] font-black uppercase leading-[0.95] tracking-tight sm:text-[64px] lg:text-[72px]">
+                <h1 className="t-title line-clamp-2 break-words">
                   {e.name}
                 </h1>
-                <div className="mt-5 space-y-1 text-xl font-light text-[#111] sm:text-[26px] sm:leading-tight">
+                <div className="t-fact mt-5 space-y-1 font-light text-[#111]">
                   <p>{capitalize(formatEventDay(e.startDate))}</p>
                   <p>{e.city}, {e.venue}</p>
                   <p>{fromPriceLabel(e)}</p>
@@ -143,8 +143,8 @@ function EventCard({ event, rank }: { event: PublicEvent; rank?: number }) {
           <div className="flex h-full items-center justify-center"><Ticket className="h-14 w-14 text-[#bbb]" strokeWidth={1.4} /></div>
         )}
       </div>
-      <h3 className="mt-3 truncate text-lg font-normal tracking-normal text-black sm:text-xl">{event.name}</h3>
-      <div className="mt-1 space-y-1.5 text-[15px] font-light tracking-wide text-[#8a8a8a] sm:text-lg">
+      <h3 className="t-card mt-3 truncate text-black">{event.name}</h3>
+      <div className="mt-1.5 space-y-1 text-[15px] text-[#8a8a8a] lg:text-base">
         <p>{formatEventDay(event.startDate)}</p>
         <p className="truncate">{event.venue}</p>
         <p>{fromPriceLabel(event)}</p>
@@ -162,7 +162,7 @@ function Rail({ title, icon, events, ranked = false }: { title: string; icon: Re
   if (events.length === 0) return null;
   return (
     <section className="mx-auto max-w-[1366px] px-6 pt-14 lg:px-[147px] lg:pt-20">
-      <h2 className="flex items-center gap-3 text-[28px] font-light uppercase leading-none lg:text-[34px]">
+      <h2 className="t-heading flex items-center gap-3">
         <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black text-white [&>svg]:h-5 [&>svg]:w-5">{icon}</span>
         {title}
       </h2>
@@ -274,7 +274,7 @@ export default function BilletteriePage() {
       {/* ── Events ── */}
       <section id="evenements" className="mx-auto max-w-[1366px] scroll-mt-24 px-6 pb-20 pt-12 lg:px-[147px] lg:pt-[88px]">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-          <h2 className="max-w-[560px] text-[36px] font-light tracking-normal uppercase leading-[0.95] lg:text-[40px]">{title}</h2>
+          <h2 className="t-heading max-w-[560px]">{title}</h2>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
             <label className="relative block">
               <Search className="absolute bottom-2.5 left-0 h-4 w-4 text-[#8a8a8a]" />
@@ -355,7 +355,7 @@ export default function BilletteriePage() {
             <div className="absolute inset-0 hidden bg-gradient-to-r from-transparent via-white/20 to-white/85 lg:block" />
           </div>
           <div className="relative px-6 pb-10 pt-8 text-center lg:absolute lg:bottom-[80px] lg:right-[30px] lg:max-w-[400px] lg:p-0 lg:text-left">
-            <p className="text-[40px] font-black uppercase leading-[0.95] tracking-tight lg:text-[50px]">
+            <p className="t-title">
               « Welcome to Zaya, where real events meet real lives »
             </p>
             <a href="#telecharger" className="mt-4 inline-block rounded-full bg-black px-4 py-2 text-lg uppercase text-white transition-opacity hover:opacity-85">

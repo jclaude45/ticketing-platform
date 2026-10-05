@@ -30,8 +30,8 @@ export default function PricingPage() {
 
       {/* ── Headline ── */}
       <section className="px-6 pb-20 pt-16 text-center lg:pb-28 lg:pt-28">
-        <h1 className="text-5xl font-black uppercase tracking-tight sm:text-7xl lg:text-[96px] lg:leading-[0.95]">Tarifs ZAYA</h1>
-        <p className="mx-auto mt-8 max-w-[640px] text-xl leading-relaxed text-[#222] lg:text-2xl">
+        <h1 className="t-display">Tarifs ZAYA</h1>
+        <p className="t-lead mx-auto mt-8 max-w-[640px] text-[#222]">
           La billetterie en ligne est gratuite. Vous ne payez que ce que vous imprimez — et {SALES_FEE} sur les billets que vous vendez.
         </p>
         <CreateButton className="mt-10" />
@@ -44,19 +44,19 @@ export default function PricingPage() {
           <div className="rounded-[32px] bg-[#F2F2F2] p-8 lg:p-12">
             <p className="text-sm uppercase tracking-[0.12em] text-[#555]">Événement gratuit</p>
             <p className="mt-3 text-5xl font-black tracking-tight lg:text-6xl">0 $</p>
-            <p className="mt-6 text-lg leading-relaxed text-[#222]">
+            <p className="mt-6 t-lead text-[#222]">
               Si votre événement est gratuit, vous ne payez rien : billets illimités envoyés par e-mail, scan illimité avec l’application ZCONTRÔLE, statistiques et historique compris, sans limite de durée.
             </p>
           </div>
           <div className="rounded-[32px] bg-[#181818] p-8 text-white lg:p-12">
             <p className="text-sm uppercase tracking-[0.12em] text-white/60">Événement payant</p>
             <p className="mt-3 text-5xl font-black tracking-tight text-[#FFDD00] lg:text-6xl">{SALES_FEE}</p>
-            <p className="mt-6 text-lg leading-relaxed text-white/85">
+            <p className="mt-6 t-lead text-white/85">
               Si votre événement est payant, vous versez {SALES_FEE} par billet vendu, tout compris. Les frais de paiement mobile money et carte sont inclus. Aucun abonnement, aucun frais fixe. Vous choisissez qui paie : vous ou l’acheteur. Votre argent vous est versé trois jours après votre événement.
             </p>
           </div>
         </div>
-        <p className="mx-auto mt-10 max-w-[640px] text-center text-lg text-[#222]">
+        <p className="mx-auto mt-10 max-w-[640px] t-lead text-center text-[#222]">
           Dans les deux cas, vous ne payez que si vous générez des billets ou des badges à imprimer.
         </p>
       </section>
@@ -64,8 +64,8 @@ export default function PricingPage() {
       {/* ── Print plans ── */}
       <section id="formules" className="scroll-mt-20 px-6 pb-24 lg:pb-32">
         <div className="mx-auto max-w-[640px] text-center">
-          <h2 className="text-4xl font-black uppercase tracking-tight sm:text-5xl">Billets et badges à imprimer</h2>
-          <p className="mt-4 text-lg leading-snug text-[#222]">
+          <h2 className="t-title">Billets et badges à imprimer</h2>
+          <p className="mt-4 t-lead text-[#222]">
             Pour imprimer vos billets et vos badges, trois formules. La billetterie en ligne reste gratuite dans tous les cas.
           </p>
         </div>
@@ -77,8 +77,8 @@ export default function PricingPage() {
               </div>
               <div className="flex flex-1 flex-col bg-[#F7F7F7]">
                 <div className="rounded-[32px] bg-[#181818] px-6 py-12 text-center text-white">
-                  <p className="text-[30px] tracking-wide">{p.name}</p>
-                  <p className="mt-3 text-[80px] font-light leading-none tracking-tight">{p.price}</p>
+                  <p className="text-[32px] tracking-wide">{p.name}</p>
+                  <p className="mt-3 text-[80px] font-light leading-none tracking-tight sm:text-[96px]">{p.price}</p>
                   <p className="mt-3 text-sm uppercase text-white/70">{p.priceNote}</p>
                 </div>
                 <ul className="flex-1">
@@ -96,8 +96,8 @@ export default function PricingPage() {
         </div>
 
         <div className="mx-auto mt-16 max-w-[820px] rounded-[32px] border-2 border-black p-8 text-center lg:p-12">
-          <h3 className="text-2xl font-black uppercase tracking-tight sm:text-3xl">Vous organisez un seul événement ?</h3>
-          <p className="mt-4 text-lg leading-relaxed text-[#222]">
+          <h3 className="t-heading">Vous organisez un seul événement ?</h3>
+          <p className="mt-4 t-lead text-[#222]">
             Payez à l’unité, sans engagement : <strong>{UNIT_PRICES.ticket} le billet</strong> prêt à imprimer,{' '}
             <strong>{UNIT_PRICES.badge} le badge</strong> ou l’accréditation. Le prix s’affiche avant la génération. Vous validez, puis vous générez.
           </p>
@@ -107,8 +107,8 @@ export default function PricingPage() {
       {/* ── Included ── */}
       <section className="bg-[#F2F2F2] px-6 py-24 lg:py-32">
         <div className="mx-auto max-w-[1100px]">
-          <h2 className="text-center text-4xl font-black uppercase tracking-tight sm:text-5xl">Tout le reste est compris</h2>
-          <p className="mt-3 text-center text-lg text-[#222]">Y compris dans le plan gratuit.</p>
+          <h2 className="t-title text-center">Tout le reste est compris</h2>
+          <p className="mt-3 t-lead text-center text-[#222]">Y compris dans le plan gratuit.</p>
           <div className="mt-14 grid grid-cols-1 gap-10 md:grid-cols-3">
             {INCLUDED.map(g => (
               <div key={g.title}>
@@ -130,7 +130,7 @@ export default function PricingPage() {
       {/* ── FAQ ── */}
       <section className="px-6 py-24 lg:py-32">
         <div className="mx-auto max-w-[820px]">
-          <h2 className="text-center text-4xl font-black uppercase tracking-tight sm:text-5xl">Questions fréquentes</h2>
+          <h2 className="t-title text-center">Questions fréquentes</h2>
           <div className="mt-12 border-t border-[#d0d0d0]">
             {FAQ.map(f => (
               <details key={f.q} className="group border-b border-[#d0d0d0] py-6">
@@ -138,7 +138,7 @@ export default function PricingPage() {
                   {f.q}
                   <span className="mt-1 text-2xl leading-none transition-transform group-open:rotate-45">+</span>
                 </summary>
-                <p className="mt-4 text-lg leading-relaxed text-[#222]">{f.a}</p>
+                <p className="mt-4 t-lead text-[#222]">{f.a}</p>
               </details>
             ))}
           </div>
@@ -147,8 +147,8 @@ export default function PricingPage() {
 
       {/* ── Last call ── */}
       <section className="px-6 pb-28 text-center">
-        <h2 className="mx-auto max-w-[760px] text-4xl font-black uppercase tracking-tight sm:text-6xl">Votre premier événement vous attend.</h2>
-        <p className="mx-auto mt-6 max-w-[600px] text-lg leading-relaxed text-[#222]">
+        <h2 className="t-title mx-auto max-w-[760px]">Votre premier événement vous attend.</h2>
+        <p className="mx-auto mt-6 max-w-[600px] t-lead text-[#222]">
           Créez votre compte, publiez votre événement, vendez vos premiers billets. Vous ne paierez rien tant que vous n’imprimerez rien.
         </p>
         <CreateButton className="mt-10" />

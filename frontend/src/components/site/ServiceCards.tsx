@@ -78,7 +78,7 @@ export function ServiceCard({ service }: { service: Service }) {
   return (
     <div id={service.slug} className="flex w-full max-w-[280px] scroll-mt-28 flex-col items-center text-center sm:w-[250px]">
       <div className="flex h-[120px] items-center justify-center text-black">{SERVICE_ICONS[service.slug]}</div>
-      <h3 className="mt-6 text-[27px] font-normal leading-[1.05] tracking-normal text-black">{service.title}</h3>
+      <h3 className="t-card mt-6 text-black">{service.title}</h3>
       <p className="mt-3 flex-1 text-sm leading-[1.7] text-[#222]">{service.text}</p>
       {service.group === 'terrain' && (
         <QuoteButton service={service.name} className="mt-5 inline-flex items-center gap-1.5 border-b border-black pb-0.5 text-sm font-semibold uppercase text-black transition-opacity hover:opacity-70">

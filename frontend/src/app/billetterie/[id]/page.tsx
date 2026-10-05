@@ -126,7 +126,7 @@ export default function EventDetailPage() {
   if (!event) {
     return (
       <div className="mx-auto max-w-xl space-y-4 px-6 py-24 text-center">
-        <h2 className="text-3xl">{isError && !notFound ? 'Connexion impossible' : 'Événement introuvable'}</h2>
+        <h2 className="t-heading">{isError && !notFound ? 'Connexion impossible' : 'Événement introuvable'}</h2>
         <p className="text-[#555]">
           {isError && !notFound
             ? "Impossible de charger l'événement. Vérifiez votre connexion internet."
@@ -173,11 +173,11 @@ export default function EventDetailPage() {
 
           {/* ── Right: details ── */}
           <div className="min-w-0 flex-1 lg:max-w-[690px]">
-            <h1 className="break-words text-[36px] font-normal tracking-normal leading-[1] lg:text-[44px]">{event.name}</h1>
-            {organizerName && <p className="mt-1 text-2xl leading-tight lg:text-[32px]">{organizerName}</p>}
-            <p className="mt-3 text-2xl lg:text-[33px]">{capitalize(formatEventDayTime(event.startDate))}</p>
+            <h1 className="t-title break-words">{event.name}</h1>
+            {organizerName && <p className="t-fact mt-3">{organizerName}</p>}
+            <p className="t-fact mt-1">{capitalize(formatEventDayTime(event.startDate))}</p>
 
-            <div className="mt-6 flex flex-wrap gap-x-7 gap-y-2 text-lg lg:mt-8 lg:text-[19px]">
+            <div className="t-lead mt-6 flex flex-wrap gap-x-7 gap-y-2 lg:mt-8">
               <span className="flex items-center gap-2"><Tag className="h-7 w-7 -scale-x-100" strokeWidth={1.4} />{EVENT_TYPE_LABELS[event.type ?? 'OTHER'] ?? 'Événement'}</span>
               <span className="flex items-center gap-2"><MapPin className="h-7 w-7" strokeWidth={1.4} />{event.venue}</span>
             </div>
@@ -186,7 +186,7 @@ export default function EventDetailPage() {
             {event.ticketTemplates.length > 0 && (
               <div className="mt-8 flex flex-col gap-4 rounded-[20px] bg-[#707070] px-6 py-5 text-white sm:flex-row sm:items-center sm:justify-between lg:mt-11 lg:px-[46px]">
                 <div>
-                  <p className="text-[30px] font-light leading-tight lg:text-[37px]">{fromPriceLabel(event)}</p>
+                  <p className="text-[28px] font-light leading-tight lg:text-[32px]">{fromPriceLabel(event)}</p>
                   <p className="mt-1 text-lg font-light text-white/50">Le prix final. Pas de frais cachés.</p>
                 </div>
                 {canBuy ? (
@@ -203,8 +203,8 @@ export default function EventDetailPage() {
             {/* About */}
             {event.description && (
               <section className="mt-10">
-                <h2 className="font-normal tracking-normal text-[32px] lg:text-[37px]">À propos</h2>
-                <p className="mt-6 whitespace-pre-line text-lg leading-snug lg:text-[21px]">{event.description}</p>
+                <h2 className="t-heading">À propos</h2>
+                <p className="t-lead mt-5 whitespace-pre-line">{event.description}</p>
               </section>
             )}
 
@@ -213,7 +213,7 @@ export default function EventDetailPage() {
               <section id="boutique" className="mt-14 border-t border-black pt-10">
                 <div className="flex flex-wrap items-end justify-between gap-4">
                   <div>
-                    <h2 className="font-normal tracking-normal text-[32px] lg:text-[37px]">Boutique</h2>
+                    <h2 className="t-heading">Boutique</h2>
                     <p className="mt-1 text-[15px] text-[#555]">
                       Souvenirs officiels — à retirer sur place{catalog?.delivery ? ' ou en livraison' : ''}.
                     </p>
@@ -239,7 +239,7 @@ export default function EventDetailPage() {
             <section className="mt-14 lg:mt-[150px]">
               <div className="flex items-start gap-5">
                 <CircleDollarSign className="h-9 w-9 flex-shrink-0" strokeWidth={1.4} />
-                <p className="text-lg leading-snug lg:text-[23px]">
+                <p className="t-lead">
                   Tu peux obtenir un remboursement si :<br />
                   - Cet événement est annulé<br />
                   - Cet événement est reporté et tu ne peux pas venir à la nouvelle date
@@ -251,7 +251,7 @@ export default function EventDetailPage() {
             {/* Organizer */}
             {organizerName && (
               <section className="mt-12 border-t border-black pt-8 lg:-mx-[30px] lg:px-[30px]">
-                <h2 className="font-normal tracking-normal text-[28px] lg:text-[33px]">Organisé par :</h2>
+                <h2 className="t-heading">Organisé par</h2>
                 <div className="mt-8 flex items-center gap-5 lg:gap-7">
                   <div className="relative h-[60px] w-[60px] flex-shrink-0 overflow-hidden rounded-full bg-[#ddd]">
                     {event.organizer.avatar ? (
@@ -260,16 +260,16 @@ export default function EventDetailPage() {
                       <span className="flex h-full items-center justify-center text-2xl font-semibold text-[#555]">{organizerName.charAt(0).toUpperCase()}</span>
                     )}
                   </div>
-                  <p className="text-[28px] lg:text-[35px]">{organizerName}</p>
+                  <p className="t-fact">{organizerName}</p>
                 </div>
               </section>
             )}
 
             {/* Venue */}
             <section className="mt-12 border-t border-black pt-12 lg:-mx-[30px] lg:mt-24 lg:px-[30px]">
-              <p className="text-[19px] lg:text-[23px]">Salle</p>
-              <p className="mt-4 text-[28px] lg:mt-6 lg:text-[37px]">{event.venue}</p>
-              <p className="mt-4 text-lg leading-snug lg:text-[21px]">
+              <h2 className="t-heading">Salle</h2>
+              <p className="t-fact mt-5">{event.venue}</p>
+              <p className="t-lead mt-2 text-[#555]">
                 {[event.address, event.city, event.country].filter(Boolean).join(', ')}
               </p>
               <a
@@ -285,10 +285,10 @@ export default function EventDetailPage() {
             {/* App */}
             <section className="mt-12 border-t border-black pt-12 lg:-mx-[30px] lg:px-[30px]">
               <div className="flex items-center justify-between gap-4">
-                <h2 className="font-normal tracking-normal text-[26px] lg:text-[37px]">Télécharge l&apos;appli ZAYA</h2>
+                <h2 className="t-heading">Télécharge l&apos;appli ZAYA</h2>
                 <ZayaLogo className="hidden text-[34px] sm:inline-flex" />
               </div>
-              <p className="mt-8 max-w-[470px] text-lg leading-snug lg:mt-12 lg:text-[23px]">
+              <p className="t-lead mt-6 max-w-[470px] lg:mt-8">
                 Plonge dans l&apos;extraordinaire avec Zaya, la plateforme qui transforme chaque événement en une aventure
                 mémorable ! Prépare-toi à vivre une expérience où chaque détail est pensé pour t&apos;émerveiller.
               </p>

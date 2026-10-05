@@ -19,10 +19,10 @@ export default function ServicesPage() {
 
       <section className="px-6 pb-24 pt-16 lg:pb-32 lg:pt-28">
         <div className="mx-auto max-w-[900px] text-center">
-          <h1 className="text-5xl font-black uppercase tracking-tight sm:text-7xl lg:text-[96px] lg:leading-[0.95]">
+          <h1 className="t-display">
             Nos services
           </h1>
-          <p className="mx-auto mt-8 max-w-[640px] text-xl leading-relaxed text-[#222] lg:text-2xl">De la vente des billets au contrôle des entrées, nous nous occupons de votre événement</p>
+          <p className="t-lead mx-auto mt-8 max-w-[640px] text-[#222]">De la vente des billets au contrôle des entrées, nous nous occupons de votre événement</p>
         </div>
 
         {/* Experience */}
@@ -31,7 +31,7 @@ export default function ServicesPage() {
             <span className="block text-[96px] font-black tracking-tight sm:text-[110px]">12</span>
             <span className="block text-lg uppercase tracking-[0.2em] text-white/70">ans d’expérience</span>
           </p>
-          <p className="text-lg leading-relaxed text-white/90 sm:text-xl">
+          <p className="t-lead text-white/90">
             Depuis 12 ans, nous accompagnons les organisateurs sur le terrain, aux côtés de partenaires parmi les meilleurs dans leur domaine :
             sécurité, impression, contrôle d’accès et vente.
           </p>
@@ -51,7 +51,7 @@ export default function ServicesPage() {
 
         <div className="mx-auto mt-24 max-w-[1150px] lg:mt-32">
           <h3 className="text-center text-sm font-semibold uppercase tracking-[0.2em] text-[#707070]">Sur le terrain · sur devis</h3>
-          <p className="mx-auto mt-3 max-w-[560px] text-center text-lg text-[#222]">
+          <p className="t-lead mx-auto mt-3 max-w-[560px] text-center text-[#222]">
             Chaque événement est différent : ces services sont chiffrés selon votre date, votre lieu et votre public.
           </p>
           <div className="mt-12 flex flex-wrap justify-center gap-x-12 gap-y-16 lg:gap-y-20">
