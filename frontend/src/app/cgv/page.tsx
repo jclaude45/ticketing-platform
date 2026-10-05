@@ -1,11 +1,13 @@
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import Link from 'next/link';
 import { COMPANY, LegalPage, Ul, type LegalSection } from '@/components/legal/LegalPage';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta({
   title: 'Conditions générales de vente',
   description: 'Conditions générales de vente de ZAYA : achat de billets et d’articles, services aux organisateurs, frais et versements.',
-};
+  path: '/cgv',
+});
 
 const A = ({ href, children }: { href: string; children: React.ReactNode }) => (
   <Link href={href} className="font-medium underline underline-offset-2">{children}</Link>

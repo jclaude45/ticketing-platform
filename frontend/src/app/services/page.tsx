@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import { SiteHeader } from '@/components/site/SiteHeader';
 import { SiteFooter } from '@/components/site/SiteFooter';
 import { ContactSection } from '@/components/site/ContactSection';
@@ -6,11 +7,12 @@ import { QuoteButton } from '@/components/site/QuoteButton';
 import { ServiceCard } from '@/components/site/ServiceCards';
 import { SERVICES } from '@/components/site/services';
 
-export const metadata: Metadata = {
-  title: 'Services ZAYA',
+export const metadata: Metadata = pageMeta({
+  title: 'Services aux organisateurs : billetterie, contrôle d’accès, sécurité, impression',
   description:
-    'Billetterie, contrôle d’accès, agents de sécurité, impression de billets, bracelets et badges, terminaux : les services ZAYA pour organisateurs, sur devis.',
-};
+    'Billetterie, experts du contrôle d’accès, agents de sécurité et barricades, impression de billets, bracelets et badges, terminaux de vente et de contrôle : 12 ans d’expérience, sur devis.',
+  path: '/services',
+});
 
 export default function ServicesPage() {
   return (

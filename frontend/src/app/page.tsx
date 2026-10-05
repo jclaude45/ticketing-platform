@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import { ChevronsDown } from 'lucide-react';
 import { SiteHeader } from '@/components/site/SiteHeader';
 import { SiteFooter } from '@/components/site/SiteFooter';
@@ -6,15 +7,17 @@ import { ContactSection } from '@/components/site/ContactSection';
 import { QuoteButton } from '@/components/site/QuoteButton';
 import { HeroAnimation } from '@/components/site/HeroAnimation';
 import { SERVICES } from '@/components/site/services';
-import { APP_URL } from '@/components/site/site-config';
+import { APP_URL, SITE_URL } from '@/components/site/site-config';
 import { cn } from '@/lib/utils';
 import { PRINT_PLANS, SALES_FEE, UNIT_PRICES, type PrintPlan } from '@/components/site/pricing';
 
-export const metadata: Metadata = {
-  title: 'ZAYA — Transformez vos événements en expériences inoubliables',
+export const metadata: Metadata = pageMeta({
+  title: 'ZAYA — Billetterie en ligne et gestion d’événements en RDC',
+  absoluteTitle: true,
   description:
-    'Créez votre événement, vendez vos billets en ligne et en cash, contrôlez les entrées par QR code. La plateforme événementielle tout-en-un.',
-};
+    'Créez votre événement, vendez vos billets en ligne (Mobile Money, carte) et en cash, contrôlez les entrées par QR code. La plateforme événementielle tout-en-un, à Kinshasa et partout en RDC.',
+  path: '/',
+});
 
 
 // ─── Pricing ──────────────────────────────────────────────────────────────────
@@ -46,11 +49,44 @@ function PriceCard({ plan }: { plan: PrintPlan }) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+/** schema.org: who runs ZAYA and the site itself, for the search engines' knowledge panels */
+const ORGANIZATION_LD = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Organization',
+      '@id': `${SITE_URL}/#organization`,
+      name: 'ZAYA',
+      legalName: 'BACK2NEXT',
+      url: SITE_URL,
+      logo: `${SITE_URL}/icon.svg`,
+      email: 'contact@zaya.live',
+      address: {
+        '@type': 'PostalAddress',
+        streetAddress: '10, avenue Katakokombe, Q/Joli Parc',
+        addressLocality: 'Kinshasa',
+        addressRegion: 'Ngaliema',
+        addressCountry: 'CD',
+      },
+      areaServed: 'CD',
+    },
+    {
+      '@type': 'WebSite',
+      '@id': `${SITE_URL}/#website`,
+      name: 'ZAYA',
+      url: SITE_URL,
+      inLanguage: 'fr',
+      publisher: { '@id': `${SITE_URL}/#organization` },
+    },
+  ],
+};
+
 export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-white text-black">
       <SiteHeader variant="landing" />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ORGANIZATION_LD) }} />
 
       {/* ── Animated banner (white like the page) ── */}
       <section id="accueil" className="relative flex h-[calc(100svh-72px)] flex-col lg:h-[calc(100svh-76px)]">

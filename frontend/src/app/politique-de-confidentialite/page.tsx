@@ -1,11 +1,13 @@
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import Link from 'next/link';
 import { COMPANY, LegalPage, Ul, type LegalSection } from '@/components/legal/LegalPage';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta({
   title: 'Politique de confidentialité',
   description: 'Comment ZAYA (BACK2NEXT) collecte, utilise et protège les données personnelles, conformément au Code du numérique de la RDC.',
-};
+  path: '/politique-de-confidentialite',
+});
 
 const Mail = () => <a href={`mailto:${COMPANY.email}`} className="underline">{COMPANY.email}</a>;
 

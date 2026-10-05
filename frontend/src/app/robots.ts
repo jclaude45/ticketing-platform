@@ -1,16 +1,25 @@
 import type { MetadataRoute } from 'next';
+import { headers } from 'next/headers';
+import { siteUrl } from '@/lib/seo';
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://zaya.live';
-
-export default function robots(): MetadataRoute.Robots {
+/**
+ * zaya.live: everything public may be indexed. app.zaya.live (organizer space) is closed to search
+ * engines: its pages need an account, and the public pages live on zaya.live only.
+ */
+export default async function robots(): Promise<MetadataRoute.Robots> {
+  const host = (await headers()).get('host') ?? '';
+  if (host.startsWith('app.')) {
+    return { rules: [{ userAgent: '*', disallow: '/' }] };
+  }
   return {
     rules: [
       {
         userAgent: '*',
-        allow: ['/', '/billetterie', '/cgu', '/politique-de-confidentialite'],
-        disallow: ['/dashboard/', '/api/', '/auth/'],
+        allow: '/',
+        disallow: ['/dashboard/', '/api/', '/auth/', '/join/', '/invite/', '/controle/', '/billetterie/payment/'],
       },
     ],
-    sitemap: `${BASE_URL}/sitemap.xml`,
+    sitemap: siteUrl('/sitemap.xml'),
+    host: siteUrl('/'),
   };
 }

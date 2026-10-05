@@ -7,6 +7,8 @@ import { SocketProvider } from '@/providers/SocketProvider';
 import { CookieBanner } from '@/components/CookieBanner';
 import { Analytics } from '@/components/Analytics';
 import './globals.css';
+import { SITE_URL } from '@/components/site/site-config';
+import { DEFAULT_DESCRIPTION, SITE_NAME } from '@/lib/seo';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -15,14 +17,33 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
-    default: 'ZAYA — Event Ticketing Platform',
+    default: 'ZAYA — Billetterie et événements en RDC',
     template: '%s | ZAYA',
   },
-  description: "Plateforme de billetterie et contrôle d'accès événementiel",
-  keywords: ['ticketing', 'events', 'qr code', 'access control'],
-  authors: [{ name: 'ZAYA' }],
-  creator: 'ZAYA',
+  description: DEFAULT_DESCRIPTION,
+  applicationName: SITE_NAME,
+  keywords: [
+    'billetterie en ligne', 'billets', 'événements', 'Kinshasa', 'RDC', 'Congo', 'concert', 'festival', 'soirée',
+    'conférence', 'Mobile Money', 'M-Pesa', 'QR code', 'contrôle d’accès', 'organisateur d’événements',
+  ],
+  authors: [{ name: 'BACK2NEXT' }],
+  creator: 'BACK2NEXT',
+  publisher: 'BACK2NEXT',
+  openGraph: {
+    type: 'website',
+    locale: 'fr_FR',
+    siteName: SITE_NAME,
+    title: 'ZAYA — Billetterie et événements en RDC',
+    description: DEFAULT_DESCRIPTION,
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'ZAYA — Billetterie et événements en RDC',
+    description: DEFAULT_DESCRIPTION,
+  },
+  formatDetection: { telephone: false, email: false, address: false },
   icons: {
     icon: '/icon.svg',
     shortcut: '/icon.svg',

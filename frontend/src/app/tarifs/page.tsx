@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { pageMeta } from '@/lib/seo';
 import { Check } from 'lucide-react';
 import { SiteHeader } from '@/components/site/SiteHeader';
 import { SiteFooter } from '@/components/site/SiteFooter';
@@ -6,11 +7,12 @@ import { APP_URL } from '@/components/site/site-config';
 import { FAQ, INCLUDED, PRINT_PLANS, SALES_FEE, UNIT_PRICES } from '@/components/site/pricing';
 import { cn } from '@/lib/utils';
 
-export const metadata: Metadata = {
-  title: 'Tarifs ZAYA',
+export const metadata: Metadata = pageMeta({
+  title: 'Tarifs',
   description:
-    'La billetterie en ligne est gratuite. Vous ne payez que ce que vous imprimez — et 9 % sur les billets que vous vendez.',
-};
+    'La billetterie en ligne est gratuite. Vous ne payez que ce que vous imprimez — et 9 % sur les billets que vous vendez, frais de paiement compris.',
+  path: '/tarifs',
+});
 
 function CreateButton({ className }: { className?: string }) {
   return (

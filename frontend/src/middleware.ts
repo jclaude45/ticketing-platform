@@ -6,7 +6,8 @@ const PUBLIC_HOST = 'zaya.live';
 
 // Routes belonging to each subdomain
 const APP_PREFIXES = ['/dashboard', '/auth', '/join'];
-const PUBLIC_PREFIXES = ['/billetterie'];
+// The public site lives on zaya.live only: one address per page for search engines
+const PUBLIC_PREFIXES = ['/billetterie', '/services', '/tarifs', '/cgu', '/cgv', '/politique-de-confidentialite'];
 
 export function middleware(request: NextRequest) {
   const host = request.headers.get('host') ?? '';
@@ -32,9 +33,9 @@ export function middleware(request: NextRequest) {
 
   // ── app.zaya.live ─────────────────────────────────────────────────────────
   if (isAppHost) {
-    // Redirect billetterie routes to zaya.live
+    // Redirect public site pages (billetterie, services, tarifs, legal pages) to zaya.live
     if (PUBLIC_PREFIXES.some(p => pathname.startsWith(p))) {
-      return NextResponse.redirect(`https://${PUBLIC_HOST}${pathname}${request.nextUrl.search}`);
+      return NextResponse.redirect(`https://${PUBLIC_HOST}${pathname}${request.nextUrl.search}`, 308);
     }
     // Root → dashboard
     if (pathname === '/') {
