@@ -173,7 +173,8 @@ export default function EventDetailPage() {
 
           {/* ── Right: details ── */}
           <div className="min-w-0 flex-1 lg:max-w-[690px]">
-            <h1 className="t-title break-words">{event.name}</h1>
+            {/* Smaller than a section title: the page already shows the poster and many headings */}
+            <h1 className="t-title break-words text-[30px] sm:text-[36px] lg:text-[40px]">{event.name}</h1>
             {organizerName && <p className="t-fact mt-3">{organizerName}</p>}
             <p className="t-fact mt-1">{capitalize(formatEventDayTime(event.startDate))}</p>
 
