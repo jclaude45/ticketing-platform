@@ -5,8 +5,11 @@ import { useEffect, useRef } from 'react';
 /** Frame where the ZAYA logo is centred: shown as is when the visitor asks for less motion */
 const STILL_FRAME = 240;
 
-/** Landing page banner: the ZAYA Lottie animation (public/zaya-site/banniere.json), looped */
-export function HeroAnimation({ className }: { className?: string }) {
+/**
+ * Landing page banner: the ZAYA words animation (public/zaya-site/banniere.json), looped.
+ * crop: fill the box and cut the empty top and bottom of the square animation.
+ */
+export function HeroAnimation({ className, crop = false }: { className?: string; crop?: boolean }) {
   const box = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -23,13 +26,13 @@ export function HeroAnimation({ className }: { className?: string }) {
         loop: !still,
         autoplay: !still,
         path: '/zaya-site/banniere.json',
-        rendererSettings: { preserveAspectRatio: 'xMidYMid meet' },
+        rendererSettings: { preserveAspectRatio: crop ? 'xMidYMid slice' : 'xMidYMid meet' },
       });
       if (still) a.addEventListener('DOMLoaded', () => a.goToAndStop(STILL_FRAME, true));
       anim = a;
     })();
     return () => { cancelled = true; anim?.destroy(); };
-  }, []);
+  }, [crop]);
 
   return <div ref={box} role="img" aria-label="ZAYA — imparable, instantané, invisible, illimité, inoubliable" className={className} />;
 }

@@ -23,7 +23,7 @@ const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
       { label: "Centre d'Assistance", href: '/#contact' },
       { label: 'Contactez-nous', href: '/#contact' },
       { label: 'Demander un remboursement', href: '/cgv#annulation' },
-      { label: 'Nos services', href: '/#services' },
+      { label: 'Nos services', href: '/services' },
     ],
   },
 ];

@@ -6,7 +6,7 @@ import { requestQuote } from './services';
 export function QuoteButton({ service, className, children }: { service?: string; className?: string; children: React.ReactNode }) {
   return (
     <a
-      href={service ? `/?service=${encodeURIComponent(service)}#contact` : '/?devis=1#contact'}
+      href={service ? `/services?service=${encodeURIComponent(service)}#contact` : '/services?devis=1#contact'}
       onClick={e => { e.preventDefault(); requestQuote(service); }}
       className={className}
     >
