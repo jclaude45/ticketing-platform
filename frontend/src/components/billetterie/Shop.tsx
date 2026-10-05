@@ -81,8 +81,11 @@ export function ProductCard({
   const soldOut = product.variants.every((v) => v.available === 0);
   const inCart = variant ? cart[variant.id] ?? 0 : 0;
 
+  // The event page shows the products in large cards; the checkout lists them in compact rows
+  const small = compact ? 'text-xs' : 'text-sm';
   const chip = (active: boolean, disabled: boolean) => cn(
-    'rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors',
+    'rounded-lg border font-medium transition-colors',
+    compact ? 'px-2.5 py-1 text-xs' : 'px-3 py-1.5 text-sm',
     active ? 'border-black bg-black text-white' : 'border-gray-200 text-gray-700 hover:border-gray-300 dark:border-gray-700 dark:text-gray-300',
     disabled && !active && 'opacity-40 line-through',
   );
@@ -98,10 +101,10 @@ export function ProductCard({
       </div>
       <div className={cn('flex min-w-0 flex-1 flex-col gap-2', !compact && 'p-4')}>
         <div className="flex items-start justify-between gap-2">
-          <p className="text-sm font-semibold text-gray-900 dark:text-white">{product.name}</p>
-          <p className="whitespace-nowrap text-sm font-bold text-black dark:text-white">{money(product.price, product.currency)}</p>
+          <p className={cn('font-semibold text-gray-900 dark:text-white', compact ? 'text-sm' : 'text-lg leading-snug lg:text-xl')}>{product.name}</p>
+          <p className={cn('whitespace-nowrap font-bold text-black dark:text-white', compact ? 'text-sm' : 'text-lg lg:text-xl')}>{money(product.price, product.currency)}</p>
         </div>
-        {!compact && product.description && <p className="text-xs text-gray-500">{product.description}</p>}
+        {!compact && product.description && <p className="text-base leading-relaxed text-gray-600">{product.description}</p>}
 
         {sizes.length > 0 && (
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="Taille">
@@ -120,23 +123,23 @@ export function ProductCard({
 
         <div className="mt-auto flex items-center justify-between gap-2">
           {soldOut ? (
-            <span className="text-xs font-medium text-red-500">Épuisé</span>
+            <span className={cn(small, 'font-medium text-red-500')}>Épuisé</span>
           ) : !variant || variant.available === 0 ? (
-            <span className="text-xs text-red-500">Indisponible dans ce choix</span>
+            <span className={cn(small, 'text-red-500')}>Indisponible dans ce choix</span>
           ) : inCart > 0 ? (
             <>
-              <span className="flex items-center gap-1 text-xs font-medium text-emerald-600"><Check className="h-3.5 w-3.5" /> Dans le panier</span>
+              <span className={cn(small, 'flex items-center gap-1 font-medium text-emerald-600')}><Check className="h-3.5 w-3.5" /> Dans le panier</span>
               <Stepper value={inCart} max={Math.min(variant.available, 20)} onChange={(q) => onCartChange(setCartQty(cart, variant, q))} />
             </>
           ) : (
             <>
-              <span className="text-xs text-gray-400">{variant.available < 5 ? `Plus que ${variant.available}` : ''}</span>
+              <span className={cn(small, 'text-gray-400')}>{variant.available < 5 ? `Plus que ${variant.available}` : ''}</span>
               <button
                 type="button"
                 onClick={() => onCartChange(setCartQty(cart, variant, 1))}
-                className="inline-flex items-center gap-1.5 rounded-full bg-black px-3.5 py-1.5 text-xs font-semibold text-white hover:opacity-85"
+                className={cn('inline-flex items-center gap-1.5 rounded-full bg-black font-semibold text-white hover:opacity-85', compact ? 'px-3.5 py-1.5 text-xs' : 'px-5 py-2 text-sm')}
               >
-                <Plus className="h-3.5 w-3.5" /> Ajouter
+                <Plus className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} /> Ajouter
               </button>
             </>
           )}

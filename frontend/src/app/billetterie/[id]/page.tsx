@@ -215,7 +215,7 @@ export default function EventDetailPage() {
                 <div className="flex flex-wrap items-end justify-between gap-4">
                   <div>
                     <h2 className="t-heading">Boutique</h2>
-                    <p className="mt-1 text-[15px] text-[#555]">
+                    <p className="t-lead mt-2 text-[#555]">
                       Souvenirs officiels — à retirer sur place{catalog?.delivery ? ' ou en livraison' : ''}.
                     </p>
                   </div>
