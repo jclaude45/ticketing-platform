@@ -53,10 +53,10 @@ export default function LandingPage() {
       <SiteHeader variant="landing" />
 
       {/* ── Animated banner (white like the page) ── */}
-      <section id="accueil" className="relative px-6 pt-6 lg:pt-10">
-        {/* The square animation only fills its middle band: cropped to a wide strip around the words */}
-        <HeroAnimation crop className="mx-auto h-[150px] w-full max-w-[1100px] sm:h-[260px] lg:h-[360px]" />
-        <a href="#intro" aria-label="Défiler" className="mx-auto mt-2 flex w-fit text-[#555] transition-colors hover:text-black">
+      <section id="accueil" className="relative flex h-[calc(100svh-72px)] flex-col lg:h-[calc(100svh-76px)]">
+        {/* Fills the screen under the header; the words span the whole width */}
+        <HeroAnimation fitWidth className="min-h-0 w-full flex-1" />
+        <a href="#intro" aria-label="Défiler" className="absolute bottom-6 left-1/2 -translate-x-1/2 text-[#555] transition-colors hover:text-black">
           <ChevronsDown className="h-9 w-9 animate-bounce" strokeWidth={2} />
         </a>
       </section>
