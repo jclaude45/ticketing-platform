@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { ChevronDown } from 'lucide-react';
 import { ZayaLogo } from './ZayaLogo';
 import { StoreButtons } from './StoreButtons';
-import { APP_URL, SOCIAL_LINKS } from './site-config';
+import { SOCIAL_LINKS } from './site-config';
 import { openCookieSettings } from '@/components/CookieBanner';
 
 const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
@@ -12,7 +12,7 @@ const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
     title: 'Zaya',
     links: [
       { label: 'A propos', href: '/' },
-      { label: 'Organisateur', href: `${APP_URL}/auth/register` },
+      { label: 'Organisateur', href: '/' },
       { label: 'Partenariats', href: '/#contact' },
       { label: 'Presse', href: '/#contact' },
     ],

@@ -19,10 +19,8 @@ const LANDING_LINKS: NavLink[] = [
   { label: 'Contact', href: '/#contact' },
 ];
 
-/** Event pages: one way back to the organizers' home page */
-const TICKETING_LINKS: NavLink[] = [
-  { label: 'Organisateurs', href: '/' },
-];
+/** Event pages: no links in the bar (the organizers' page is linked from the footer) */
+const TICKETING_LINKS: NavLink[] = [];
 
 /**
  * Header of the public site. "landing": translucent bar over the hero picture, yellow
