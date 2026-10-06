@@ -44,11 +44,7 @@ export const metadata: Metadata = {
     description: DEFAULT_DESCRIPTION,
   },
   formatDetection: { telephone: false, email: false, address: false },
-  icons: {
-    icon: '/icon.svg',
-    shortcut: '/icon.svg',
-    apple: '/icon.svg',
-  },
+  // Tab icon: app/icon.svg (black, white in dark mode); home screen icon: app/apple-icon.tsx
   other: {
     'google': 'notranslate',
   },
