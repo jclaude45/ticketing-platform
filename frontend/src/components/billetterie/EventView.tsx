@@ -18,6 +18,8 @@ export interface PublicEvent {
   id: string;
   name: string;
   description?: string;
+  /** Artists or speakers */
+  performers?: string[];
   venue: string;
   address?: string;
   city: string;
@@ -178,6 +180,9 @@ export function EventView({ id, initialEvent }: { id: string; initialEvent?: Pub
             <h1 className="t-title break-words text-[30px] sm:text-[36px] lg:text-[40px]">{event.name}</h1>
             {organizerName && <p className="t-fact mt-3">{organizerName}</p>}
             <p className="t-fact mt-1">{capitalize(formatEventDayTime(event.startDate))}</p>
+            {!!event.performers?.length && (
+              <p className="t-lead mt-2 text-[#555]">Avec <span className="text-black">{event.performers.join(', ')}</span></p>
+            )}
 
             <div className="t-lead mt-6 flex flex-wrap gap-x-7 gap-y-2 lg:mt-8">
               <span className="flex items-center gap-2"><Tag className="h-7 w-7 -scale-x-100" strokeWidth={1.4} />{EVENT_TYPE_LABELS[event.type ?? 'OTHER'] ?? 'Événement'}</span>

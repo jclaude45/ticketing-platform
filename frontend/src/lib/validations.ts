@@ -80,6 +80,8 @@ export type EventTypeValue = typeof EVENT_TYPES[number]['value'];
 export const createEventSchema = z.object({
   name: z.string().min(3, 'Le nom doit contenir au moins 3 caractères').max(200),
   description: z.string().min(10, 'La description doit contenir au moins 10 caractères').max(2000).optional().or(z.literal('')),
+  /** Artists or speakers, separated by commas (sent as a list) */
+  performers: z.string().max(1000, 'Liste trop longue').optional(),
   type: z.enum(['CONCERT','CONFERENCE','FESTIVAL','SPORT','PARTY','EXHIBITION','THEATER','WORKSHOP','GALA','COMEDY','WORSHIP','FAIR','OTHER']).default('OTHER'),
   currency: z.enum(['CDF','USD','EUR','XAF','GBP']).default('USD'),
   /** Who pays ZAYA's 9 % on paid tickets */

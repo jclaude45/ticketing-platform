@@ -13,6 +13,14 @@ import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { EventStatus, Role } from '@prisma/client';
 
+/** Names trimmed, empty ones and repeats removed (same name written twice, any case) */
+function cleanPerformers(names?: string[]): string[] {
+  const seen = new Set<string>();
+  return (names ?? [])
+    .map(n => n.trim())
+    .filter(n => n && !seen.has(n.toLowerCase()) && seen.add(n.toLowerCase()));
+}
+
 @Injectable()
 export class EventsService {
   private readonly logger = new Logger(EventsService.name);
@@ -34,6 +42,7 @@ export class EventsService {
       data: {
         name: dto.name,
         description: dto.description,
+        performers: cleanPerformers(dto.performers),
         venue: dto.venue,
         address: dto.address,
         city: dto.city,
@@ -176,6 +185,7 @@ export class EventsService {
       data: {
         ...(dto.name && { name: dto.name }),
         ...(dto.description !== undefined && { description: dto.description }),
+        ...(dto.performers !== undefined && { performers: cleanPerformers(dto.performers) }),
         ...(dto.venue && { venue: dto.venue }),
         ...(dto.address !== undefined && { address: dto.address }),
         ...(dto.city && { city: dto.city }),
@@ -290,6 +300,7 @@ export class EventsService {
       data: {
         name: `${event.name} (Copy)`,
         description: event.description,
+        performers: event.performers,
         venue: event.venue,
         address: event.address,
         city: event.city,

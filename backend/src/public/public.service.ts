@@ -163,7 +163,7 @@ export class PublicService {
     const event = await this.prisma.event.findUnique({
       where: { id },
       select: {
-        id: true, name: true, description: true,
+        id: true, name: true, description: true, performers: true,
         venue: true, address: true, city: true, country: true, type: true,
         startDate: true, endDate: true,
         bannerUrl: true, totalCapacity: true, status: true, feePayer: true,
@@ -174,6 +174,7 @@ export class PublicService {
             price: true, currency: true,
             quantity: true, availableCount: true,
             color: true, validDays: true,
+            createdAt: true, // when this ticket type went on sale (search engines' offers.validFrom)
           },
           orderBy: { price: 'asc' },
         },

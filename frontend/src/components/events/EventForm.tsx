@@ -134,6 +134,7 @@ export function EventForm({ event, isEdit, draft }: EventFormProps) {
           name: event.name,
           // null from the API for empty fields: the schema expects text
           description: event.description ?? '',
+          performers: ((event as any).performers ?? []).join(', '),
           type: event.type ?? 'OTHER',
           currency: (event as any).currency ?? 'USD',
           feePayer: (event as any).feePayer ?? 'ORGANIZER',
@@ -289,6 +290,8 @@ export function EventForm({ event, isEdit, draft }: EventFormProps) {
     setSaving(true);
     const payload = {
       ...data,
+      // "Fally Ipupa, Ferre Gola" → ['Fally Ipupa', 'Ferre Gola'] (an empty list clears them)
+      performers: (data.performers ?? '').split(',').map(n => n.trim()).filter(Boolean).slice(0, 20),
       startDate: toISOString(data.startDate),
       endDate: toISOString(data.endDate),
     };
@@ -352,6 +355,14 @@ export function EventForm({ event, isEdit, draft }: EventFormProps) {
 
             <Field label="Description" error={errors.description?.message} hint="Elle apparaît dans la rubrique « À propos » de la page de vente.">
               <textarea {...register('description')} rows={4} placeholder="Décrivez votre événement…" className={cn(inputClass, 'resize-y')} />
+            </Field>
+
+            <Field
+              label="Artistes / intervenants"
+              error={errors.performers?.message}
+              hint="Facultatif. Séparez les noms par des virgules. Ils apparaissent sur la page de vente et aident Google à proposer votre événement à qui cherche ces noms."
+            >
+              <input {...register('performers')} placeholder="Ex. Fally Ipupa, Ferre Gola" className={inputClass} />
             </Field>
           </Section>
 

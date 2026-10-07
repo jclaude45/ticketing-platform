@@ -7,6 +7,7 @@ interface SeoEvent {
   id: string;
   name: string;
   description?: string | null;
+  performers?: string[];
   type?: string;
   status?: string;
   venue: string;
@@ -18,7 +19,7 @@ interface SeoEvent {
   bannerUrl?: string | null;
   minPrice: number | null;
   soldOut: boolean;
-  ticketTemplates: { price: number; currency: string; availableCount: number }[];
+  ticketTemplates: { price: number; currency: string; availableCount: number; createdAt?: string }[];
   organizer?: { firstName: string; lastName: string } | null;
 }
 
@@ -47,8 +48,9 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const when = kinshasaDateTime(event.startDate);
   const where = [event.venue, event.city].filter(Boolean).join(', ');
   const kind = EVENT_TYPE_LABELS[event.type ?? 'OTHER'] ?? 'Événement';
+  const withWho = event.performers?.length ? ` Avec ${event.performers.join(', ')}.` : '';
   const description = excerpt(
-    `${kind} · ${when} · ${where}. ${event.description ?? `Billets en vente sur ${SITE_NAME}.`}`,
+    `${kind} · ${when} · ${where}.${withWho} ${event.description ?? `Billets en vente sur ${SITE_NAME}.`}`,
     160,
   );
   return {
@@ -69,6 +71,8 @@ function eventJsonLd(event: SeoEvent) {
   const currency = event.ticketTemplates[0]?.currency ?? 'USD';
   const prices = event.ticketTemplates.map(t => t.price);
   const organizer = event.organizer ? `${event.organizer.firstName} ${event.organizer.lastName}`.trim() : SITE_NAME;
+  // Sales open when the first ticket type is created
+  const onSale = event.ticketTemplates.map(t => t.createdAt).filter(Boolean).sort()[0];
   return {
     '@context': 'https://schema.org',
     '@type': 'Event',
@@ -90,7 +94,11 @@ function eventJsonLd(event: SeoEvent) {
         addressCountry: countryCode(event.country),
       },
     },
-    organizer: { '@type': 'Organization', name: organizer },
+    ...(event.performers?.length && {
+      performer: event.performers.map(name => ({ '@type': 'PerformingGroup', name })),
+    }),
+    // Organizers have no public page of their own: the event page presents them (« Organisé par »)
+    organizer: { '@type': 'Organization', name: organizer, url },
     ...(prices.length > 0 && {
       offers: {
         '@type': 'AggregateOffer',
@@ -100,6 +108,7 @@ function eventJsonLd(event: SeoEvent) {
         highPrice: Math.max(...prices),
         offerCount: prices.length,
         availability: event.soldOut ? 'https://schema.org/SoldOut' : 'https://schema.org/InStock',
+        ...(onSale && { validFrom: onSale }),
       },
     }),
   };

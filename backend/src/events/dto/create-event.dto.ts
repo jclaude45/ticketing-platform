@@ -8,6 +8,8 @@ import {
   MaxLength,
   IsEnum,
   IsIn,
+  IsArray,
+  ArrayMaxSize,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { EventStatus, EventType } from '@prisma/client';
@@ -24,6 +26,14 @@ export class CreateEventDto {
   @IsString()
   @MaxLength(2000)
   description?: string;
+
+  @ApiPropertyOptional({ example: ['Fally Ipupa', 'Ferre Gola'], description: 'Artists, bands or speakers' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  @MaxLength(100, { each: true })
+  performers?: string[];
 
   @ApiProperty({ example: 'Grand Convention Center' })
   @IsString()

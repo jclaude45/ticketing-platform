@@ -143,6 +143,8 @@ model Event {
   id               String      @id @default(uuid())
   name             String
   description      String?
+  /// Artists, bands or speakers, as shown on the event page (and to search engines)
+  performers       String[]    @default([])
   venue            String
   address          String?
   city             String
