@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { daysBetween, shortDay } from '@/components/site/format';
 import { SearchSelect, type SearchOption } from '@/components/common/SearchSelect';
 import { CountryFlag } from '@/components/common/CountryFlag';
+import { PerformersInput, splitNames } from './PerformersInput';
 import { useCountries, useCities, countryCodeOf, FREQUENT_COUNTRIES } from '@/hooks/useGeo';
 import toast from 'react-hot-toast';
 
@@ -291,7 +292,7 @@ export function EventForm({ event, isEdit, draft }: EventFormProps) {
     const payload = {
       ...data,
       // "Fally Ipupa, Ferre Gola" → ['Fally Ipupa', 'Ferre Gola'] (an empty list clears them)
-      performers: (data.performers ?? '').split(',').map(n => n.trim()).filter(Boolean).slice(0, 20),
+      performers: splitNames(data.performers).slice(0, 20),
       startDate: toISOString(data.startDate),
       endDate: toISOString(data.endDate),
     };
@@ -360,9 +361,14 @@ export function EventForm({ event, isEdit, draft }: EventFormProps) {
             <Field
               label="Artistes / intervenants"
               error={errors.performers?.message}
-              hint="Facultatif. Séparez les noms par des virgules. Ils apparaissent sur la page de vente et aident Google à proposer votre événement à qui cherche ces noms."
+              hint="Facultatif. Ajoutez autant d'artistes que nécessaire (Entrée ou « Ajouter » après chaque nom). Ils apparaissent sur la page de vente et aident Google à proposer votre événement à qui cherche ces noms."
             >
-              <input {...register('performers')} placeholder="Ex. Fally Ipupa, Ferre Gola" className={inputClass} />
+              <PerformersInput
+                value={watch('performers')}
+                onChange={v => setValue('performers', v, { shouldDirty: true, shouldValidate: true })}
+                inputClass={inputClass}
+              />
+              <input type="hidden" {...register('performers')} />
             </Field>
           </Section>
 
