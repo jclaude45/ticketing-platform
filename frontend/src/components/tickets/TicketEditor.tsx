@@ -94,7 +94,7 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
     price: initialMeta?.price ?? 0,
     currency: initialMeta?.currency ?? 'USD',
     quantity: initialMeta?.quantity ?? 100,
-    color: initialMeta?.color ?? '#4f46e5',
+    color: initialMeta?.color ?? '#111111',
   });
 
   // For "new" templates: the user picks an existing tariff to associate the canvas to
@@ -167,9 +167,9 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
       fabric.Object.prototype.cornerSize = 14;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (fabric.Object.prototype as any).touchCornerSize = 36;
-      fabric.Object.prototype.cornerColor = '#4f46e5';
+      fabric.Object.prototype.cornerColor = '#111111';
       fabric.Object.prototype.cornerStrokeColor = '#ffffff';
-      fabric.Object.prototype.borderColor = '#4f46e5';
+      fabric.Object.prototype.borderColor = '#111111';
       fabric.Object.prototype.borderScaleFactor = 2;
       fabric.Object.prototype.transparentCorners = false;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -307,12 +307,12 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
       const g = new fabric.Group([
         new fabric.Rect({
           width: s, height: s,
-          fill: '#f3f4f6', stroke: '#4f46e5', strokeWidth: 2,
+          fill: '#f3f4f6', stroke: '#111111', strokeWidth: 2,
           strokeDashArray: [8, 4], rx: 6, ry: 6,
           originX: 'center', originY: 'center',
         }),
         new fabric.Text('QR CODE', {
-          fontSize: Math.round(s * 0.13), fill: '#4f46e5',
+          fontSize: Math.round(s * 0.13), fill: '#111111',
           fontFamily: 'Inter', fontWeight: 'bold',
           originX: 'center', originY: 'center',
           left: 0, top: -Math.round(s * 0.08),
@@ -369,7 +369,7 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
       fabricRef.current?.add(new fabric.Rect({
         left: Math.round(W() * 0.1), top: Math.round(H() * 0.2),
         width: Math.round(W() * 0.3), height: Math.round(H() * 0.25),
-        fill: 'rgba(79,70,229,0.12)', stroke: '#4f46e5', strokeWidth: 2, rx: 6, ry: 6,
+        fill: 'rgba(17,17,17,0.08)', stroke: '#111111', strokeWidth: 2, rx: 6, ry: 6,
       }));
       fabricRef.current?.renderAll();
     });
@@ -752,7 +752,7 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
                       <button key={i} onClick={() => { fabricRef.current?.setActiveObject(o); fabricRef.current?.renderAll(); syncProps(o); }}
                         className={cn('w-full flex items-center gap-2 px-3 py-2 text-xs text-left transition-colors border-b border-gray-50 dark:border-gray-800',
                           sel === o ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800')}>
-                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: (o.fill as string) || '#4f46e5' }} />
+                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: (o.fill as string) || '#111111' }} />
                         <span className="truncate">{String(label)}</span>
                       </button>
                     );
@@ -796,7 +796,7 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
                     /* Editing an existing template — show info as read-only */
                     <div className="space-y-1.5">
                       <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: meta.color ?? '#4f46e5' }} />
+                        <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: meta.color ?? '#111111' }} />
                         <span className="text-xs font-medium text-gray-800 dark:text-gray-200 truncate">{meta.name}</span>
                       </div>
                       <div className="flex gap-3 text-xs text-gray-500">
@@ -826,7 +826,7 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
                               price: Number(found.price),
                               currency: found.currency ?? 'USD',
                               quantity: found.availableCount ?? found.quantity,
-                              color: found.color ?? '#4f46e5',
+                              color: found.color ?? '#111111',
                             });
                           }
                         }}
@@ -842,7 +842,7 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
 
                       {selectedTariffId && (
                         <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-gray-50 dark:bg-gray-800">
-                          <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: meta.color ?? '#4f46e5' }} />
+                          <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: meta.color ?? '#111111' }} />
                           <span className="text-xs text-gray-600 dark:text-gray-400">{meta.quantity} places</span>
                         </div>
                       )}

@@ -78,8 +78,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     borderRadius: '0.75rem',
                     fontSize: '0.875rem',
                   },
+                  // ZAYA colours: black check mark (white in dark mode), like the rest of the dashboard
                   success: {
-                    iconTheme: { primary: '#6366f1', secondary: '#fff' },
+                    iconTheme: { primary: 'hsl(var(--foreground))', secondary: 'hsl(var(--background))' },
+                  },
+                  error: {
+                    iconTheme: { primary: '#dc2626', secondary: '#fff' },
                   },
                 }}
               />
