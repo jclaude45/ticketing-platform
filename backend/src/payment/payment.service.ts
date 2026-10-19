@@ -1,5 +1,6 @@
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { TicketGenerationService } from '../tickets/ticket-generation.service';
 import { PublicService } from '../public/public.service';
@@ -318,6 +319,32 @@ export class PaymentService {
     }
 
     return { status: payment.status, tickets: payment.ticketsData, merchOrder: await this.shop.orderSummaryForPayment(payment.id) };
+  }
+
+  /**
+   * Every 15 minutes: settles orders still pending after an hour (callback lost, buyer gone,
+   * push refused). FlexPay decides; an order FlexPay never received is failed.
+   */
+  @Cron('*/15 * * * *')
+  async settleStalePayments() {
+    const stale = await this.prisma.payment.findMany({
+      where: { status: 'PENDING', createdAt: { lt: new Date(Date.now() - 60 * 60 * 1000) } },
+      take: 50,
+    });
+    for (const payment of stale) {
+      try {
+        if (!payment.orderNumber) {
+          await this.failPayment(payment);
+          continue;
+        }
+        const verification = await this.verifyWithFlexPay(payment.orderNumber, Number(payment.amount));
+        if (verification === 'VERIFIED') await this.claimAndGenerate(payment);
+        else if (verification === 'REJECTED') await this.failPayment(payment);
+      } catch (err) {
+        this.logger.error(`Cannot settle pending payment ${payment.reference}: ${err.message}`);
+      }
+    }
+    if (stale.length) this.logger.log(`Checked ${stale.length} stale pending payment(s)`);
   }
 
   /** Marks a pending payment failed and releases any shop items it reserved. */
