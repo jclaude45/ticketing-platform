@@ -367,7 +367,9 @@ log_info "Smoke tests : ${PASS} réussis, ${FAIL} échoués"
 # =============================================================================
 log_section "11. Nettoyage"
 docker image prune -f --filter "until=24h" 2>/dev/null || true
-log_success "Images anciennes supprimées"
+# Build cache grows by ~1 GB per deployment (17 GB had piled up by October 2026)
+docker builder prune -af --filter "until=24h" > /dev/null 2>&1 || true
+log_success "Images anciennes et cache de construction supprimés"
 
 # =============================================================================
 # Résumé
