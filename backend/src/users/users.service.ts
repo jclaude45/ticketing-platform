@@ -126,7 +126,7 @@ export class UsersService {
 
     const isCurrentPasswordValid = await bcrypt.compare(dto.currentPassword, user.password);
     if (!isCurrentPasswordValid) {
-      throw new BadRequestException('Current password is incorrect');
+      throw new BadRequestException('Mot de passe actuel incorrect');
     }
 
     const hashedPassword = await bcrypt.hash(dto.newPassword, 12);

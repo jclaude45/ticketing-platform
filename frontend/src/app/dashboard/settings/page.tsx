@@ -119,12 +119,12 @@ function SettingsContent() {
 
   const changePassword = useMutation({
     mutationFn: (data: PasswordData) =>
-      apiClient.patch('/auth/change-password', {
+      apiClient.post('/users/me/change-password', {
         currentPassword: data.currentPassword,
         newPassword: data.newPassword,
       }),
     onSuccess: () => {
-      toast.success('Mot de passe modifié');
+      toast.success('Mot de passe modifié. Vos autres appareils devront se reconnecter.');
       passwordForm.reset();
     },
     onError: (err: any) =>
@@ -150,7 +150,7 @@ function SettingsContent() {
 
   // ── RSA key rotation ──────────────────────────────────────────────────────
   const rotateKeys = useMutation({
-    mutationFn: () => apiClient.post('/users/rotate-keys'),
+    mutationFn: () => apiClient.post('/users/me/rotate-keys'),
     onSuccess: () => toast.success('Clés RSA-4096 régénérées — vos nouveaux billets utiliseront ces clés'),
     onError: () => toast.error('Erreur lors de la rotation des clés'),
   });
