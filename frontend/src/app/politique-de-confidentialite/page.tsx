@@ -123,6 +123,7 @@ const SECTIONS: LegalSection[] = [
         head={['Données', 'Durée']}
         rows={[
           ['Compte Organisateur ou collaborateur', 'Tant que le compte est actif ; anonymisé 3 ans après la dernière connexion s’il n’a plus d’événement, ou à sa fermeture'],
+          ['Inscription jamais confirmée', 'Supprimée 7 jours après l’inscription si l’adresse e-mail n’a pas été confirmée'],
           ['Billets, invités, équipes et commandes de la boutique', '3 ans après la fin de l’événement, puis anonymisés'],
           ['Paiements, reçus, reversements et pièces comptables', '10 ans, conformément au droit comptable OHADA, puis anonymisés'],
           ['Scans et journal des actions', '3 ans'],

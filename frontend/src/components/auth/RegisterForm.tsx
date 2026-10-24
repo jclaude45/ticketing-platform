@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { prepareProof } from '@/lib/proof-of-work';
 import { useForm } from 'react-hook-form';
 import { authField, authButton } from '@/components/site/AuthShell';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -45,6 +46,8 @@ function PasswordStrength({ password }: { password: string }) {
 }
 
 export function RegisterForm() {
+  // Anti-robot check computed while the form is filled
+  useEffect(() => { prepareProof(); }, []);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const register_mutation = useRegister();

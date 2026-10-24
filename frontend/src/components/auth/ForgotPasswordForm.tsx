@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { prepareProof } from '@/lib/proof-of-work';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { motion } from 'framer-motion';
@@ -10,6 +11,8 @@ import { useForgotPassword } from '@/hooks/useAuth';
 import { authButton, authField } from '@/components/site/AuthShell';
 
 export function ForgotPasswordForm() {
+  // Anti-robot check computed while the form is filled
+  useEffect(() => { prepareProof(); }, []);
   const [sent, setSent] = useState(false);
   const forgotPassword = useForgotPassword();
 

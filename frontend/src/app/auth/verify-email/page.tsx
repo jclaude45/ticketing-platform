@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { CheckCircle2, Loader2, MailCheck, XCircle } from 'lucide-react';
 import { useResendVerification } from '@/hooks/useAuth';
 import { authApi } from '@/lib/api';
+import { prepareProof } from '@/lib/proof-of-work';
 import { AuthShell, authButton } from '@/components/site/AuthShell';
 
 function VerifyEmailContent() {
@@ -16,6 +17,8 @@ function VerifyEmailContent() {
 
   const [status, setStatus] = useState<'idle' | 'verifying' | 'success' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
+  // Anti-robot check for the « renvoyer » button, computed in advance
+  useEffect(() => { if (!token) prepareProof(); }, [token]);
 
   useEffect(() => {
     if (!token) return;

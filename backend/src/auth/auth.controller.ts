@@ -19,6 +19,7 @@ import {
 import { AuthGuard } from '@nestjs/passport';
 import { Response as ExpressResponse } from 'express';
 import { AuthService } from './auth.service';
+import { ProofOfWorkService } from './proof-of-work.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
@@ -45,6 +46,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
+    private readonly pow: ProofOfWorkService,
   ) {}
 
   private setRefreshCookie(res: ExpressResponse, token: string, accountId: string) {
@@ -92,6 +94,14 @@ export class AuthController {
     return { message: 'Session cleared' };
   }
 
+  /** Anti-robot challenge solved by the browser before sign-up and e-mail requests */
+  @Public()
+  @Get('challenge')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  challenge() {
+    return this.pow.challenge();
+  }
+
   @Public()
   @Post('register')
   @Throttle({ default: { limit: 5, ttl: 60000 } })
@@ -99,6 +109,7 @@ export class AuthController {
   @ApiResponse({ status: 201, description: 'User registered successfully' })
   @ApiResponse({ status: 409, description: 'Email already in use' })
   async register(@Body() dto: RegisterDto) {
+    await this.pow.verify(dto.pow);
     return this.authService.register(dto);
   }
 
@@ -234,6 +245,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Resend email verification link' })
   @ApiResponse({ status: 200, description: 'Verification email sent if account exists and is unverified' })
   async resendVerification(@Body() dto: ResendVerificationDto) {
+    await this.pow.verify(dto.pow);
     return this.authService.resendVerification(dto.email);
   }
 
@@ -244,6 +256,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Request password reset email' })
   @ApiResponse({ status: 200, description: 'Password reset email sent if account exists' })
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    await this.pow.verify(dto.pow);
     return this.authService.forgotPassword(dto.email);
   }
 

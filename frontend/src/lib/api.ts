@@ -1,6 +1,7 @@
 import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import { getAccessToken, setTokens, clearTokens, tokenSubject, getTabAccountId, getTabWorkspace, switchWorkspace } from './auth';
 import { useAuthStore } from '@/store/auth.store';
+import { takeProof } from './proof-of-work';
 import type {
   ApiResponse,
   PaginatedResponse,
@@ -148,10 +149,10 @@ export const authApi = {
       credentials
     ),
 
-  register: (data: RegisterData) =>
+  register: async (data: RegisterData) =>
     apiClient.post<ApiResponse<{ user: User; tokens: AuthTokens }>>(
       '/auth/register',
-      data
+      { ...data, pow: await takeProof() }
     ),
 
   logout: () => apiClient.post('/auth/logout'),
@@ -166,16 +167,16 @@ export const authApi = {
   refreshToken: (refreshToken: string) =>
     apiClient.post<ApiResponse<AuthTokens>>('/auth/refresh', { refreshToken }),
 
-  forgotPassword: (email: string) =>
-    apiClient.post('/auth/forgot-password', { email }),
+  forgotPassword: async (email: string) =>
+    apiClient.post('/auth/forgot-password', { email, pow: await takeProof() }),
 
   resetPassword: (token: string, password: string) =>
     apiClient.post('/auth/reset-password', { token, newPassword: password }),
 
   verifyEmail: (token: string) =>
     apiClient.get(`/auth/verify-email?token=${encodeURIComponent(token)}`),
-  resendVerification: (email: string) =>
-    apiClient.post('/auth/resend-verification', { email }),
+  resendVerification: async (email: string) =>
+    apiClient.post('/auth/resend-verification', { email, pow: await takeProof() }),
 
   setupTwoFactor: () =>
     apiClient.post<ApiResponse<{ qrCode: string; secret: string }>>(

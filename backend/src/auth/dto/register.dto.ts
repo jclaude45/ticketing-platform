@@ -31,4 +31,11 @@ export class RegisterDto {
   @IsOptional()
   @IsIn([Role.ORGANIZER])
   role?: Role;
+
+  /** Anti-robot proof computed by the browser (see ProofOfWorkService) */
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  pow?: string;
 }

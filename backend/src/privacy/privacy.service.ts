@@ -6,6 +6,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PayoutsService } from '../billing/payouts.service';
 
+const DAY_MS = 24 * 60 * 60 * 1000;
 const MONTH_MS = 30.44 * 24 * 60 * 60 * 1000;
 const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
 
@@ -15,6 +16,7 @@ export const RETENTION = {
   eventDataYears: 3,
   logsYears: 3,
   inactiveAccountYears: 3,
+  unconfirmedAccountDays: 7,
   accountingYears: 10,
 };
 
@@ -42,7 +44,7 @@ export class PrivacyService {
 
   async applyRetention(now = new Date()) {
     const before = (ms: number) => new Date(now.getTime() - ms);
-    const report = { views: 0, scans: 0, logs: 0, tickets: 0, teamMembers: 0, recipients: 0, merchOrders: 0, payments: 0, accounts: 0 };
+    const report = { views: 0, scans: 0, logs: 0, tickets: 0, teamMembers: 0, recipients: 0, merchOrders: 0, payments: 0, accounts: 0, unconfirmed: 0 };
 
     // Audience of the event pages: 13 months
     report.views = (await this.prisma.eventView.deleteMany({ where: { createdAt: { lt: before(RETENTION.audienceMonths * MONTH_MS) } } })).count;
@@ -88,6 +90,32 @@ export class PrivacyService {
     for (const u of inactive) {
       await this.anonymizeAccount(u.id);
       report.accounts += 1;
+    }
+
+    // Sign-ups never confirmed within 7 days (robots used the form with strangers' addresses)
+    const unconfirmed = await this.prisma.user.findMany({
+      where: {
+        role: 'ORGANIZER',
+        isEmailVerified: false,
+        lastLoginAt: null,
+        createdAt: { lt: before(RETENTION.unconfirmedAccountDays * DAY_MS) },
+        events: { none: {} },
+        controllers: { none: {} },
+        projectMemberships: { none: {} },
+      },
+      select: { id: true },
+      take: 200,
+    });
+    for (const u of unconfirmed) {
+      try {
+        await this.prisma.$transaction([
+          this.prisma.keyPair.deleteMany({ where: { organizerId: u.id } }),
+          this.prisma.user.delete({ where: { id: u.id } }),
+        ]);
+        report.unconfirmed += 1;
+      } catch (err) {
+        this.logger.warn(`Unconfirmed account ${u.id} kept: ${(err as Error).message}`);
+      }
     }
     return report;
   }

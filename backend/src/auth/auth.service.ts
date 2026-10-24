@@ -605,7 +605,30 @@ export class AuthService {
     });
   }
 
+  /**
+   * At most 3 sign-up / reset e-mails per address and per day: the forms can be filled with a
+   * stranger's address, and robots used them to flood inboxes. Gmail ignores dots and +tags,
+   * so a.b.c@gmail.com and abc+x@gmail.com count as the same inbox.
+   */
+  private async mailQuotaAllows(email: string) {
+    let [local, domain] = email.trim().toLowerCase().split('@');
+    local = (local ?? '').split('+')[0];
+    if (domain === 'gmail.com' || domain === 'googlemail.com') {
+      local = local.replace(/\./g, '');
+      domain = 'gmail.com';
+    }
+    const key = `mailquota:${this.cryptoService.hashData(`${local}@${domain}`)}`;
+    const n = await this.redisService.incr(key);
+    if (n === 1) await this.redisService.expire(key, 24 * 60 * 60);
+    if (n > 3) {
+      this.logger.warn(`Daily e-mail quota reached for an address (${n} requests) — not sent`);
+      return false;
+    }
+    return true;
+  }
+
   private async sendVerificationEmail(email: string, firstName: string, token: string) {
+    if (!(await this.mailQuotaAllows(email))) return;
     const frontendUrl = this.configService.get<string>('frontend.url');
     const verifyUrl = `${frontendUrl}/auth/verify-email?token=${token}`;
 
@@ -659,6 +682,7 @@ export class AuthService {
   }
 
   private async sendPasswordResetEmail(email: string, firstName: string, token: string) {
+    if (!(await this.mailQuotaAllows(email))) return;
     const frontendUrl = this.configService.get<string>('frontend.url');
     const resetUrl = `${frontendUrl}/auth/reset-password?token=${token}`;
 
