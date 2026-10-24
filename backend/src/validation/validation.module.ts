@@ -3,6 +3,7 @@ import { ValidationController } from './validation.controller';
 import { ValidationService } from './validation.service';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { QrcodeModule } from '../qrcode/qrcode.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
@@ -10,6 +11,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
   imports: [
     RealtimeModule,
     QrcodeModule,
+    NotificationsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

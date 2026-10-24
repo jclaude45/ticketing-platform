@@ -137,6 +137,8 @@ model User {
   payouts               Payout[]
   /// Where sales are paid out: { method: 'mobile_money'|'bank', phone?, network?, bankName?, accountNumber?, accountName? }
   payoutInfo            Json?
+  /// E-mail alerts the organizer chose in Paramètres (missing keys = defaults)
+  notificationPrefs     Json?
 }
 
 model Event {

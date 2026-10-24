@@ -10,7 +10,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { CryptoService } from '../crypto/crypto.service';
 import { StorageService } from '../storage/storage.service';
-import { UpdateUserDto, ChangePasswordDto } from './dto/update-user.dto';
+import { UpdateUserDto, ChangePasswordDto, NotificationPrefsDto } from './dto/update-user.dto';
+import { notificationPrefs } from '../notifications/notification-prefs';
 import { Role } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import * as path from 'path';
@@ -118,6 +119,19 @@ export class UsersService {
 
     await this.redisService.cacheDelete(`user:${userId}`);
     return updated;
+  }
+
+  async getNotificationPrefs(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { notificationPrefs: true } });
+    if (!user) throw new NotFoundException('User not found');
+    return notificationPrefs(user.notificationPrefs);
+  }
+
+  async updateNotificationPrefs(userId: string, dto: NotificationPrefsDto) {
+    const current = await this.getNotificationPrefs(userId);
+    const next = notificationPrefs({ ...current, ...dto });
+    await this.prisma.user.update({ where: { id: userId }, data: { notificationPrefs: { ...next } } });
+    return next;
   }
 
   async changePassword(userId: string, dto: ChangePasswordDto) {

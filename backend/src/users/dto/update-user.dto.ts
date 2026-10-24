@@ -33,3 +33,11 @@ export class ChangePasswordDto {
   @MaxLength(128)
   newPassword: string;
 }
+
+/** Paramètres → Notifications: only the keys sent are changed */
+export class NotificationPrefsDto {
+  @IsOptional() @IsBoolean() emailOnScan?: boolean;
+  @IsOptional() @IsBoolean() emailOnEventFull?: boolean;
+  @IsOptional() @IsBoolean() emailOnFraud?: boolean;
+  @IsOptional() @IsBoolean() emailWeeklyReport?: boolean;
+}

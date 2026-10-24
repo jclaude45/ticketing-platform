@@ -2,6 +2,7 @@ import { Injectable, ForbiddenException, NotFoundException, Logger } from '@nest
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { QrcodeService } from '../qrcode/qrcode.service';
+import { OrganizerAlertsService } from '../notifications/organizer-alerts.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { ScanTicketDto, OfflineScanDto } from './dto/scan-ticket.dto';
 import { ScanResult, TicketStatus, Role } from '@prisma/client';
@@ -17,6 +18,7 @@ export class ValidationService {
     private readonly redisService: RedisService,
     private readonly qrcodeService: QrcodeService,
     private readonly realtimeGateway: RealtimeGateway,
+    private readonly organizerAlerts: OrganizerAlertsService,
   ) {}
 
   // Returns a Controller.id valid for ScanValidation FK.
@@ -447,6 +449,8 @@ export class ValidationService {
           },
         });
       }
+      // The organizer is told right away (if they chose to be); never delays the answer to the scanner
+      if (result === ScanResult.FRAUDULENT) void this.organizerAlerts.fraudDetected(ticketId, controller?.name);
     }
 
     return scan;

@@ -7,7 +7,7 @@ import { CloseAccount } from '@/components/account/CloseAccount';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
   User, Lock, Shield, Bell, Key, ChevronRight,
@@ -157,16 +157,21 @@ function SettingsContent() {
 
   // ── Notifications prefs ───────────────────────────────────────────────────
   const [notifPrefs, setNotifPrefs] = useState({
-    emailOnScan: true,
+    emailOnScan: false,
     emailOnEventFull: true,
     emailOnFraud: true,
     emailWeeklyReport: false,
   });
+  const savedPrefs = useQuery({
+    queryKey: ['notification-prefs'],
+    queryFn: async () => (await apiClient.get('/users/me/notification-prefs')).data.data as typeof notifPrefs,
+  });
+  useEffect(() => { if (savedPrefs.data) setNotifPrefs(savedPrefs.data); }, [savedPrefs.data]);
 
   const saveNotifs = useMutation({
-    mutationFn: () => apiClient.patch('/auth/settings', { notifications: notifPrefs }),
-    onSuccess: () => toast.success('Préférences sauvegardées'),
-    onError: () => toast.error('Erreur'),
+    mutationFn: () => apiClient.patch('/users/me/notification-prefs', notifPrefs),
+    onSuccess: () => { toast.success('Préférences sauvegardées'); savedPrefs.refetch(); },
+    onError: () => toast.error('Les préférences n’ont pas pu être enregistrées'),
   });
 
   return (
@@ -445,10 +450,10 @@ function SettingsContent() {
 
               <div className="divide-y divide-gray-100">
                 {[
-                  { key: 'emailOnScan' as const, label: 'Alerte scan', desc: 'Notifié à chaque validation de billet' },
-                  { key: 'emailOnEventFull' as const, label: 'Événement complet', desc: 'Notifié quand la capacité est atteinte' },
-                  { key: 'emailOnFraud' as const, label: 'Tentative de fraude', desc: 'Alerte immédiate sur les QR codes frauduleux' },
-                  { key: 'emailWeeklyReport' as const, label: 'Rapport hebdomadaire', desc: 'Résumé de l\'activité chaque lundi' },
+                  { key: 'emailOnScan' as const, label: 'Résumé des scans', desc: 'Les billets scannés à l’entrée, regroupés tous les quarts d’heure' },
+                  { key: 'emailOnEventFull' as const, label: 'Événement complet', desc: 'Quand tous les billets d’un événement sont vendus' },
+                  { key: 'emailOnFraud' as const, label: 'Tentative de fraude', desc: 'Alerte immédiate quand un faux billet est présenté' },
+                  { key: 'emailWeeklyReport' as const, label: 'Rapport hebdomadaire', desc: 'Ventes, entrées et prochains événements, chaque lundi matin' },
                 ].map((pref) => (
                   <div key={pref.key} className="flex items-center justify-between py-4">
                     <div>
@@ -456,6 +461,11 @@ function SettingsContent() {
                       <p className="text-xs text-gray-500">{pref.desc}</p>
                     </div>
                     <button
+                      type="button"
+                      role="switch"
+                      aria-checked={notifPrefs[pref.key]}
+                      aria-label={pref.label}
+                      disabled={savedPrefs.isLoading}
                       onClick={() => setNotifPrefs((p) => ({ ...p, [pref.key]: !p[pref.key] }))}
                       className={cn(
                         'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',

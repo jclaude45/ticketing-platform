@@ -23,7 +23,7 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { UsersService } from './users.service';
-import { UpdateUserDto, ChangePasswordDto } from './dto/update-user.dto';
+import { UpdateUserDto, ChangePasswordDto, NotificationPrefsDto } from './dto/update-user.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -93,6 +93,18 @@ export class UsersController {
   ) {
     if (!file) throw new BadRequestException('No file uploaded');
     return this.usersService.uploadAvatar(userId, file.buffer, file.originalname, file.mimetype);
+  }
+
+  @Get('me/notification-prefs')
+  @ApiOperation({ summary: 'E-mail alerts chosen by the current user' })
+  getNotificationPrefs(@CurrentUser('id') userId: string) {
+    return this.usersService.getNotificationPrefs(userId);
+  }
+
+  @Patch('me/notification-prefs')
+  @ApiOperation({ summary: 'Switch e-mail alerts on or off' })
+  updateNotificationPrefs(@CurrentUser('id') userId: string, @Body() dto: NotificationPrefsDto) {
+    return this.usersService.updateNotificationPrefs(userId, dto);
   }
 
   @Post('me/change-password')
