@@ -6,6 +6,7 @@ import { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
 import { pickRefreshCookie } from '../session-cookies';
+import { AuthService } from '../auth.service';
 
 // C3 FIX: extract token from httpOnly cookie (web) or Authorization body (mobile)
 const extractRefreshToken = (req: Request): string | null => {
@@ -22,6 +23,7 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
   constructor(
     configService: ConfigService,
     private prisma: PrismaService,
+    private auth: AuthService,
   ) {
     super({
       jwtFromRequest: extractRefreshToken,
@@ -65,16 +67,15 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
       },
     });
 
-    if (!user || !user.isActive || !user.refreshToken) {
+    if (!user || !user.isActive) {
       throw new UnauthorizedException('Access denied');
     }
 
-    // Verify the raw token matches the bcrypt hash stored in DB
-    const isRefreshTokenValid = await bcrypt.compare(rawToken, user.refreshToken);
-    if (!isRefreshTokenValid) {
+    // The token must be the current one of its session (or of the single slot used before sessions)
+    if (!(await this.auth.refreshTokenIsCurrent(user, rawToken, payload.sid))) {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    return user;
+    return { ...user, sid: payload.sid as string | undefined };
   }
 }

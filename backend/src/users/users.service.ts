@@ -152,6 +152,7 @@ export class UsersService {
         refreshToken: null, // Invalidate all sessions
       },
     });
+    await this.prisma.userSession.deleteMany({ where: { userId } });
 
     await this.redisService.deleteSession(`user:${userId}`);
 

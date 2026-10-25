@@ -139,6 +139,25 @@ model User {
   payoutInfo            Json?
   /// E-mail alerts the organizer chose in Paramètres (missing keys = defaults)
   notificationPrefs     Json?
+  sessions              UserSession[]
+}
+
+/// One signed-in browser or phone: each has its own refresh token, so the web dashboard and
+/// the organizer app don't sign each other out
+model UserSession {
+  id         String   @id @default(uuid())
+  userId     String
+  /// SHA-256 of the current refresh token (rotated on every refresh)
+  tokenHash  String
+  platform   String   @default("web")
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+  expiresAt  DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Event {

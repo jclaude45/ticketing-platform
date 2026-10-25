@@ -92,6 +92,9 @@ export class PrivacyService {
       report.accounts += 1;
     }
 
+    // Sessions of browsers and phones that stopped refreshing
+    await this.prisma.userSession.deleteMany({ where: { expiresAt: { lt: now } } });
+
     // Sign-ups never confirmed within 7 days (robots used the form with strangers' addresses)
     const unconfirmed = await this.prisma.user.findMany({
       where: {
@@ -169,6 +172,7 @@ export class PrivacyService {
           emailVerificationExpiry: null,
         },
       }),
+      this.prisma.userSession.deleteMany({ where: { userId } }),
       this.prisma.controller.updateMany({ where: { organizerId: userId }, data: { isActive: false } }),
       this.prisma.accountMember.deleteMany({ where: { OR: [{ ownerId: userId }, { userId }] } }),
       this.prisma.organizerSubscription.deleteMany({ where: { organizerId: userId } }),

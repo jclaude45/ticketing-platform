@@ -1,3 +1,4 @@
+import * as crypto from 'crypto';
 import {
   Injectable,
   UnauthorizedException,
@@ -21,6 +22,12 @@ import { button, emailLayout, emailText, esc, note, p } from '../common/email/la
 import * as QRCode from 'qrcode';
 import { Role } from '@prisma/client';
 import * as nodemailer from 'nodemailer';
+
+/** Where a session was opened (shown later in a list of signed-in devices) */
+export interface SessionDevice {
+  platform?: string;
+  userAgent?: string;
+}
 
 @Injectable()
 export class AuthService {
@@ -159,7 +166,7 @@ export class AuthService {
     return result;
   }
 
-  async login(dto: LoginDto, ipAddress?: string) {
+  async login(dto: LoginDto, ipAddress?: string, device: SessionDevice = {}) {
     const bruteKey = `login:fail:${dto.email.toLowerCase()}`;
     const MAX_ATTEMPTS = 10;
     const BLOCK_TTL = 15 * 60; // 15 minutes in seconds
@@ -217,17 +224,9 @@ export class AuthService {
       await this.redisService.set(replayKey, '1', 90);
     }
 
-    const tokens = await this.generateTokens(user.id, user.email, user.role);
-
-    // Update last login and store refresh token hash
-    const hashedRefreshToken = await bcrypt.hash(tokens.refreshToken, 10);
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        lastLoginAt: new Date(),
-        refreshToken: hashedRefreshToken,
-      },
-    });
+    // One session per browser or phone: signing in here does not sign out the other devices
+    const tokens = await this.startSession(user.id, user.email, user.role, device);
+    await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
 
     // Store session in Redis
     await this.redisService.setSession(
@@ -299,10 +298,13 @@ export class AuthService {
       await this.prisma.controller.update({ where: { id: userId }, data: { refreshToken: null } });
       return { message: 'Logged out successfully' };
     }
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { refreshToken: null },
-    });
+    // Only this device's session ends; a token from before sessions clears the old single slot
+    const sid = (this.jwtService.decode(accessToken) as any)?.sid as string | undefined;
+    if (sid) {
+      await this.prisma.userSession.deleteMany({ where: { id: sid, userId } });
+    } else {
+      await this.prisma.user.update({ where: { id: userId }, data: { refreshToken: null } });
+    }
 
     await this.redisService.deleteSession(`user:${userId}`);
 
@@ -475,6 +477,7 @@ export class AuthService {
         refreshToken: null, // Invalidate all existing sessions
       },
     });
+    await this.prisma.userSession.deleteMany({ where: { userId: user.id } });
 
     // Invalidate all sessions for this user
     await this.redisService.deleteSession(`user:${user.id}`);
@@ -560,7 +563,7 @@ export class AuthService {
           where: { id: payload.sub },
           select: { id: true, email: true, firstName: true, lastName: true, role: true, avatar: true, isActive: true, refreshToken: true },
         });
-        if (u?.isActive && u.refreshToken && (await bcrypt.compare(token, u.refreshToken))) {
+        if (u?.isActive && (await this.refreshTokenIsCurrent(u, token, (payload as any).sid))) {
           accounts.set(u.id, {
             id: u.id, email: u.email, name: `${u.firstName} ${u.lastName}`.trim(), role: u.role, avatar: u.avatar,
           });
@@ -570,17 +573,19 @@ export class AuthService {
     return [...accounts.values()];
   }
 
-  async generateTokens(userId: string, email: string, role: string) {
+  async generateTokens(userId: string, email: string, role: string, sid?: string) {
+    const session = sid ? { sid } : {};
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(
-        { sub: userId, email, role, type: 'access' },
+        { sub: userId, email, role, type: 'access', ...session },
         {
           secret: this.configService.get<string>('jwt.secret'),
           expiresIn: this.configService.get<string>('jwt.expiresIn'),
         },
       ),
       this.jwtService.signAsync(
-        { sub: userId, email, role, type: 'refresh' },
+        // jti: two tokens of the same session made in the same second must still differ
+        { sub: userId, email, role, type: 'refresh', jti: crypto.randomUUID(), ...session },
         {
           secret: this.configService.get<string>('jwt.refreshSecret'),
           expiresIn: this.configService.get<string>('jwt.refreshExpiresIn'),
@@ -591,8 +596,57 @@ export class AuthService {
     return { accessToken, refreshToken };
   }
 
+  private hashRefreshToken(token: string) {
+    return crypto.createHash('sha256').update(token).digest('hex');
+  }
+
+  private refreshExpiry(refreshToken: string) {
+    const exp = (this.jwtService.decode(refreshToken) as any)?.exp;
+    return exp ? new Date(exp * 1000) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  }
+
+  /** New session for a user signing in on a browser or a phone; returns its first tokens */
+  async startSession(userId: string, email: string, role: string, device: SessionDevice = {}) {
+    const session = await this.prisma.userSession.create({
+      data: {
+        userId,
+        tokenHash: '',
+        platform: device.platform === 'mobile' ? 'mobile' : 'web',
+        userAgent: device.userAgent?.slice(0, 300) || null,
+        expiresAt: new Date(),
+      },
+    });
+    return this.rotateSession(session.id, userId, email, role);
+  }
+
+  /** New token pair for a session; the previous refresh token stops working */
+  async rotateSession(sid: string, userId: string, email: string, role: string) {
+    const tokens = await this.generateTokens(userId, email, role, sid);
+    await this.prisma.userSession.update({
+      where: { id: sid },
+      data: { tokenHash: this.hashRefreshToken(tokens.refreshToken), lastUsedAt: new Date(), expiresAt: this.refreshExpiry(tokens.refreshToken) },
+    });
+    return tokens;
+  }
+
+  /**
+   * Whether a (signature-checked) refresh token is the current one of its session. A token with
+   * a session id is checked against that session; an older token against the single slot that
+   * existed before sessions.
+   */
+  async refreshTokenIsCurrent(user: { id: string; refreshToken: string | null }, token: string, sid?: string) {
+    if (!sid) return !!user.refreshToken && (await bcrypt.compare(token, user.refreshToken));
+    const session = await this.prisma.userSession.findUnique({ where: { id: sid } });
+    if (!session || session.userId !== user.id || session.expiresAt < new Date()) return false;
+    const given = Buffer.from(this.hashRefreshToken(token), 'hex');
+    const stored = Buffer.from(session.tokenHash, 'hex');
+    // An older token of the session is refused but does not end it: two tabs refreshing at the
+    // same moment send the same cookie, and the second one simply retries with the new cookie
+    return given.length === stored.length && crypto.timingSafeEqual(given, stored);
+  }
+
   // Used by auth controller after refresh token validation
-  async updateRefreshToken(userId: string, hashedRefreshToken: string, role?: string) {
+  async updateRefreshToken(userId: string, hashedRefreshToken: string | null, role?: string) {
     if (role === 'CONTROLLER') {
       return this.prisma.controller.update({
         where: { id: userId },

@@ -125,7 +125,10 @@ export class AuthController {
     @Request() req: any,
     @Response({ passthrough: true }) res: ExpressResponse,
   ) {
-    const result = await this.authService.login(dto, req.ip);
+    const result = await this.authService.login(dto, req.ip, {
+      platform: req.headers['x-platform'] === 'mobile' ? 'mobile' : 'web',
+      userAgent: req.headers['user-agent'],
+    });
     const isMobile = req.headers['x-platform'] === 'mobile';
     if ('refreshToken' in result && result.refreshToken) {
       this.setRefreshCookie(res, result.refreshToken as string, (result as any).user.id);
@@ -175,16 +178,22 @@ export class AuthController {
     @Response({ passthrough: true }) res: ExpressResponse,
   ) {
     // req.user is populated by JwtRefreshStrategy after full validation
-    const result = await this.authService.generateTokens(
-      req.user.id,
-      req.user.email,
-      req.user.role,
-    );
-    // Update stored refresh token hash
-    const bcrypt = await import('bcryptjs');
-    const hashedRefreshToken = await bcrypt.hash(result.refreshToken, 10);
-    // We need prisma here — delegate to authService
-    await this.authService.updateRefreshToken(req.user.id, hashedRefreshToken, req.user.role);
+    const { id, email, role, sid } = req.user;
+    let result: { accessToken: string; refreshToken: string };
+    if (role === 'CONTROLLER') {
+      result = await this.authService.generateTokens(id, email, role);
+      const bcrypt = await import('bcryptjs');
+      await this.authService.updateRefreshToken(id, await bcrypt.hash(result.refreshToken, 10), role);
+    } else if (sid) {
+      result = await this.authService.rotateSession(sid, id, email, role);
+    } else {
+      // Signed in before sessions existed: the device gets its own session from now on
+      result = await this.authService.startSession(id, email, role, {
+        platform: req.headers['x-platform'] === 'mobile' ? 'mobile' : 'web',
+        userAgent: req.headers['user-agent'],
+      });
+      await this.authService.updateRefreshToken(id, null, role);
+    }
 
     this.setRefreshCookie(res, result.refreshToken, req.user.id);
     // Session came from the pre-multi-account cookie: move it to the per-account cookie
