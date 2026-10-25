@@ -7,6 +7,9 @@ import '../../core/realtime.dart';
 import '../../core/session.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
+import '../money/payouts_screen.dart';
+import '../team/collaborators_screen.dart';
+import '../team/controllers_screen.dart';
 
 final workspacesProvider = FutureProvider.autoDispose<List<Workspace>>(
   (ref) => ref.read(sessionProvider.notifier).workspaces(),
@@ -65,6 +68,26 @@ class AccountScreen extends ConsumerWidget {
                 ),
               ],
             ),
+          ),
+          const ZSection('Équipe'),
+          _NavTile(
+            icon: Icons.qr_code_scanner_rounded,
+            title: 'Contrôleurs',
+            subtitle: 'Scan des billets à l’entrée',
+            screen: const ControllersScreen(),
+          ),
+          _NavTile(
+            icon: Icons.groups_outlined,
+            title: 'Collaborateurs',
+            subtitle: 'Personnes qui gèrent ce compte avec vous',
+            screen: const CollaboratorsScreen(),
+          ),
+          const ZSection('Argent'),
+          _NavTile(
+            icon: Icons.account_balance_wallet_outlined,
+            title: 'Versements',
+            subtitle: 'Vos ventes en ligne et quand elles sont versées',
+            screen: const PayoutsScreen(),
           ),
           const ZSection('Espace de travail'),
           _WorkspaceTile(
@@ -173,6 +196,33 @@ class _WorkspaceTile extends StatelessWidget {
           ? const Icon(Icons.check_circle_rounded, color: ZColors.green)
           : Icon(Icons.radio_button_unchecked, color: ZColors.line),
       onTap: selected ? null : onTap,
+    );
+  }
+}
+
+class _NavTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Widget screen;
+
+  const _NavTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.screen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+      leading: Icon(icon, color: ZColors.ink),
+      title: Text(title, style: zText(ZSize.body, weight: ZWeight.bold)),
+      subtitle: Text(subtitle, style: zText(ZSize.small, color: ZColors.muted)),
+      trailing: Icon(Icons.chevron_right_rounded, color: ZColors.muted),
+      onTap: () =>
+          Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen)),
     );
   }
 }

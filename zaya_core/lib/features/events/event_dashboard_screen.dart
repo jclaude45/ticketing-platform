@@ -11,6 +11,7 @@ import '../../core/api/api_exception.dart';
 import 'event_admin_data.dart';
 import 'event_form_screen.dart';
 import 'events_data.dart';
+import 'invitations_screen.dart';
 import 'orders_screen.dart';
 import 'tariffs_screen.dart';
 
@@ -164,6 +165,13 @@ class _EventDashboardScreenState extends ConsumerState<EventDashboardScreen> {
                               currency: event.currency,
                             ),
                           ),
+                        ),
+                        const SizedBox(width: 10),
+                        _Action(
+                          icon: Icons.mail_outline,
+                          label: 'Invités',
+                          onTap: () =>
+                              _open(InvitationsScreen(eventId: event.id)),
                         ),
                         const SizedBox(width: 10),
                         _Action(
