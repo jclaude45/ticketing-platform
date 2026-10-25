@@ -167,6 +167,11 @@ export class ControllersService {
       throw new ForbiddenException('Access denied');
     }
 
+    // Switching one back on takes a place of the plan again
+    if (dto.isActive === true && !controller.isActive) {
+      await this.subscriptions.assertCanAddController(controller.organizerId);
+    }
+
     return this.prisma.controller.update({
       where: { id: controllerId },
       data: {
@@ -187,8 +192,22 @@ export class ControllersService {
       throw new ForbiddenException('Access denied');
     }
 
+    // Scans keep their controller (statistics, ticket history): one who already scanned is
+    // switched off and taken off every event instead of being deleted
+    const scans = await this.prisma.scanValidation.count({ where: { controllerId } });
+    if (scans > 0) {
+      await this.prisma.$transaction([
+        this.prisma.controllerEvent.deleteMany({ where: { controllerId } }),
+        this.prisma.controller.update({
+          where: { id: controllerId },
+          data: { isActive: false, refreshToken: null, invitationToken: null },
+        }),
+      ]);
+      return { deleted: false, deactivated: true, message: 'Contrôleur désactivé : ses scans restent dans vos statistiques.' };
+    }
+
     await this.prisma.controller.delete({ where: { id: controllerId } });
-    return { message: 'Controller deleted successfully' };
+    return { deleted: true, message: 'Contrôleur supprimé.' };
   }
 
   async assignEvent(

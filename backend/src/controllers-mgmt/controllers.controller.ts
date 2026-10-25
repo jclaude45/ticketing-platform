@@ -76,7 +76,10 @@ export class ControllersController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
-    return this.controllersService.findAll(user.id, user.role, page, limit);
+    // Query values arrive as strings
+    const p = Math.max(1, Number(page) || 1);
+    const l = Math.min(100, Math.max(1, Number(limit) || 20));
+    return this.controllersService.findAll(user.id, user.role, p, l);
   }
 
   @Get(':id')

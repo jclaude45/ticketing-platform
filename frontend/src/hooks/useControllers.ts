@@ -51,11 +51,12 @@ export function useDeleteController() {
 
   return useMutation({
     mutationFn: (id: string) => controllersApi.delete(id),
-    onSuccess: () => {
+    onSuccess: (res: any) => {
       queryClient.invalidateQueries({ queryKey: ['controllers'] });
-      toast.success('Controller removed');
+      // A controller who already scanned is switched off (their scans stay in the statistics)
+      toast.success(res?.data?.data?.message ?? 'Contrôleur supprimé');
     },
-    onError: () => toast.error('Failed to remove controller'),
+    onError: () => toast.error('Le contrôleur n’a pas pu être retiré'),
   });
 }
 

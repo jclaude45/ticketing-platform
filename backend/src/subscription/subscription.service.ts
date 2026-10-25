@@ -376,11 +376,19 @@ export class SubscriptionService {
     }
   }
 
-  /** Controllers of the account; the one made for the organizer scanning in person is free */
+  /**
+   * Controllers that use a place: active ones and pending invitations. Switched-off ones (kept
+   * for their scan history) free their place; the one made for the organizer scanning in
+   * person is free.
+   */
   private async controllersCount(organizerId: string) {
     const owner = await this.prisma.user.findUnique({ where: { id: organizerId }, select: { email: true } });
     return this.prisma.controller.count({
-      where: { organizerId, ...(owner ? { NOT: { email: owner.email } } : {}) },
+      where: {
+        organizerId,
+        OR: [{ isActive: true }, { invitationToken: { not: null } }],
+        ...(owner ? { NOT: { email: owner.email } } : {}),
+      },
     });
   }
 
