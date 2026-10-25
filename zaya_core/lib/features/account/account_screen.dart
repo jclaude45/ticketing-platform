@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/api/api_exception.dart';
 import '../../core/config.dart';
 import '../../core/realtime.dart';
 import '../../core/session.dart';
@@ -98,42 +97,30 @@ class AccountScreen extends ConsumerWidget {
               subtitle: 'Alertes sur ce téléphone et par e-mail',
               screen: NotificationSettingsScreen(),
             ),
-            const ZSection('Espace de travail'),
-            _WorkspaceTile(
-              title: 'Mon compte',
-              subtitle: 'Mes événements',
-              selected: user.workspace == null,
-              onTap: () => _switch(context, ref, null),
-            ),
-            ...workspaces.when(
-              loading: () => [
-                const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Center(child: CircularProgressIndicator()),
-                ),
-              ],
-              error: (e, _) => [
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 8,
-                  ),
-                  child: Text(
-                    ApiException.from(e).message,
-                    style: zText(ZSize.small, color: ZColors.muted),
-                  ),
-                ),
-              ],
-              data: (list) => list
-                  .map(
-                    (w) => _WorkspaceTile(
-                      title: w.ownerName,
-                      subtitle: 'Collaborateur · ${w.permissionLabel}',
-                      selected: user.workspace?.ownerId == w.ownerId,
-                      onTap: () => _switch(context, ref, w),
-                    ),
-                  )
-                  .toList(),
+            // Only for people invited to manage another organizer's account: switch between
+            // their own events and the accounts shared with them (hidden otherwise)
+            ...workspaces.maybeWhen(
+              data: (list) => list.isEmpty && user.workspace == null
+                  ? <Widget>[]
+                  : [
+                      const ZSection('Comptes partagés avec vous'),
+                      _WorkspaceTile(
+                        title: 'Mon compte',
+                        subtitle: 'Mes propres événements',
+                        selected: user.workspace == null,
+                        onTap: () => _switch(context, ref, null),
+                      ),
+                      ...list.map(
+                        (w) => _WorkspaceTile(
+                          title: w.ownerName,
+                          subtitle:
+                              'Vous êtes collaborateur · ${w.permissionLabel}',
+                          selected: user.workspace?.ownerId == w.ownerId,
+                          onTap: () => _switch(context, ref, w),
+                        ),
+                      ),
+                    ],
+              orElse: () => <Widget>[],
             ),
             const SizedBox(height: 36),
             Padding(

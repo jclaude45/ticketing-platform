@@ -2,4 +2,6 @@
 <resources>
     <!-- Accent of the notifications (ZAYA yellow) -->
     <color name="zaya_yellow">#FFBB00</color>
+    <!-- Background of the app icon -->
+    <color name="zaya_icon_background">#FFFFFF</color>
 </resources>
