@@ -146,8 +146,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             label: 'Événements',
           ),
           NavigationDestination(
-            icon: Icon(Icons.insights_outlined),
-            selectedIcon: Icon(Icons.insights),
+            icon: Icon(Icons.bar_chart_rounded),
+            selectedIcon: Icon(Icons.bar_chart_rounded),
             label: 'Statistiques',
           ),
           NavigationDestination(

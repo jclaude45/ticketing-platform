@@ -143,8 +143,7 @@ class _EventDashboardScreenState extends ConsumerState<EventDashboardScreen> {
                       style: zText(ZSize.body, color: ZColors.muted),
                     ),
                     const SizedBox(height: 10),
-                    if (event.status == 'PUBLISHED' && !event.isPast)
-                      const _LiveBadge(),
+                    _StatusBadge(event: event),
                     const SizedBox(height: 16),
                     Row(
                       children: [
@@ -444,44 +443,27 @@ class _Kpi extends StatelessWidget {
   }
 }
 
-/// « En direct » with a pulsing dot: the screen follows sales and entries as they happen
-class _LiveBadge extends StatefulWidget {
-  const _LiveBadge();
-
-  @override
-  State<_LiveBadge> createState() => _LiveBadgeState();
-}
-
-class _LiveBadgeState extends State<_LiveBadge>
-    with SingleTickerProviderStateMixin {
-  late final _pulse = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1200),
-  )..repeat(reverse: true);
-
-  @override
-  void dispose() {
-    _pulse.dispose();
-    super.dispose();
-  }
+/// Where the event stands: published (on sale on zaya.live), draft, cancelled or over
+class _StatusBadge extends StatelessWidget {
+  final EventSummary event;
+  const _StatusBadge({required this.event});
 
   @override
   Widget build(BuildContext context) {
+    final (label, color) = switch (event.status) {
+      'CANCELLED' => ('Événement annulé', ZColors.red),
+      'DRAFT' => ('Brouillon · pas encore en vente', ZColors.muted),
+      _ when event.isPast => ('Événement terminé', ZColors.muted),
+      _ => ('Événement publié', ZColors.green),
+    };
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        FadeTransition(
-          opacity: Tween(begin: 0.3, end: 1.0).animate(_pulse),
-          child: const CircleAvatar(radius: 4, backgroundColor: ZColors.green),
-        ),
+        CircleAvatar(radius: 4, backgroundColor: color),
         const SizedBox(width: 6),
         Text(
-          'En direct',
-          style: zText(
-            ZSize.small,
-            weight: ZWeight.medium,
-            color: ZColors.green,
-          ),
+          label,
+          style: zText(ZSize.small, weight: ZWeight.medium, color: color),
         ),
       ],
     );
