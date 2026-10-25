@@ -1,3 +1,4 @@
+import { NotificationsModule } from '../notifications/notifications.module';
 import { Module } from '@nestjs/common';
 import { PaymentController } from './payment.controller';
 import { PaymentService } from './payment.service';
@@ -8,7 +9,7 @@ import { PublicModule } from '../public/public.module';
 import { ShopModule } from '../shop/shop.module';
 
 @Module({
-  imports: [PrismaModule, TicketsModule, PublicModule, ShopModule],
+  imports: [PrismaModule, TicketsModule, PublicModule, ShopModule, NotificationsModule],
   controllers: [PaymentController],
   providers: [PaymentService, FlexPayWebhookGuard],
 })

@@ -140,6 +140,21 @@ model User {
   /// E-mail alerts the organizer chose in Paramètres (missing keys = defaults)
   notificationPrefs     Json?
   sessions              UserSession[]
+  devices               DeviceToken[]
+}
+
+/// Phone of the organizer app that receives push notifications (Firebase Cloud Messaging)
+model DeviceToken {
+  id         String   @id @default(uuid())
+  userId     String
+  token      String   @unique
+  platform   String // android | ios
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 /// One signed-in browser or phone: each has its own refresh token, so the web dashboard and

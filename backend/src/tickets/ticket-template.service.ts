@@ -175,8 +175,16 @@ export class TicketTemplateService {
 
     if (template._count.tickets > 0) {
       throw new BadRequestException(
-        'Cannot delete a template that has generated tickets. Cancel the tickets first.',
+        'Ce tarif a déjà des billets : il ne peut pas être supprimé.',
       );
+    }
+
+    // A buyer may be paying for it right now: their tickets are made from this tariff once paid
+    const paying = await this.prisma.payment.count({
+      where: { status: { in: ['PENDING', 'PROCESSING'] }, items: { array_contains: [{ templateId }] } },
+    });
+    if (paying > 0) {
+      throw new BadRequestException('Un paiement est en cours sur ce tarif : réessayez dans une heure.');
     }
 
     await this.prisma.ticketTemplate.delete({ where: { id: templateId } });

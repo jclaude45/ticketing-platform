@@ -30,7 +30,11 @@ export class NotificationsService {
       },
     });
     this.logger.log(`Notification ${notification.id} created — emitting to user ${userId} via WebSocket`);
-    this.gateway.emitToUser(userId, 'notification:new', notification);
+    try {
+      this.gateway.emitToUser(userId, 'notification:new', notification);
+    } catch (err) {
+      this.logger.warn(`Live notification to ${userId} failed: ${(err as Error).message}`);
+    }
     return notification;
   }
 

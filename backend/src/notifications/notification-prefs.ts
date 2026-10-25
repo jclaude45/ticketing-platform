@@ -8,6 +8,11 @@ export interface NotificationPrefs {
   emailOnFraud: boolean;
   /** Activity of the week, every Monday morning */
   emailWeeklyReport: boolean;
+  /** Push notifications on the organizer app's phones */
+  pushOnSale: boolean;
+  pushOnEventFull: boolean;
+  pushOnFraud: boolean;
+  pushWeeklyReport: boolean;
 }
 
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
@@ -15,6 +20,10 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   emailOnEventFull: true,
   emailOnFraud: true,
   emailWeeklyReport: false,
+  pushOnSale: true,
+  pushOnEventFull: true,
+  pushOnFraud: true,
+  pushWeeklyReport: true,
 };
 
 /** Stored preferences completed with the defaults (the column is null until the first save) */

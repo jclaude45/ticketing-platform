@@ -10,6 +10,9 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -18,6 +21,7 @@ import {
   ApiBearerAuth,
   ApiQuery,
 } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { EventsService } from './events.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
@@ -83,6 +87,24 @@ export class EventsController {
   @ApiOperation({ summary: 'Publish a draft event' })
   async publish(@Param('id') id: string, @CurrentUser() user: any) {
     return this.eventsService.publish(id, user.id, user.role);
+  }
+
+  @Post(':id/banner')
+  @Roles(Role.ORGANIZER, Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor('banner'))
+  @ApiOperation({ summary: 'Upload the event poster (JPEG, PNG or WebP, 5 MB max)' })
+  async uploadBanner(@Param('id') id: string, @CurrentUser() user: any, @UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('Aucune image reçue');
+    return this.eventsService.uploadBanner(id, user.id, user.role, file);
+  }
+
+  @Post(':id/unpublish')
+  @Roles(Role.ORGANIZER, Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Take a published event back to draft (only before any ticket)' })
+  async unpublish(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.eventsService.unpublish(id, user.id, user.role);
   }
 
   @Post(':id/cancel')

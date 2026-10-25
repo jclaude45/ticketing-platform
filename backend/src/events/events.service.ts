@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { SubscriptionService } from '../subscription/subscription.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { StorageService } from '../storage/storage.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { EventStatus, Role } from '@prisma/client';
@@ -30,6 +31,7 @@ export class EventsService {
     private readonly redisService: RedisService,
     private readonly subscriptionService: SubscriptionService,
     private readonly notificationsService: NotificationsService,
+    private readonly storage: StorageService,
   ) {}
 
   async create(organizerId: string, dto: CreateEventDto) {
@@ -246,6 +248,54 @@ export class EventsService {
       link: `/dashboard/events/${id}`,
     });
 
+    return updated;
+  }
+
+  /** Poster sent as a file (the app); the web form may still send it inline as a data URL */
+  async uploadBanner(id: string, organizerId: string, organizerRole: Role, file: { buffer: Buffer; originalname: string; mimetype: string }) {
+    const event = await this.prisma.event.findUnique({ where: { id }, select: { organizerId: true } });
+    if (!event) throw new NotFoundException('Event not found');
+    if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && event.organizerId !== organizerId) {
+      throw new ForbiddenException('You can only change your own events');
+    }
+    this.storage.validateFileType(file.mimetype, ['image/jpeg', 'image/png', 'image/webp']);
+    this.storage.validateFileSize(file.buffer.length, 5 * 1024 * 1024);
+    const ext = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' }[file.mimetype];
+    // New name on every change: browsers and the app cache the old picture under its URL
+    const stored = await this.storage.uploadBuffer(file.buffer, `${id}-${Date.now()}${ext}`, file.mimetype, 'banners');
+    const updated = await this.prisma.event.update({ where: { id }, data: { bannerUrl: stored.url } });
+    await this.redisService.cacheDelete(`event:${id}`);
+    return updated;
+  }
+
+  /**
+   * Back to draft (taken off the ticketing) as long as nobody has a ticket or is paying for
+   * one; after that, the event can only be cancelled (buyers are then refunded).
+   */
+  async unpublish(id: string, organizerId: string, organizerRole: Role) {
+    const event = await this.prisma.event.findUnique({
+      where: { id },
+      include: { _count: { select: { tickets: true } } },
+    });
+    if (!event) throw new NotFoundException('Event not found');
+
+    if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && event.organizerId !== organizerId) {
+      throw new ForbiddenException('You can only unpublish your own events');
+    }
+    if (event.status !== EventStatus.PUBLISHED) {
+      throw new BadRequestException('Seul un événement publié peut repasser en brouillon');
+    }
+    const payments = await this.prisma.payment.count({
+      where: { eventId: id, status: { in: ['PENDING', 'PROCESSING', 'COMPLETED', 'REFUNDED'] } },
+    });
+    if (event._count.tickets > 0 || payments > 0) {
+      throw new BadRequestException(
+        'Des billets ont déjà été émis ou achetés : l’événement ne peut plus repasser en brouillon. Vous pouvez l’annuler.',
+      );
+    }
+
+    const updated = await this.prisma.event.update({ where: { id }, data: { status: EventStatus.DRAFT } });
+    await this.redisService.cacheDelete(`event:${id}`);
     return updated;
   }
 

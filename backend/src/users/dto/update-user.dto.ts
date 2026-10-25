@@ -40,4 +40,8 @@ export class NotificationPrefsDto {
   @IsOptional() @IsBoolean() emailOnEventFull?: boolean;
   @IsOptional() @IsBoolean() emailOnFraud?: boolean;
   @IsOptional() @IsBoolean() emailWeeklyReport?: boolean;
+  @IsOptional() @IsBoolean() pushOnSale?: boolean;
+  @IsOptional() @IsBoolean() pushOnEventFull?: boolean;
+  @IsOptional() @IsBoolean() pushOnFraud?: boolean;
+  @IsOptional() @IsBoolean() pushWeeklyReport?: boolean;
 }

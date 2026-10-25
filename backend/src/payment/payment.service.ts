@@ -10,6 +10,7 @@ import * as crypto from 'crypto';
 
 import { InitiatePaymentDto } from './dto/initiate-payment.dto';
 import { ShopService } from '../shop/shop.service';
+import { OrganizerAlertsService } from '../notifications/organizer-alerts.service';
 import { tariffLabel } from '../tickets/event-days';
 import { buyerUnitPrice, flexPayAmount, roundMoney, ticketFeeSplit } from '../billing/pricing';
 import { normalizeDrcPhone } from '../common/phone';
@@ -32,6 +33,7 @@ export class PaymentService {
     private readonly ticketGeneration: TicketGenerationService,
     private readonly publicService: PublicService,
     private readonly shop: ShopService,
+    private readonly organizerAlerts: OrganizerAlertsService,
   ) {
     this.FLEXPAY_TOKEN = this.config.get<string>('FLEXPAY_TOKEN') || '';
     this.FLEXPAY_MERCHANT = this.config.get<string>('FLEXPAY_MERCHANT') || '';
@@ -445,6 +447,7 @@ export class PaymentService {
       where: { id: payment.id },
       data: { status: 'COMPLETED', providerRef, ticketsData: ticketRows as any },
     });
+    void this.organizerAlerts.saleCompleted(payment.id);
 
     // Shop items bought in the same checkout (sends its own confirmation email)
     await this.shop.markPaidForPayment(payment.id).catch((err) =>

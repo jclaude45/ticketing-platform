@@ -7,6 +7,9 @@ import * as nodemailer from 'nodemailer';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { NotificationPrefs, notificationPrefs } from './notification-prefs';
+import { PushService } from './push.service';
+import { NotificationsService } from './notifications.service';
+import { RealtimeGateway } from '../realtime/realtime.gateway';
 
 const QUARTER_MS = 15 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -37,6 +40,9 @@ export class OrganizerAlertsService {
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
     private readonly config: ConfigService,
+    private readonly push: PushService,
+    private readonly notifications: NotificationsService,
+    private readonly realtime: RealtimeGateway,
   ) {
     const host = this.config.get<string>('email.host');
     const user = this.config.get<string>('email.user');
@@ -67,11 +73,23 @@ export class OrganizerAlertsService {
         where: { id: ticketId },
         select: {
           serialNumber: true, holderName: true,
-          event: { select: { id: true, name: true, organizer: { select: { email: true, firstName: true, notificationPrefs: true } } } },
+          event: { select: { id: true, name: true, organizer: { select: { id: true, email: true, firstName: true, notificationPrefs: true } } } },
         },
       });
-      if (!ticket || !this.wants(ticket.event.organizer, 'emailOnFraud')) return;
+      if (!ticket) return;
+      const org = ticket.event.organizer;
+      const byMail = this.wants(org, 'emailOnFraud');
+      const byPush = this.wants(org, 'pushOnFraud');
+      if (!byMail && !byPush) return;
       await this.redis.set(throttle, '1', 60 * 60);
+      if (byPush) {
+        await this.push.send(org.id, {
+          title: `Billet frauduleux — ${ticket.event.name}`,
+          body: `Le billet ${ticket.serialNumber} a été refusé à l’entrée${controllerName ? ` (${controllerName})` : ''}.`,
+          data: { kind: 'fraud', eventId: ticket.event.id },
+        });
+      }
+      if (!byMail) return;
       const subject = `Billet frauduleux présenté — ${ticket.event.name}`;
       await this.send(ticket.event.organizer.email, subject, {
         eyebrow: 'Alerte fraude',
@@ -91,6 +109,50 @@ export class OrganizerAlertsService {
       });
     } catch (err) {
       this.logger.warn(`Fraud alert for ticket ${ticketId} failed: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * A paid order was confirmed: the organizer's dashboards update live (event room and their
+   * notifications) and their phones get a push if they chose to.
+   */
+  async saleCompleted(paymentId: string) {
+    try {
+      const pay = await this.prisma.payment.findUnique({
+        where: { id: paymentId },
+        select: {
+          id: true, reference: true, amount: true, currency: true, holderName: true, ticketsData: true, createdAt: true,
+          event: { select: { id: true, name: true, organizer: { select: { id: true, notificationPrefs: true } } } },
+        },
+      });
+      if (!pay) return;
+      const tickets = Array.isArray(pay.ticketsData) ? pay.ticketsData.length : 0;
+      const amount = `${Number(pay.amount).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} ${pay.currency}`;
+      const what = `${tickets} billet${tickets > 1 ? 's' : ''} · ${amount}`;
+      try {
+        this.realtime.emitToEvent(pay.event.id, 'sale:new', {
+          eventId: pay.event.id, paymentId: pay.id, reference: pay.reference, amount: Number(pay.amount),
+          currency: pay.currency, tickets, holderName: pay.holderName, timestamp: new Date().toISOString(),
+        });
+      } catch (err) {
+        // Live update only: the notification and the push still go out
+        this.logger.warn(`Live sale update for ${pay.event.id} failed: ${(err as Error).message}`);
+      }
+      await this.notifications.create(pay.event.organizer.id, {
+        title: `Nouvelle vente — ${pay.event.name}`,
+        message: `${what} (${pay.holderName})`,
+        type: 'success',
+        link: `/dashboard/events/${pay.event.id}/orders`,
+      });
+      if (this.wants(pay.event.organizer, 'pushOnSale')) {
+        await this.push.send(pay.event.organizer.id, {
+          title: `Nouvelle vente — ${pay.event.name}`,
+          body: what,
+          data: { kind: 'sale', eventId: pay.event.id, paymentId: pay.id },
+        });
+      }
+    } catch (err) {
+      this.logger.warn(`Sale alert for payment ${paymentId} failed: ${(err as Error).message}`);
     }
   }
 
@@ -166,17 +228,26 @@ export class OrganizerAlertsService {
       select: {
         id: true, name: true, startDate: true,
         ticketTemplates: { select: { quantity: true, availableCount: true } },
-        organizer: { select: { email: true, firstName: true, isActive: true, notificationPrefs: true } },
+        organizer: { select: { id: true, email: true, firstName: true, isActive: true, notificationPrefs: true } },
       },
     });
     for (const ev of events) {
       const tariffs = ev.ticketTemplates.filter((t) => t.quantity > 0);
       if (!tariffs.every((t) => t.availableCount <= 0)) continue;
-      if (!ev.organizer.isActive || !this.wants(ev.organizer, 'emailOnEventFull')) continue;
+      const byMail = this.wants(ev.organizer, 'emailOnEventFull');
+      const byPush = this.wants(ev.organizer, 'pushOnEventFull');
+      if (!ev.organizer.isActive || (!byMail && !byPush)) continue;
       const sent = await this.prisma.auditLog.count({ where: { action: 'event.sold_out_alert', entity: 'event', entityId: ev.id } });
       if (sent) continue;
       const total = tariffs.reduce((n, t) => n + t.quantity, 0);
-      await this.send(ev.organizer.email, `${ev.name} est complet`, {
+      if (byPush) {
+        await this.push.send(ev.organizer.id, {
+          title: `${ev.name} est complet`,
+          body: `Les ${total} billets sont vendus.`,
+          data: { kind: 'sold_out', eventId: ev.id },
+        });
+      }
+      if (byMail) await this.send(ev.organizer.email, `${ev.name} est complet`, {
         eyebrow: 'Événement complet',
         intro: [
           `Bonjour ${ev.organizer.firstName ?? ''},`,
@@ -212,7 +283,9 @@ export class OrganizerAlertsService {
       select: { id: true, email: true, firstName: true, notificationPrefs: true },
     });
     for (const o of organizers) {
-      if (!this.wants(o, 'emailWeeklyReport')) continue;
+      const byMail = this.wants(o, 'emailWeeklyReport');
+      const byPush = this.wants(o, 'pushWeeklyReport');
+      if (!byMail && !byPush) continue;
       const mine = { event: { organizerId: o.id } };
       const [payments, issued, entries, upcoming] = await Promise.all([
         this.prisma.payment.findMany({ where: { ...mine, status: 'COMPLETED', createdAt: { gte: since } }, select: { amount: true, currency: true } }),
@@ -248,7 +321,14 @@ export class OrganizerAlertsService {
       });
 
       const subject = 'Votre semaine sur ZAYA';
-      await this.mail(o.email, subject, {
+      if (byPush) {
+        await this.push.send(o.id, {
+          title: subject,
+          body: `${payments.length} commande(s), ${revenueText} encaissé(s), ${entries} entrée(s) ces 7 derniers jours.`,
+          data: { kind: 'weekly' },
+        });
+      }
+      if (byMail) await this.mail(o.email, subject, {
         preheader: `${payments.length} commande(s), ${sold} billet(s) vendu(s), ${entries} entrée(s) ces 7 derniers jours`,
         eyebrow: 'Rapport hebdomadaire',
         title: subject,

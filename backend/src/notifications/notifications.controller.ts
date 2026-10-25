@@ -1,12 +1,31 @@
-import { Controller, Get, Patch, Delete, Post, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Patch, Delete, Post, Param, Body, HttpCode, UseGuards } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
+import { PushService } from './push.service';
+import { DeviceTokenDto } from './device-token.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @Controller('notifications')
 @UseGuards(JwtAuthGuard)
 export class NotificationsController {
-  constructor(private readonly notificationsService: NotificationsService) {}
+  constructor(
+    private readonly notificationsService: NotificationsService,
+    private readonly push: PushService,
+  ) {}
+
+  /** The organizer app registers its phone after sign-in (and when Firebase renews the token) */
+  @Post('devices')
+  @HttpCode(200)
+  registerDevice(@CurrentUser() user: any, @Body() dto: DeviceTokenDto) {
+    return this.push.registerDevice(user.id, dto.token, dto.platform ?? 'android');
+  }
+
+  /** Before signing out: the phone stops receiving this account's notifications */
+  @Post('devices/remove')
+  @HttpCode(200)
+  forgetDevice(@CurrentUser() user: any, @Body() dto: DeviceTokenDto) {
+    return this.push.forgetDevice(user.id, dto.token);
+  }
 
   @Get()
   findAll(@CurrentUser() user: any) {

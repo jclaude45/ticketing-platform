@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Patch,
   Body,
   Param,
@@ -88,6 +89,16 @@ export class TicketsController {
     @Body() dto: Partial<CreateTicketTemplateDto>,
   ) {
     return this.templateService.update(templateId, user.id, user.role, dto);
+  }
+
+  @Delete('templates/:templateId')
+  @Roles(Role.ORGANIZER, Role.ADMIN)
+  @ApiOperation({ summary: 'Delete a ticket template that has no tickets yet' })
+  async deleteTemplate(
+    @Param('templateId') templateId: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.templateService.delete(templateId, user.id, user.role);
   }
 
   // ===== TICKET GENERATION ENDPOINTS =====
