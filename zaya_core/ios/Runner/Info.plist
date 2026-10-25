@@ -26,6 +26,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>ZAYA Core utilise l’appareil photo pour photographier l’affiche de vos événements.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>ZAYA Core utilise vos photos pour l’affiche de vos événements.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

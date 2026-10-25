@@ -81,6 +81,14 @@ class ApiException implements Exception {
       'Ce code a déjà servi : attendez le suivant.',
     'Too many failed attempts — please try again in 15 minutes' =>
       'Trop d’essais. Réessayez dans 15 minutes.',
+    'End date must be after start date' => 'La fin doit être après le début.',
+    'Cannot update a cancelled event' =>
+      'Un événement annulé ne peut plus être modifié.',
+    'Only draft events can be published' =>
+      'Seul un brouillon peut être publié.',
+    'Cannot publish event without ticket templates' =>
+      'Ajoutez au moins un tarif avant de publier.',
+    'Event is already cancelled' => 'L’événement est déjà annulé.',
     _ => m,
   };
 }

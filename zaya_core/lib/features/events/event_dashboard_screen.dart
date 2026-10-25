@@ -7,7 +7,12 @@ import '../../core/format.dart';
 import '../../core/realtime.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
+import '../../core/api/api_exception.dart';
+import 'event_admin_data.dart';
+import 'event_form_screen.dart';
 import 'events_data.dart';
+import 'orders_screen.dart';
+import 'tariffs_screen.dart';
 
 /// Live dashboard of one event: sales, fill per tariff, entries. Updates by itself on every
 /// sale and every scan (realtime channel), and on pull-to-refresh.
@@ -59,6 +64,26 @@ class _EventDashboardScreenState extends ConsumerState<EventDashboardScreen> {
     });
   }
 
+  void _open(Widget screen) async {
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+    ref.invalidate(eventDashboardProvider(widget.event.id));
+  }
+
+  Future<void> _edit() async {
+    try {
+      final detail = await ref
+          .read(eventAdminRepository)
+          .detail(widget.event.id);
+      if (mounted) _open(EventFormScreen(event: detail));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(ApiException.from(e).message)));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final dash = ref.watch(eventDashboardProvider(widget.event.id));
@@ -83,6 +108,15 @@ class _EventDashboardScreenState extends ConsumerState<EventDashboardScreen> {
                   child: BackButton(color: ZColors.ink),
                 ),
               ),
+              actions: [
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: CircleAvatar(
+                    backgroundColor: ZColors.page.withValues(alpha: 0.85),
+                    child: _PublicationMenu(event: event),
+                  ),
+                ),
+              ],
               flexibleSpace: FlexibleSpaceBar(
                 background: EventPoster(
                   url: event.bannerUrl,
@@ -110,7 +144,35 @@ class _EventDashboardScreenState extends ConsumerState<EventDashboardScreen> {
                       style: zText(ZSize.body, color: ZColors.muted),
                     ),
                     const SizedBox(height: 10),
-                    const _LiveBadge(),
+                    if (event.status == 'PUBLISHED' && !event.isPast)
+                      const _LiveBadge(),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        _Action(
+                          icon: Icons.receipt_long_outlined,
+                          label: 'Commandes',
+                          onTap: () => _open(OrdersScreen(eventId: event.id)),
+                        ),
+                        const SizedBox(width: 10),
+                        _Action(
+                          icon: Icons.sell_outlined,
+                          label: 'Tarifs',
+                          onTap: () => _open(
+                            TariffsScreen(
+                              eventId: event.id,
+                              currency: event.currency,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        _Action(
+                          icon: Icons.edit_outlined,
+                          label: 'Modifier',
+                          onTap: _edit,
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -332,6 +394,7 @@ class _Kpi extends StatelessWidget {
   Widget build(BuildContext context) {
     final fg = highlight ? ZColors.onYellow : ZColors.text;
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: highlight ? ZColors.yellow : ZColors.card,
@@ -414,6 +477,128 @@ class _LiveBadgeState extends State<_LiveBadge>
             color: ZColors.green,
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _Action extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _Action({required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Material(
+        color: ZColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Column(
+              children: [
+                Icon(icon, size: 22, color: ZColors.ink),
+                const SizedBox(height: 4),
+                Text(label, style: zText(ZSize.small, weight: ZWeight.medium)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Publish, back to draft, or cancel, depending on where the event is
+class _PublicationMenu extends ConsumerWidget {
+  final EventSummary event;
+  const _PublicationMenu({required this.event});
+
+  Future<void> _run(BuildContext context, WidgetRef ref, String action) async {
+    final repo = ref.read(eventAdminRepository);
+    if (action == 'cancel') {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('Annuler l’événement ?'),
+          content: const Text(
+            'La vente s’arrête et l’événement est marqué annulé sur zaya.live. Les acheteurs déjà payés '
+            'devront être remboursés depuis « Commandes ». C’est définitif.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Retour'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text(
+                'Annuler l’événement',
+                style: TextStyle(color: ZColors.red),
+              ),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return;
+    }
+    try {
+      switch (action) {
+        case 'publish':
+          await repo.publish(event.id);
+        case 'unpublish':
+          await repo.unpublish(event.id);
+        case 'cancel':
+          await repo.cancel(event.id);
+      }
+      ref.invalidate(eventDashboardProvider(event.id));
+      ref.invalidate(eventsProvider);
+      if (context.mounted) {
+        final done = switch (action) {
+          'publish' => 'Événement publié : il est en vente sur zaya.live.',
+          'unpublish' =>
+            'Événement repassé en brouillon : il n’est plus visible.',
+          _ => 'Événement annulé.',
+        };
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(done)));
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(ApiException.from(e).message)));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return PopupMenuButton<String>(
+      tooltip: 'Publication',
+      icon: Icon(Icons.more_vert, color: ZColors.ink),
+      onSelected: (a) => _run(context, ref, a),
+      itemBuilder: (_) => [
+        if (event.status == 'DRAFT')
+          const PopupMenuItem(value: 'publish', child: Text('Publier')),
+        if (event.status == 'PUBLISHED')
+          const PopupMenuItem(
+            value: 'unpublish',
+            child: Text('Repasser en brouillon'),
+          ),
+        if (event.status != 'CANCELLED')
+          const PopupMenuItem(
+            value: 'cancel',
+            child: Text(
+              'Annuler l’événement',
+              style: TextStyle(color: ZColors.red),
+            ),
+          ),
       ],
     );
   }

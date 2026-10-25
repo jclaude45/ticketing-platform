@@ -6,6 +6,7 @@ import '../../core/session.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import 'event_dashboard_screen.dart';
+import 'event_form_screen.dart';
 import 'events_data.dart';
 
 /// Home tab: the events of the account, coming ones first
@@ -18,6 +19,15 @@ class EventsScreen extends ConsumerWidget {
     final session = ref.watch(sessionProvider);
     final user = session is SignedIn ? session.user : null;
     return Scaffold(
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: ZColors.ink,
+        foregroundColor: ZColors.onInk,
+        onPressed: () => Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const EventFormScreen())),
+        icon: const Icon(Icons.add),
+        label: const Text('Créer'),
+      ),
       body: SafeArea(
         child: RefreshIndicator(
           color: ZColors.ink,
@@ -75,7 +85,7 @@ class EventsScreen extends ConsumerWidget {
                             icon: Icons.event_available_rounded,
                             title: 'Aucun événement',
                             text:
-                                'Créez votre premier événement sur app.zaya.live : il apparaîtra ici.',
+                                'Créez votre premier événement avec le bouton « Créer ».',
                           ),
                         ),
                       ]

@@ -27,6 +27,15 @@ class Fmt {
     return '$value $symbol';
   }
 
+  /// DRC numbers are stored as 243 + 9 digits: shown « +243 812 345 678 »
+  static String phone(String raw) {
+    final d = raw.replaceAll(RegExp(r'\D'), '');
+    if (d.length == 12 && d.startsWith('243')) {
+      return '+243 ${d.substring(3, 6)} ${d.substring(6, 9)} ${d.substring(9)}';
+    }
+    return raw;
+  }
+
   static String percent(double ratio) => '${(ratio * 100).round()} %';
 
   /// Kinshasa is UTC+1 all year
