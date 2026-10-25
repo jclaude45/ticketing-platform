@@ -8,6 +8,7 @@ import '../../core/session.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../money/payouts_screen.dart';
+import 'notification_settings_screen.dart';
 import '../team/collaborators_screen.dart';
 import '../team/controllers_screen.dart';
 
@@ -88,6 +89,13 @@ class AccountScreen extends ConsumerWidget {
             title: 'Versements',
             subtitle: 'Vos ventes en ligne et quand elles sont versées',
             screen: const PayoutsScreen(),
+          ),
+          const ZSection('Préférences'),
+          const _NavTile(
+            icon: Icons.notifications_active_outlined,
+            title: 'Notifications',
+            subtitle: 'Alertes sur ce téléphone et par e-mail',
+            screen: NotificationSettingsScreen(),
           ),
           const ZSection('Espace de travail'),
           _WorkspaceTile(

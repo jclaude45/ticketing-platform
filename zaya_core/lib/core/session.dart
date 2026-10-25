@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'api/api_client.dart';
 import 'api/api_exception.dart';
+import 'push.dart';
 import 'storage.dart';
 
 /// Signed-in organizer, and the account they work on (their own or, as a collaborator,
@@ -141,6 +142,7 @@ class SessionController extends Notifier<SessionState> {
     if (ws != null) user = user.withWorkspace(await _findWorkspace(ws));
     // Shown at once from the phone (works offline); refreshed from the server behind
     state = SignedIn(user);
+    unawaited(Push.instance.register());
     try {
       final me = await _api.get('/auth/me') as Map<String, dynamic>;
       final fresh = SessionUser.fromJson(me, workspace: user.workspace);
@@ -188,6 +190,7 @@ class SessionController extends Notifier<SessionState> {
       await _store.saveUser(user.toJson());
       await _store.saveWorkspace(null);
       state = SignedIn(user);
+      unawaited(Push.instance.register());
       return LoginStep.done;
     } catch (e) {
       throw ApiException.from(e);
@@ -210,6 +213,8 @@ class SessionController extends Notifier<SessionState> {
   }
 
   Future<void> logout() async {
+    // While the session is still valid: the server forgets this phone
+    await Push.instance.unregister();
     try {
       await _api.post('/auth/logout');
     } catch (_) {
