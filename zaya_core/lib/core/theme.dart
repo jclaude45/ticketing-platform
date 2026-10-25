@@ -6,13 +6,29 @@ const zFont = 'Satoshi';
 
 class ZSize {
   ZSize._();
-  static const double display = 32;
-  static const double h1 = 26;
-  static const double h2 = 22;
-  static const double h3 = 18;
-  static const double title = 16;
+
+  /// Title of a main page (Événements, Statistiques, Compte) and of the sign-in screen
+  static const double display = 28;
+
+  /// Name of an event on its dashboard, key figures
+  static const double h1 = 24;
+
+  /// Title of a sheet (« Nouveau tarif », « Inviter »…)
+  static const double h2 = 20;
+
+  /// Title bar of a sub-page, dialog titles, card titles
+  static const double h3 = 17;
+
+  /// Buttons, fields, section titles
+  static const double title = 15;
+
+  /// Body text, list rows
   static const double body = 14;
+
+  /// Secondary text, labels
   static const double small = 12;
+
+  /// Status pills
   static const double caption = 11;
 }
 
@@ -102,6 +118,22 @@ ThemeData zTheme() {
       focusedErrorBorder: border(ZColors.red, 1.6),
     ),
     dividerTheme: DividerThemeData(color: ZColors.line, thickness: 1, space: 1),
+    // Confirmations in the app's type scale (Material's default title is large and thin)
+    dialogTheme: DialogThemeData(
+      backgroundColor: ZColors.page,
+      surfaceTintColor: Colors.transparent,
+      titleTextStyle: zText(ZSize.h3, weight: ZWeight.bold),
+      contentTextStyle: zText(ZSize.body, color: ZColors.muted, height: 1.45),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+    ),
+    listTileTheme: ListTileThemeData(
+      titleTextStyle: zText(ZSize.body, weight: ZWeight.medium),
+      subtitleTextStyle: zText(ZSize.small, color: ZColors.muted),
+    ),
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: ZColors.page,
+      surfaceTintColor: Colors.transparent,
+    ),
     progressIndicatorTheme: ProgressIndicatorThemeData(color: ZColors.ink),
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: ZColors.page,

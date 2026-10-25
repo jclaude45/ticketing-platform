@@ -5,6 +5,7 @@ import '../../core/format.dart';
 import '../../core/session.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
+import '../notifications/notifications_screen.dart';
 import 'event_dashboard_screen.dart';
 import 'event_form_screen.dart';
 import 'events_data.dart';
@@ -36,32 +37,12 @@ class EventsScreen extends ConsumerWidget {
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
               SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        user?.workspace != null
-                            ? user!.workspace!.ownerName
-                            : 'Bonjour ${user?.firstName ?? ''}',
-                        style: zText(
-                          ZSize.small,
-                          weight: ZWeight.medium,
-                          color: ZColors.muted,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Événements',
-                        style: zText(
-                          ZSize.display,
-                          weight: ZWeight.black,
-                          height: 1.1,
-                        ),
-                      ),
-                    ],
-                  ),
+                child: ZPageHeader(
+                  title: 'Événements',
+                  overline: user?.workspace != null
+                      ? user!.workspace!.ownerName
+                      : 'Bonjour ${user?.firstName ?? ''}',
+                  trailing: const NotificationBell(),
                 ),
               ),
               ...events.when(

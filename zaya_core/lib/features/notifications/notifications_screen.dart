@@ -70,10 +70,7 @@ class NotificationsScreen extends ConsumerWidget {
     final unread = ref.watch(unreadCountProvider);
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          'Notifications',
-          style: zText(ZSize.h2, weight: ZWeight.black),
-        ),
+        title: const Text('Notifications'),
         actions: [
           if (unread > 0)
             TextButton(
@@ -164,6 +161,34 @@ class NotificationsScreen extends ConsumerWidget {
                     );
                   },
                 ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Bell at the top of the main pages, with the number of unread notifications
+class NotificationBell extends ConsumerWidget {
+  const NotificationBell({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final unread = ref.watch(unreadCountProvider);
+    return IconButton(
+      tooltip: 'Notifications',
+      onPressed: () async {
+        await Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const NotificationsScreen()));
+        ref.invalidate(notificationsProvider);
+      },
+      icon: Badge(
+        isLabelVisible: unread > 0,
+        label: Text('$unread'),
+        child: Icon(
+          Icons.notifications_none_rounded,
+          size: 28,
+          color: ZColors.ink,
         ),
       ),
     );

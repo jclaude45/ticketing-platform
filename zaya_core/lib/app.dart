@@ -13,6 +13,8 @@ import 'features/events/event_dashboard_screen.dart';
 import 'features/events/events_data.dart';
 import 'features/events/events_screen.dart';
 import 'features/notifications/notifications_screen.dart';
+import 'features/stats/stats_screen.dart';
+import 'core/widgets.dart';
 
 class ZayaCoreApp extends ConsumerWidget {
   const ZayaCoreApp({super.key});
@@ -34,6 +36,9 @@ class ZayaCoreApp extends ConsumerWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
+      // The phone's text size is followed, up to 130 %: beyond that the cards and figures overflow
+      builder: (context, child) =>
+          MediaQuery.withClampedTextScaling(maxScaleFactor: 1.3, child: child!),
       home: switch (session) {
         SessionLoading() => const Scaffold(
           body: Center(child: CircularProgressIndicator()),
@@ -66,7 +71,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   @override
   void initState() {
     super.initState();
-    // A notification while the app is open: shown as a bar, and the screens reload
+    // A notification while the app is open: banner at the top, and the screens reload
     _subs.add(
       Push.instance.foreground.stream.listen((m) {
         ref.invalidate(notificationsProvider);
@@ -74,12 +79,12 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         if (eventId != null) ref.invalidate(eventDashboardProvider(eventId));
         final title = m.notification?.title;
         if (title != null && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                [title, m.notification?.body].whereType<String>().join(' — '),
-              ),
-            ),
+          showTopBanner(
+            context,
+            title: title,
+            body: m.notification?.body,
+            onTap: () =>
+                _open(PushTap(m.data['kind']?.toString() ?? '', eventId)),
           );
         }
       }),
@@ -96,9 +101,16 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     super.dispose();
   }
 
+  Future<void> _openNotifications() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const NotificationsScreen()));
+    ref.invalidate(notificationsProvider);
+  }
+
   Future<void> _open(PushTap tap) async {
     if (tap.eventId == null) {
-      setState(() => _tab = 1);
+      await _openNotifications();
       return;
     }
     try {
@@ -110,44 +122,35 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         MaterialPageRoute(builder: (_) => EventDashboardScreen(event: event)),
       );
     } catch (_) {
-      if (mounted) setState(() => _tab = 1);
+      if (mounted) await _openNotifications();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final unread = ref.watch(unreadCountProvider);
     return Scaffold(
       body: IndexedStack(
         index: _tab,
-        children: const [
-          EventsScreen(),
-          NotificationsScreen(),
-          AccountScreen(),
-        ],
+        children: const [EventsScreen(), StatsScreen(), AccountScreen()],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
         onDestinationSelected: (i) {
           setState(() => _tab = i);
-          if (i == 1) ref.invalidate(notificationsProvider);
+          if (i == 1) ref.invalidate(statsProvider);
         },
-        destinations: [
-          const NavigationDestination(
+        destinations: const [
+          NavigationDestination(
             icon: Icon(Icons.event_outlined),
             selectedIcon: Icon(Icons.event),
             label: 'Événements',
           ),
           NavigationDestination(
-            icon: Badge(
-              isLabelVisible: unread > 0,
-              label: Text('$unread'),
-              child: const Icon(Icons.notifications_none_rounded),
-            ),
-            selectedIcon: const Icon(Icons.notifications_rounded),
-            label: 'Notifications',
+            icon: Icon(Icons.insights_outlined),
+            selectedIcon: Icon(Icons.insights),
+            label: 'Statistiques',
           ),
-          const NavigationDestination(
+          NavigationDestination(
             icon: Icon(Icons.person_outline_rounded),
             selectedIcon: Icon(Icons.person_rounded),
             label: 'Compte',

@@ -50,12 +50,10 @@ class _EventDashboardScreenState extends ConsumerState<EventDashboardScreen> {
         (e.data['amount'] as num?) ?? 0,
         e.data['currency'] as String? ?? '',
       );
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Nouvelle vente : $n billet${n > 1 ? 's' : ''} · $amount',
-          ),
-        ),
+      showTopBanner(
+        context,
+        title: 'Nouvelle vente',
+        body: '$n billet${n > 1 ? 's' : ''} · $amount',
       );
     }
     // Entries can come by the dozen at the door: one reload for a burst of scans

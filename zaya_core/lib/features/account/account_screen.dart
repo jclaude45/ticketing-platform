@@ -8,6 +8,7 @@ import '../../core/session.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../money/payouts_screen.dart';
+import '../notifications/notifications_screen.dart';
 import 'notification_settings_screen.dart';
 import '../team/collaborators_screen.dart';
 import '../team/controllers_screen.dart';
@@ -27,134 +28,135 @@ class AccountScreen extends ConsumerWidget {
     final user = session.user;
     final workspaces = ref.watch(workspacesProvider);
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Compte', style: zText(ZSize.h2, weight: ZWeight.black)),
-      ),
-      body: ListView(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 28,
-                  backgroundColor: ZColors.yellow,
-                  child: Text(
-                    (user.firstName.isNotEmpty
-                            ? user.firstName[0]
-                            : user.email[0])
-                        .toUpperCase(),
-                    style: zText(
-                      ZSize.h2,
-                      weight: ZWeight.black,
-                      color: ZColors.onYellow,
+      body: SafeArea(
+        child: ListView(
+          children: [
+            const ZPageHeader(title: 'Compte', trailing: NotificationBell()),
+            const SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 28,
+                    backgroundColor: ZColors.yellow,
+                    child: Text(
+                      (user.firstName.isNotEmpty
+                              ? user.firstName[0]
+                              : user.email[0])
+                          .toUpperCase(),
+                      style: zText(
+                        ZSize.h2,
+                        weight: ZWeight.black,
+                        color: ZColors.onYellow,
+                      ),
                     ),
                   ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          user.fullName.isEmpty ? user.email : user.fullName,
+                          style: zText(ZSize.h3, weight: ZWeight.bold),
+                        ),
+                        Text(
+                          user.email,
+                          style: zText(ZSize.small, color: ZColors.muted),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const ZSection('Équipe'),
+            _NavTile(
+              icon: Icons.qr_code_scanner_rounded,
+              title: 'Contrôleurs',
+              subtitle: 'Scan des billets à l’entrée',
+              screen: const ControllersScreen(),
+            ),
+            _NavTile(
+              icon: Icons.groups_outlined,
+              title: 'Collaborateurs',
+              subtitle: 'Personnes qui gèrent ce compte avec vous',
+              screen: const CollaboratorsScreen(),
+            ),
+            const ZSection('Argent'),
+            _NavTile(
+              icon: Icons.account_balance_wallet_outlined,
+              title: 'Versements',
+              subtitle: 'Vos ventes en ligne et quand elles sont versées',
+              screen: const PayoutsScreen(),
+            ),
+            const ZSection('Préférences'),
+            const _NavTile(
+              icon: Icons.notifications_active_outlined,
+              title: 'Notifications',
+              subtitle: 'Alertes sur ce téléphone et par e-mail',
+              screen: NotificationSettingsScreen(),
+            ),
+            const ZSection('Espace de travail'),
+            _WorkspaceTile(
+              title: 'Mon compte',
+              subtitle: 'Mes événements',
+              selected: user.workspace == null,
+              onTap: () => _switch(context, ref, null),
+            ),
+            ...workspaces.when(
+              loading: () => [
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Center(child: CircularProgressIndicator()),
                 ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        user.fullName.isEmpty ? user.email : user.fullName,
-                        style: zText(ZSize.h3, weight: ZWeight.bold),
-                      ),
-                      Text(
-                        user.email,
-                        style: zText(ZSize.small, color: ZColors.muted),
-                      ),
-                    ],
+              ],
+              error: (e, _) => [
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 8,
+                  ),
+                  child: Text(
+                    ApiException.from(e).message,
+                    style: zText(ZSize.small, color: ZColors.muted),
                   ),
                 ),
               ],
+              data: (list) => list
+                  .map(
+                    (w) => _WorkspaceTile(
+                      title: w.ownerName,
+                      subtitle: 'Collaborateur · ${w.permissionLabel}',
+                      selected: user.workspace?.ownerId == w.ownerId,
+                      onTap: () => _switch(context, ref, w),
+                    ),
+                  )
+                  .toList(),
             ),
-          ),
-          const ZSection('Équipe'),
-          _NavTile(
-            icon: Icons.qr_code_scanner_rounded,
-            title: 'Contrôleurs',
-            subtitle: 'Scan des billets à l’entrée',
-            screen: const ControllersScreen(),
-          ),
-          _NavTile(
-            icon: Icons.groups_outlined,
-            title: 'Collaborateurs',
-            subtitle: 'Personnes qui gèrent ce compte avec vous',
-            screen: const CollaboratorsScreen(),
-          ),
-          const ZSection('Argent'),
-          _NavTile(
-            icon: Icons.account_balance_wallet_outlined,
-            title: 'Versements',
-            subtitle: 'Vos ventes en ligne et quand elles sont versées',
-            screen: const PayoutsScreen(),
-          ),
-          const ZSection('Préférences'),
-          const _NavTile(
-            icon: Icons.notifications_active_outlined,
-            title: 'Notifications',
-            subtitle: 'Alertes sur ce téléphone et par e-mail',
-            screen: NotificationSettingsScreen(),
-          ),
-          const ZSection('Espace de travail'),
-          _WorkspaceTile(
-            title: 'Mon compte',
-            subtitle: 'Mes événements',
-            selected: user.workspace == null,
-            onTap: () => _switch(context, ref, null),
-          ),
-          ...workspaces.when(
-            loading: () => [
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Center(child: CircularProgressIndicator()),
+            const SizedBox(height: 36),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: ZButton(
+                label: 'Se déconnecter',
+                outlined: true,
+                onPressed: () async {
+                  Realtime.instance.close();
+                  await ref.read(sessionProvider.notifier).logout();
+                },
               ),
-            ],
-            error: (e, _) => [
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 8,
-                ),
-                child: Text(
-                  ApiException.from(e).message,
-                  style: zText(ZSize.small, color: ZColors.muted),
-                ),
+            ),
+            const SizedBox(height: 20),
+            Center(
+              child: Text(
+                'ZAYA Core ${AppConfig.appVersion}',
+                style: zText(ZSize.caption, color: ZColors.muted),
               ),
-            ],
-            data: (list) => list
-                .map(
-                  (w) => _WorkspaceTile(
-                    title: w.ownerName,
-                    subtitle: 'Collaborateur · ${w.permissionLabel}',
-                    selected: user.workspace?.ownerId == w.ownerId,
-                    onTap: () => _switch(context, ref, w),
-                  ),
-                )
-                .toList(),
-          ),
-          const SizedBox(height: 36),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: ZButton(
-              label: 'Se déconnecter',
-              outlined: true,
-              onPressed: () async {
-                Realtime.instance.close();
-                await ref.read(sessionProvider.notifier).logout();
-              },
             ),
-          ),
-          const SizedBox(height: 20),
-          Center(
-            child: Text(
-              'ZAYA Core ${AppConfig.appVersion}',
-              style: zText(ZSize.caption, color: ZColors.muted),
-            ),
-          ),
-          const SizedBox(height: 24),
-        ],
+            const SizedBox(height: 24),
+          ],
+        ),
       ),
     );
   }

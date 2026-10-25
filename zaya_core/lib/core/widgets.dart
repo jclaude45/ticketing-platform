@@ -335,3 +335,204 @@ class ZSection extends StatelessWidget {
     );
   }
 }
+
+/// Header of a main page (Événements, Statistiques, Compte): small line above, big title,
+/// actions on the right (the notification bell)
+class ZPageHeader extends StatelessWidget {
+  final String title;
+  final String? overline;
+  final Widget? trailing;
+
+  const ZPageHeader({
+    super.key,
+    required this.title,
+    this.overline,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 14, 12, 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (overline != null)
+                  Text(
+                    overline!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: zText(
+                      ZSize.small,
+                      weight: ZWeight.medium,
+                      color: ZColors.muted,
+                    ),
+                  ),
+                const SizedBox(height: 2),
+                Text(
+                  title,
+                  style: zText(
+                    ZSize.display,
+                    weight: ZWeight.black,
+                    height: 1.1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ?trailing,
+        ],
+      ),
+    );
+  }
+}
+
+/// Banner sliding from the top of the screen (alert received while the app is open), gone
+/// after a few seconds or when touched
+void showTopBanner(
+  BuildContext context, {
+  required String title,
+  String? body,
+  VoidCallback? onTap,
+}) {
+  final overlay = Overlay.maybeOf(context, rootOverlay: true);
+  if (overlay == null) return;
+  late OverlayEntry entry;
+  var removed = false;
+  void close() {
+    if (removed) return;
+    removed = true;
+    entry.remove();
+  }
+
+  entry = OverlayEntry(
+    builder: (context) => _TopBanner(
+      title: title,
+      body: body,
+      onTap: () {
+        close();
+        onTap?.call();
+      },
+      onDone: close,
+    ),
+  );
+  overlay.insert(entry);
+}
+
+class _TopBanner extends StatefulWidget {
+  final String title;
+  final String? body;
+  final VoidCallback onTap;
+  final VoidCallback onDone;
+
+  const _TopBanner({
+    required this.title,
+    this.body,
+    required this.onTap,
+    required this.onDone,
+  });
+
+  @override
+  State<_TopBanner> createState() => _TopBannerState();
+}
+
+class _TopBannerState extends State<_TopBanner>
+    with SingleTickerProviderStateMixin {
+  late final _slide = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 260),
+  )..forward();
+
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(const Duration(seconds: 5), () async {
+      if (!mounted) return;
+      await _slide.reverse();
+      widget.onDone();
+    });
+  }
+
+  @override
+  void dispose() {
+    _slide.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: MediaQuery.paddingOf(context).top + 8,
+      left: 12,
+      right: 12,
+      child: SlideTransition(
+        position: Tween(
+          begin: const Offset(0, -1.4),
+          end: Offset.zero,
+        ).animate(CurvedAnimation(parent: _slide, curve: Curves.easeOutCubic)),
+        child: Material(
+          color: ZColors.ink,
+          elevation: 6,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: widget.onTap,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: ZColors.yellow,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.notifications_active_rounded,
+                      size: 19,
+                      color: ZColors.onYellow,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          widget.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: zText(
+                            ZSize.body,
+                            weight: ZWeight.bold,
+                            color: ZColors.onInk,
+                          ),
+                        ),
+                        if (widget.body != null)
+                          Text(
+                            widget.body!,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: zText(
+                              ZSize.small,
+                              color: ZColors.onInk.withValues(alpha: 0.75),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
