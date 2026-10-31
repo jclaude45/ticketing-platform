@@ -3,7 +3,7 @@ import { ProjectService } from './project.service';
 import { ProjectController } from './project.controller';
 import { ProjectInvitationController } from './project-invitation.controller';
 import { PrismaModule } from '../prisma/prisma.module';
-import { JwtModule } from '@nestjs/jwt';
+import { JwtModule, JwtSignOptions } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { NotificationsModule } from '../notifications/notifications.module';
 
@@ -17,7 +17,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
       inject: [ConfigService],
       useFactory: (c: ConfigService) => ({
         secret: c.get<string>('jwt.secret'),
-        signOptions: { expiresIn: c.get<string>('jwt.expiresIn') },
+        signOptions: { expiresIn: c.get<JwtSignOptions['expiresIn']>('jwt.expiresIn') },
       }),
     }),
   ],

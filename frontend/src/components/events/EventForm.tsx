@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Check, ChevronDown, Save, Loader2, Plus, Trash2, Ticket, ImageIcon } from 'lucide-react';
-import { createEventSchema, type CreateEventFormData, EVENT_TYPES, EVENT_CURRENCIES } from '@/lib/validations';
+import { createEventSchema, type CreateEventFormData, type CreateEventFormInput, EVENT_TYPES, EVENT_CURRENCIES } from '@/lib/validations';
 import { eventsApi, ticketsApi, eventDraftsApi, type EventDraftData } from '@/lib/api';
 import { FileUpload } from '@/components/common/FileUpload';
 import { UpgradePlanModal } from '@/components/subscription/UpgradePlanModal';
@@ -128,7 +128,7 @@ export function EventForm({ event, isEdit, draft }: EventFormProps) {
     return [newTariff()];
   });
 
-  const { register, handleSubmit, setValue, watch, getValues, formState: { errors } } = useForm<CreateEventFormData>({
+  const { register, handleSubmit, setValue, watch, getValues, formState: { errors } } = useForm<CreateEventFormInput, unknown, CreateEventFormData>({
     resolver: zodResolver(createEventSchema),
     defaultValues: event
       ? {

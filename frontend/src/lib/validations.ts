@@ -19,7 +19,7 @@ export const registerSchema = z
       .regex(/[^A-Za-z0-9]/, 'Doit contenir au moins un caractère spécial'),
     confirmPassword: z.string(),
     /** CGU, CGV and privacy policy accepted (electronic contract) */
-    acceptTerms: z.boolean({ required_error: 'Acceptez les conditions pour créer votre compte', invalid_type_error: 'Acceptez les conditions pour créer votre compte' }).refine(v => v === true, { message: 'Acceptez les conditions pour créer votre compte' }),
+    acceptTerms: z.boolean({ error: 'Acceptez les conditions pour créer votre compte' }).refine(v => v === true, { message: 'Acceptez les conditions pour créer votre compte' }),
   })
   .refine(data => data.password === data.confirmPassword, {
     message: 'Les mots de passe ne correspondent pas',
@@ -131,6 +131,8 @@ export type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>;
 export type TotpFormData = z.infer<typeof totpSchema>;
 export type CreateEventFormData = z.infer<typeof createEventSchema>;
+// What the form holds before validation (defaults not applied yet)
+export type CreateEventFormInput = z.input<typeof createEventSchema>;
 export type GenerateTicketsFormData = z.infer<typeof generateTicketsSchema>;
 export type CreateControllerFormData = z.infer<typeof createControllerSchema>;
 export type SettingsFormData = z.infer<typeof settingsSchema>;

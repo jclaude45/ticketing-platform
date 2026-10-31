@@ -36,7 +36,12 @@ export class SecurityMiddleware implements NestMiddleware {
       /chmod\s+[0-9]/i,
     ];
 
-    const requestBody = JSON.stringify(req.body ?? '');
+    // Inline images (ticket preview, poster) are opaque base64: random runs like "oNMf…="
+    // match /on\w+\s*=/ and blocked saving a ticket design. Their payload is not scanned.
+    const requestBody = JSON.stringify(req.body ?? '').replace(
+      /data:[\w.+/-]+;base64,[A-Za-z0-9+/=]+/g,
+      'data:;base64,',
+    );
     const requestUrl = req.url ?? '';
     const userAgent = req.headers['user-agent'] ?? '';
 

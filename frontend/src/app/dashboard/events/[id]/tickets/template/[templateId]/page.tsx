@@ -131,6 +131,7 @@ export default function TicketTemplateEditorPage() {
             eventId={eventId}
             templateId={isNew ? undefined : templateId}
             initialData={existingCanvas}
+            initialDesign={template?.customFields ?? undefined}
             initialMeta={initialMeta}
             onSaved={handleSaved}
           />

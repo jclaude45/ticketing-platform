@@ -13,7 +13,9 @@ import {
 } from './dto/team.dto';
 import * as PDFDocument from 'pdfkit';
 import * as QRCode from 'qrcode';
-import * as sharp from 'sharp';
+// sharp 0.35's CommonJS build exports the function itself, while its types only declare a default export
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const sharp: typeof import('sharp').default = require('sharp');
 import * as fs from 'fs';
 import { Readable } from 'stream';
 import * as path from 'path';

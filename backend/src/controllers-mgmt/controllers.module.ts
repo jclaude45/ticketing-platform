@@ -5,7 +5,7 @@ import { ControllersService } from './controllers.service';
 import { ControllerSpaceController } from './controller-space.controller';
 import { ControllerSpaceService } from './controller-space.service';
 import { AuthModule } from '../auth/auth.module';
-import { JwtModule } from '@nestjs/jwt';
+import { JwtModule, JwtSignOptions } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { InvitationsModule } from '../invitations/invitations.module';
 
@@ -20,7 +20,7 @@ import { InvitationsModule } from '../invitations/invitations.module';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         secret: configService.get<string>('jwt.secret'),
-        signOptions: { expiresIn: configService.get<string>('jwt.expiresIn') },
+        signOptions: { expiresIn: configService.get<JwtSignOptions['expiresIn']>('jwt.expiresIn') },
       }),
     }),
   ],

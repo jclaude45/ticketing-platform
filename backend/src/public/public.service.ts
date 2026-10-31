@@ -20,7 +20,9 @@ const PDFDocument = require('pdfkit');
 import * as QRCode from 'qrcode';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as sharp from 'sharp';
+// sharp 0.35's CommonJS build exports the function itself, while its types only declare a default export
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const sharp: typeof import('sharp').default = require('sharp');
 
 /** The "Z" of the ZAYA logo, copied from frontend/public/zaya-logo.svg. */
 const ZAYA_LOGO_Z_PATH =
