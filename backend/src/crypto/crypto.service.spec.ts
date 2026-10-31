@@ -52,7 +52,9 @@ describe('CryptoService', () => {
       const data = 'secret private key PEM content';
       const encrypted = service.encryptAES(data, key);
       expect(encrypted).not.toBe(data);
-      expect(encrypted.split(':')).toHaveLength(3);
+      // v2:<salt>:<iv>:<ciphertext>:<tag>
+      expect(encrypted.startsWith('v2:')).toBe(true);
+      expect(encrypted.split(':')).toHaveLength(5);
       expect(service.decryptAES(encrypted, key)).toBe(data);
     });
 
