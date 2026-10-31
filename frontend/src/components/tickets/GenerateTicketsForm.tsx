@@ -55,6 +55,7 @@ const schema = z.object({
 });
 
 type FormData = z.infer<typeof schema>;
+type FormInput = z.input<typeof schema>;
 
 const QUICK_COUNTS = [50, 100, 250, 500, 1000, 2000, 5000];
 
@@ -86,13 +87,13 @@ export function GenerateTicketsForm({ eventId }: Props) {
     watch,
     setValue,
     formState: { errors },
-  } = useForm<FormData>({
+  } = useForm<FormInput, unknown, FormData>({
     resolver: zodResolver(schema),
     defaultValues: { mode: 'count', count: 100, holders: [] },
   });
 
   const mode = watch('mode');
-  const count = watch('count');
+  const count = Number(watch('count') ?? 0); // zod 4 types a coerced field's input as unknown
   const templateId = watch('templateId');
   const holders = watch('holders') ?? [];
   // Only rows with an actual name produce a ticket

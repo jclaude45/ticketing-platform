@@ -142,12 +142,12 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
 
     let destroyed = false; // guards the async callback
 
-    import('fabric').then(({ fabric }) => {
+    import('fabric').then((fabric) => {
       if (destroyed || !mountEl) return;
 
       // Dispose the previous Fabric instance (handles preset changes).
       if (fabricRef.current) {
-        try { fabricRef.current.dispose(); } catch {}
+        Promise.resolve(fabricRef.current.dispose()).catch(() => {});
         fabricRef.current = null;
       }
 
@@ -163,17 +163,16 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
       const canvasEl = document.createElement('canvas');
       mountEl.appendChild(canvasEl);
 
-      // Set global control appearance BEFORE creating the canvas
-      fabric.Object.prototype.cornerSize = 14;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (fabric.Object.prototype as any).touchCornerSize = 36;
-      fabric.Object.prototype.cornerColor = '#111111';
-      fabric.Object.prototype.cornerStrokeColor = '#ffffff';
-      fabric.Object.prototype.borderColor = '#111111';
-      fabric.Object.prototype.borderScaleFactor = 2;
-      fabric.Object.prototype.transparentCorners = false;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (fabric.Object.prototype as any).padding = 6;
+      // Set global control appearance BEFORE creating the canvas.
+      // Origin stays top-left as in Fabric 5 (7 defaults to center): saved designs, the
+      // placeholder bounds and the PDF export all assume left/top is the top-left corner.
+      Object.assign(fabric.FabricObject.ownDefaults, {
+        originX: 'left', originY: 'top',
+        cornerSize: 14, touchCornerSize: 36,
+        cornerColor: '#111111', cornerStrokeColor: '#ffffff',
+        borderColor: '#111111', borderScaleFactor: 2,
+        transparentCorners: false, padding: 6,
+      });
 
       // Canvas element is (page + 2×PAD) so handles at the page edge are
       // fully within the event-capture area of the upper canvas.
@@ -187,7 +186,7 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
       });
 
       // Pure translation: objects at (0,0)→(w,h) world appear at (PAD,PAD)→(w+PAD,h+PAD) screen.
-      // Translation does NOT break Fabric.js v5 drag or resize delta calculation.
+      // Translation does NOT break Fabric's drag or resize delta calculation.
       canvas.setViewportTransform([1, 0, 0, 1, PAD, PAD]);
 
       fabricRef.current = canvas;
@@ -198,15 +197,16 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
         fill: '#ffffff', selectable: false, evented: false, name: '__bg__',
       });
       canvas.add(bg);
-      canvas.sendToBack(bg);
+      canvas.sendObjectToBack(bg);
 
       if (initialData) {
-        canvas.loadFromJSON(initialData, () => {
+        canvas.loadFromJSON(initialData).then(() => {
+          if (destroyed) return;
           // Restore the white bg rect at the very bottom.
           // __bg__ is excluded from saved JSON so it must always be re-added here.
           const existing = canvas.getObjects().find((o: any) => o.name === '__bg__');
-          if (!existing) { canvas.add(bg); canvas.sendToBack(bg); }
-          else canvas.sendToBack(existing);
+          if (!existing) { canvas.add(bg); canvas.sendObjectToBack(bg); }
+          else canvas.sendObjectToBack(existing);
 
           // __bg-img__ is now saved in JSON and restored by loadFromJSON.
           // Re-apply non-selectable/non-evented guards (toJSON preserves them but be safe),
@@ -215,8 +215,8 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
           const bgImg = canvas.getObjects().find((o: any) => o.name === '__bg-img__');
           if (bgImg) {
             bgImg.set({ selectable: false, evented: false });
-            canvas.sendToBack(bgImg);          // bgImg at 0, __bg__ at 1
-            canvas.bringForward(bgImg);        // bgImg at 1, __bg__ at 0 ✓
+            canvas.sendObjectToBack(bgImg);    // bgImg at 0, __bg__ at 1
+            canvas.bringObjectForward(bgImg);  // bgImg at 1, __bg__ at 0 ✓
           }
 
           canvas.setViewportTransform([1, 0, 0, 1, PAD, PAD]);
@@ -268,13 +268,10 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
       // Dispose synchronously if canvas exists; if it doesn't yet (async not resolved),
       // the `destroyed` flag prevents it from being created at all.
       if (fabricRef.current) {
-        try {
-          fabricRef.current.dispose();
-        } catch {
-          // Fabric tries to removeChild on its wrapper element; when React has
-          // already unmounted the parent container the parent node may be null,
-          // which causes a "removeChild" DOMException — safe to swallow.
-        }
+        // Fabric tries to removeChild on its wrapper element; when React has
+        // already unmounted the parent container the parent node may be null,
+        // which causes a "removeChild" DOMException — safe to swallow.
+        Promise.resolve(fabricRef.current.dispose()).catch(() => {});
         fabricRef.current = null;
       }
       setReady(false);
@@ -286,7 +283,7 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
   const H = () => pageDims.current.h;
 
   const addText = useCallback(() => {
-    import('fabric').then(({ fabric }) => {
+    import('fabric').then((fabric) => {
       const t = new fabric.IText('Double-cliquez pour éditer', {
         left: Math.round(W() * 0.05), top: Math.round(H() * 0.3),
         fontFamily: 'Inter', fontSize: Math.round(W() * 0.025), fill: '#1a1a2e',
@@ -299,7 +296,7 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
   }, []);
 
   const addQR = useCallback(() => {
-    import('fabric').then(({ fabric }) => {
+    import('fabric').then((fabric) => {
       const s = Math.round(Math.min(W(), H()) * 0.55);
       // IMPORTANT: all children use originX/Y='center' and left=0, so their centers
       // align at the group center and nothing extends outside the s×s rect.
@@ -338,7 +335,7 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
   }, []);
 
   const addSerial = useCallback(() => {
-    import('fabric').then(({ fabric }) => {
+    import('fabric').then((fabric) => {
       const t = new fabric.IText('{{SERIAL}}', {
         left: Math.round(W() * 0.05), top: Math.round(H() * 0.75),
         fontFamily: 'Courier New', fontSize: Math.round(W() * 0.018), fill: '#1a1a2e', fontWeight: 'bold', name: 'serial-placeholder',
@@ -351,7 +348,7 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
   }, []);
 
   const addName = useCallback(() => {
-    import('fabric').then(({ fabric }) => {
+    import('fabric').then((fabric) => {
       const t = new fabric.IText('Prénom NOM', {
         left: Math.round(W() * 0.05), top: Math.round(H() * 0.45),
         fontFamily: 'Inter', fontSize: Math.round(W() * 0.03), fill: '#1a1a2e',
@@ -365,7 +362,7 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
   }, []);
 
   const addRect = useCallback(() => {
-    import('fabric').then(({ fabric }) => {
+    import('fabric').then((fabric) => {
       fabricRef.current?.add(new fabric.Rect({
         left: Math.round(W() * 0.1), top: Math.round(H() * 0.2),
         width: Math.round(W() * 0.3), height: Math.round(H() * 0.25),
@@ -389,16 +386,15 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
       const r = new FileReader();
       r.onload = (e) => {
         const url = e.target?.result as string;
-        import('fabric').then(({ fabric }) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          fabric.Image.fromURL(url, (img: any) => {
+        import('fabric').then((fabric) => {
+          fabric.FabricImage.fromURL(url, { crossOrigin: 'anonymous' }).then((img) => {
             // Scale to 55% of page width — keeps handles well within canvas bounds
             img.scaleToWidth(Math.round(W() * 0.55));
             img.set({ left: Math.round(W() * 0.05), top: Math.round(H() * 0.1) });
             fabricRef.current?.add(img);
             fabricRef.current?.setActiveObject(img);
             fabricRef.current?.renderAll();
-          }, { crossOrigin: 'anonymous' });
+          });
         });
       };
       r.readAsDataURL(file);
@@ -436,9 +432,8 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
         const url = cvs.toDataURL('image/jpeg', 0.85);
 
         const fabricCanvas = fabricRef.current; if (!fabricCanvas) return;
-        import('fabric').then(({ fabric }) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          fabric.Image.fromURL(url, (img: any) => {
+        import('fabric').then((fabric) => {
+          fabric.FabricImage.fromURL(url, { crossOrigin: 'anonymous' }).then((img) => {
             const old = fabricCanvas.getObjects().find((o: any) => o.name === '__bg-img__');
             if (old) fabricCanvas.remove(old);
             img.set({
@@ -448,11 +443,11 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
               selectable: false, evented: false, name: '__bg-img__',
             });
             fabricCanvas.add(img);
-            fabricCanvas.sendToBack(img);
+            fabricCanvas.sendObjectToBack(img);
             const bgRect = fabricCanvas.getObjects().find((o: any) => o.name === '__bg__');
-            if (bgRect) fabricCanvas.sendToBack(bgRect);
+            if (bgRect) fabricCanvas.sendObjectToBack(bgRect);
             fabricCanvas.renderAll();
-          }, { crossOrigin: 'anonymous' });
+          });
         });
       };
       tmpImg.src = objectUrl;
@@ -476,12 +471,12 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
     c.renderAll(); syncLayers();
   }, [syncLayers]);
 
-  const fwd = useCallback(() => { const o = fabricRef.current?.getActiveObject(); if (o) { fabricRef.current.bringForward(o); fabricRef.current.renderAll(); } }, []);
+  const fwd = useCallback(() => { const o = fabricRef.current?.getActiveObject(); if (o) { fabricRef.current.bringObjectForward(o); fabricRef.current.renderAll(); } }, []);
   const bwd = useCallback(() => {
     const c = fabricRef.current; const o = c?.getActiveObject(); if (!c || !o) return;
     const objs = c.getObjects();
     const minIdx = Math.max(...Array.from(SYS).map(n => objs.findIndex((x: any) => x.name === n)));
-    if (objs.indexOf(o) > minIdx + 1) { c.sendBackwards(o); c.renderAll(); }
+    if (objs.indexOf(o) > minIdx + 1) { c.sendObjectBackwards(o); c.renderAll(); }
   }, []);
 
   const applyProp = useCallback(<K extends keyof typeof props>(k: K, v: typeof props[K]) => {
@@ -513,23 +508,27 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
     // 1. Export canvas JSON.
     // __bg__ (white rect) is recreated from scratch on load — exclude it to avoid duplication.
     // __bg-img__ (background image) must be KEPT so it is restored by loadFromJSON.
-    const full = c.toJSON(['name']);
+    const full = c.toObject(['name']);
     const json = JSON.stringify({ ...full, objects: full.objects.filter((o: any) => o.name !== '__bg__') });
 
     // 2. Capture placeholder bounds in design space BEFORE touching the viewport.
-    //    Fabric.js 5.x: getBoundingRect(absolute=false) uses lineCoords which apply the
-    //    viewport transform, so lineCoords = aCoords + [PAD, PAD]. Subtracting PAD gives
-    //    the true design-space position. (absolute=true uses aCoords = design space already,
-    //    so subtracting PAD from it was a bug that caused a ~17pt horizontal offset in the PDF.)
+    //    getBoundingRect() works in the scene plane (viewport transform not applied),
+    //    so its left/top are already design-space: no PAD to subtract.
+    //    Fabric 5 measured these boxes with the selection padding included, and the PDF
+    //    placement is calibrated on that: the padding is added back so saved bounds stay
+    //    identical to those of templates designed before the upgrade.
+    const box = (obj: any) => {
+      const br = obj.getBoundingRect();
+      const p = obj.padding ?? 0;
+      return { left: br.left - p, top: br.top - p, width: br.width + 2 * p, height: br.height + 2 * p };
+    };
     const qrObj     = c.getObjects().find((o: any) => o.name === 'qr-placeholder') as any;
     const serialObj = c.getObjects().find((o: any) => o.name === 'serial-placeholder') as any;
     const nameObj   = c.getObjects().find((o: any) => o.name === 'name-placeholder') as any;
 
-    // getBounds for generic objects: absolute=false → lineCoords (viewport/screen space), subtract PAD → design space
     const getBounds = (obj: any) => {
       if (!obj) return undefined;
-      const br = obj.getBoundingRect(false, true); // calculate=true for fresh coords
-      return { left: br.left - PAD, top: br.top - PAD, width: br.width, height: br.height };
+      return box(obj);
     };
 
     // For the QR group specifically, use the inner Rect child bounds if the text labels
@@ -540,8 +539,8 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
       const innerRect = (group.getObjects?.() as any[])?.find((o: any) => o.type === 'rect');
       if (!innerRect) return getBounds(group);
 
-      // Group center in viewport/screen space
-      const gBr = group.getBoundingRect(false, true);
+      // Group center in design space
+      const gBr = box(group);
       const gcx = gBr.left + gBr.width / 2;
       const gcy = gBr.top  + gBr.height / 2;
       const gs  = group.scaleX ?? 1; // we enforce uniform scale
@@ -550,7 +549,7 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
       const rW = (innerRect.width  ?? 0) * (innerRect.scaleX ?? 1) * gs;
       const rH = (innerRect.height ?? 0) * (innerRect.scaleY ?? 1) * gs;
 
-      // innerRect.left/top in group local space → convert to viewport space
+      // innerRect.left/top in group local space → convert to design space
       // originX='center' (new design): center at (innerRect.left, innerRect.top)
       // originX='left'   (old design): left edge at (innerRect.left, innerRect.top)
       const isCenter = innerRect.originX === 'center';
@@ -561,15 +560,15 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
         ? gcy + (innerRect.top ?? 0) * gs - rH / 2
         : gcy + (innerRect.top ?? 0) * gs;
 
-      return { left: rLeft_vp - PAD, top: rTop_vp - PAD, width: rW, height: rH };
+      return { left: rLeft_vp, top: rTop_vp, width: rW, height: rH };
     };
 
     const getNameBounds = (obj: any) => {
       if (!obj) return undefined;
-      const br = obj.getBoundingRect(false, true);
+      const br = box(obj);
       return {
-        left:       br.left - PAD,
-        top:        br.top  - PAD,
+        left:       br.left,
+        top:        br.top,
         width:      Math.max(30, (obj.width  ?? 60) * (obj.scaleX ?? 1)),
         height:     (obj.height ?? 20) * (obj.scaleY ?? 1),
         fontSize:   (obj.fontSize   ?? 16) * (obj.scaleY ?? 1),
@@ -585,11 +584,11 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
     // placeholder, so store an enlarged width to prevent line wrapping in PDFKit.
     const getSerialBounds = (obj: any) => {
       if (!obj) return undefined;
-      const br = obj.getBoundingRect(false, true);
+      const br = box(obj);
       const textWidth  = Math.max(30, (obj.width  ?? 60) * (obj.scaleX ?? 1));
       return {
-        left:       br.left - PAD,
-        top:        br.top  - PAD,
+        left:       br.left,
+        top:        br.top,
         // Reserve 2.5× the placeholder width — real serial numbers are longer than "{{SERIAL}}"
         width:      textWidth * 2.5,
         height:     (obj.height ?? 20) * (obj.scaleY ?? 1),
@@ -675,7 +674,7 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
 
   const exportJSON = useCallback(() => {
     const c = fabricRef.current; if (!c) return;
-    const full = c.toJSON(['name']);
+    const full = c.toObject(['name']);
     const filtered = { ...full, objects: full.objects.filter((o: any) => !SYS.has(o.name ?? '')) };
     const blob = new Blob([JSON.stringify(filtered, null, 2)], { type: 'application/json' });
     const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `ticket-${eventId}.json` });
