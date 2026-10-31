@@ -13,7 +13,7 @@ import { createReadStream } from 'fs';
 import { mkdir, writeFile } from 'fs/promises';
 import { Readable } from 'stream';
 import * as path from 'path';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 
 export interface UploadResult {
   key: string;
@@ -215,7 +215,7 @@ export class StorageService {
 
   generateKey(originalName: string, folder?: string): string {
     const ext = path.extname(originalName);
-    const uniqueName = `${uuidv4()}${ext}`;
+    const uniqueName = `${randomUUID()}${ext}`;
     return folder ? `${folder}/${uniqueName}` : uniqueName;
   }
 
