@@ -24,6 +24,9 @@ jobs:
 
       - run: npm ci --ignore-scripts
 
+      # postinstall is skipped above: the client (Role, models) must be generated for the type checks
+      - run: npx prisma generate
+
       - name: Run unit tests with coverage
         run: npm run test:cov
 
