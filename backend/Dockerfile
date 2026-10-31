@@ -72,7 +72,11 @@ FROM node:20-alpine AS production
 
 WORKDIR /app
 
-RUN apk add --no-cache curl dumb-init openssl
+# The npm bundled with the base image ships a vulnerable tar (CVE-2026-59873);
+# npm stays in the image because the deploy runs `npx prisma migrate deploy` in it
+RUN apk add --no-cache curl dumb-init openssl && \
+    npm install -g npm@10.9.9 && \
+    npm cache clean --force
 
 COPY package*.json ./
 COPY prisma ./prisma/

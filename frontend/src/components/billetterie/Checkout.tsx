@@ -267,7 +267,7 @@ export function Checkout({
   const finish = (r: PurchaseResult) => { setResult(r); setStep('application'); onDone(); };
 
   const mutation = useMutation({
-    mutationFn: () => {
+    mutationFn: (): Promise<{ data: unknown }> => {
       const holder = { holderName: name.trim(), holderEmail: email.trim(), holderPhone: normalizeDrcPhone(phone)! };
       if (!isPaid) return publicApi.purchaseTicket(event.id, { ...holder, items });
       return publicApi.initiatePayment(event.id, {
