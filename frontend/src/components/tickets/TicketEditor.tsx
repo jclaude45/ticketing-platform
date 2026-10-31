@@ -29,6 +29,8 @@ interface TemplateMetaInput {
 interface TicketEditorProps {
   eventId: string;
   initialData?: string;
+  /** Size the template was designed at and its export preset (customFields of a saved template) */
+  initialDesign?: { width?: number; height?: number; presetWidth?: number; presetHeight?: number };
   templateId?: string;
   initialMeta?: TemplateMetaInput;
   onSaved?: (templateId: string) => void;
@@ -51,16 +53,26 @@ const FONTS = ['Inter', 'Arial', 'Georgia', 'Courier New', 'Times New Roman', 'V
 const SIZES = [6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 64, 72, 96];
 
 // Padding so handles at object edges are never clipped by the canvas boundary.
-// A pure-translation viewport transform does NOT break Fabric.js v5 drag deltas.
 const PAD = 32;
 const SYS = new Set(['__bg__', '__bg-img__']);
 
-function pageSize(containerW: number, preset: Preset) {
-  const w = Math.min(Math.max(300, containerW - 56), preset.width);
+// The design has a fixed size, whatever the screen: objects keep their place on the page
+// and the saved bounds stay the same on any computer. The canvas is only zoomed to fit.
+// A saved template keeps the size it was designed at.
+const DESIGN_W = 1200;
+function designSize(preset: Preset, saved?: { width?: number; height?: number }) {
+  if (saved?.width && saved?.height) return { w: saved.width, h: saved.height };
+  const w = Math.min(DESIGN_W, preset.width);
   return { w, h: Math.round(w * preset.height / preset.width) };
 }
 
-export function TicketEditor({ eventId, initialData, templateId, initialMeta, onSaved }: TicketEditorProps) {
+// Zoom that fits the page in the editing area: p-6 padding on both sides (48), PAD margins,
+// and a few pixels for rounding and the wrapper border so no horizontal scrollbar appears
+function fitZoom(areaW: number, designW: number) {
+  return Math.min(1, Math.max(0.2, (areaW - 56 - PAD * 2) / designW));
+}
+
+export function TicketEditor({ eventId, initialData, initialDesign, templateId, initialMeta, onSaved }: TicketEditorProps) {
   // canvasMountRef points to an empty <div> that Fabric mounts into imperatively.
   // We intentionally do NOT render <canvas> via JSX: Fabric wraps the canvas element
   // inside its own <div class="canvas-container">, which moves the node out of its
@@ -71,6 +83,14 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fabricRef = useRef<any>(null);
   const pageDims = useRef({ w: 900, h: 335 });
+  const zoomRef = useRef(1);
+  // Canvas element size: the page at the current zoom plus the PAD margins
+  const displaySize = () => ({
+    width: Math.round(pageDims.current.w * zoomRef.current) + PAD * 2,
+    height: Math.round(pageDims.current.h * zoomRef.current) + PAD * 2,
+  });
+  const displayTransform = (): [number, number, number, number, number, number] =>
+    [zoomRef.current, 0, 0, zoomRef.current, PAD, PAD];
 
   const [ready, setReady] = useState(false);
   const [tool, setTool] = useState<ToolType>('select');
@@ -78,7 +98,11 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
   const [sel, setSel] = useState<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [layers, setLayers] = useState<any[]>([]);
-  const [preset, setPreset] = useState(PRESETS[0]);
+  // The preset the template was saved with (it used to reopen on the first one)
+  const [initialPreset] = useState(() => PRESETS.find(
+    p => p.width === initialDesign?.presetWidth && p.height === initialDesign?.presetHeight,
+  ) ?? PRESETS[0]);
+  const [preset, setPreset] = useState(initialPreset);
   const [showL, setShowL] = useState(true);
   const [showP, setShowP] = useState(true);
 
@@ -136,9 +160,9 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
     const mountEl = canvasMountRef.current;
     if (!mountEl) return;
 
-    const cw = areaRef.current?.clientWidth ?? 900;
-    const { w, h } = pageSize(cw, preset);
+    const { w, h } = designSize(preset, preset === initialPreset ? initialDesign : undefined);
     pageDims.current = { w, h };
+    zoomRef.current = fitZoom(areaRef.current?.clientWidth ?? 900, w);
 
     let destroyed = false; // guards the async callback
 
@@ -178,16 +202,14 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
       // fully within the event-capture area of the upper canvas.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const canvas: any = new fabric.Canvas(canvasEl, {
-        width: w + PAD * 2,
-        height: h + PAD * 2,
+        ...displaySize(),
         backgroundColor: '#d1d5db',
         selection: true,
         preserveObjectStacking: true,
       });
 
-      // Pure translation: objects at (0,0)→(w,h) world appear at (PAD,PAD)→(w+PAD,h+PAD) screen.
-      // Translation does NOT break Fabric's drag or resize delta calculation.
-      canvas.setViewportTransform([1, 0, 0, 1, PAD, PAD]);
+      // Zoom + translation: objects at (0,0)→(w,h) world appear at (PAD,PAD)→(w·z+PAD,h·z+PAD) screen.
+      canvas.setViewportTransform(displayTransform());
 
       fabricRef.current = canvas;
 
@@ -219,7 +241,7 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
             canvas.bringObjectForward(bgImg);  // bgImg at 1, __bg__ at 0 ✓
           }
 
-          canvas.setViewportTransform([1, 0, 0, 1, PAD, PAD]);
+          canvas.setViewportTransform(displayTransform());
 
           // Normalize QR placeholder to always be square.
           // If the user previously resized it non-uniformly, snap it back to
@@ -278,6 +300,25 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preset]);
+
+  // Window resized, side panels opened or closed: the zoom follows the editing area.
+  // Only the view changes: the design and its saved coordinates stay as they are.
+  useEffect(() => {
+    const area = areaRef.current;
+    if (!area || !ready) return;
+    const ro = new ResizeObserver(() => {
+      const c = fabricRef.current; if (!c) return;
+      const z = fitZoom(area.clientWidth, pageDims.current.w);
+      if (Math.abs(z - zoomRef.current) < 0.005) return;
+      zoomRef.current = z;
+      c.setDimensions(displaySize());
+      c.setViewportTransform(displayTransform());
+      c.requestRenderAll();
+    });
+    ro.observe(area);
+    return () => ro.disconnect();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready]);
 
   const W = () => pageDims.current.w;
   const H = () => pageDims.current.h;
@@ -623,7 +664,7 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
     if (qrObj)     qrObj.set('visible', true);
     if (serialObj) serialObj.set('visible', true);
     if (nameObj)   nameObj.set('visible', true);
-    c.setDimensions({ width: w + PAD * 2, height: h + PAD * 2 });
+    c.setDimensions(displaySize());
     c.setViewportTransform(vpt as any);
     c.renderAll();
 
@@ -664,7 +705,7 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
     c.setDimensions({ width: w, height: h });
     c.renderAll();
     const url = c.toDataURL({ format: 'png', multiplier: preset.width / w });
-    c.setDimensions({ width: w + PAD * 2, height: h + PAD * 2 });
+    c.setDimensions(displaySize());
     c.setViewportTransform(vpt);
     c.renderAll();
     const a = document.createElement('a');
@@ -762,8 +803,8 @@ export function TicketEditor({ eventId, initialData, templateId, initialMeta, on
         </AnimatePresence>
 
         {/* Canvas */}
-        <div ref={areaRef} className="flex-1 overflow-auto flex items-start justify-center p-6 bg-gray-100 dark:bg-gray-950">
-          <div className="relative rounded-sm shadow-2xl">
+        <div ref={areaRef} className="flex-1 overflow-auto flex items-start p-6 bg-gray-100 dark:bg-gray-950">
+          <div className="relative mx-auto rounded-sm shadow-2xl">
             {!ready && (
               <div className="absolute inset-0 z-10 flex items-center justify-center bg-white rounded-sm" style={{ minWidth: 200, minHeight: 80 }}>
                 <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
