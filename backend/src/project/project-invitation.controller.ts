@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Param, Body } from '@nestjs/common';
 import { ProjectService } from './project.service';
-import { AcceptInvitationDto } from './dto/project.dto';
+import { AcceptProjectInvitationDto } from './dto/project.dto';
 
 @Controller('project/invitations')
 export class ProjectInvitationController {
@@ -14,7 +14,7 @@ export class ProjectInvitationController {
   @Post(':token/accept')
   acceptInvitation(
     @Param('token') token: string,
-    @Body() dto: AcceptInvitationDto,
+    @Body() dto: AcceptProjectInvitationDto,
   ) {
     return this.projectService.acceptInvitation(token, dto);
   }

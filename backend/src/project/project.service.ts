@@ -22,7 +22,7 @@ import {
   CreateExpenseDto,
   UpdateExpenseDto,
   InviteMemberDto,
-  AcceptInvitationDto,
+  AcceptProjectInvitationDto,
 } from './dto/project.dto';
 
 // Budget alerts: a line is "WARNING" from 80% of its planned amount, "OVER" above 100%
@@ -772,7 +772,7 @@ export class ProjectService {
     return inv;
   }
 
-  async acceptInvitation(token: string, dto: AcceptInvitationDto) {
+  async acceptInvitation(token: string, dto: AcceptProjectInvitationDto) {
     const inv = await this.prisma.projectInvitation.findUnique({
       where: { token },
       include: { event: true },

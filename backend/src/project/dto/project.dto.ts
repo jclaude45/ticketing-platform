@@ -69,6 +69,6 @@ export class InviteMemberDto {
   @IsOptional() @IsIn(['MANAGER', 'CONTRIBUTOR']) projectRole?: string;
 }
 
-export class AcceptInvitationDto {
+export class AcceptProjectInvitationDto {
   @IsString() @MinLength(8) password: string;
 }

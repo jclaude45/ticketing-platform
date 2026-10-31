@@ -1,4 +1,3 @@
-version: '3.9'
 
 # DÉVELOPPEMENT UNIQUEMENT — NE PAS UTILISER EN PRODUCTION.
 # Les valeurs par défaut (ticketing_secret, redis_secret, etc.) sont volontairement

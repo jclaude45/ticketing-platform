@@ -102,7 +102,10 @@
   },
   "overrides": {
     "multer": "$multer",
-    "uuid": "^11.1.1"
+    "uuid": "^11.1.1",
+    "@nestjs/swagger": {
+      "js-yaml": "^5.5.0"
+    }
   },
   "jest": {
     "moduleFileExtensions": [
