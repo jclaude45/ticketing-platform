@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
-import { JwtModule } from '@nestjs/jwt';
+import { JwtModule, JwtSignOptions } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { StorageModule } from '../storage/storage.module';
 
@@ -13,7 +13,7 @@ import { StorageModule } from '../storage/storage.module';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         secret: configService.get<string>('jwt.secret'),
-        signOptions: { expiresIn: configService.get<string>('jwt.expiresIn') },
+        signOptions: { expiresIn: configService.get<JwtSignOptions['expiresIn']>('jwt.expiresIn') },
       }),
     }),
   ],

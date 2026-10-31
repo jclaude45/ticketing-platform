@@ -8,7 +8,7 @@ import {
   ForbiddenException,
   Logger,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
@@ -580,7 +580,7 @@ export class AuthService {
         { sub: userId, email, role, type: 'access', ...session },
         {
           secret: this.configService.get<string>('jwt.secret'),
-          expiresIn: this.configService.get<string>('jwt.expiresIn'),
+          expiresIn: this.configService.get<JwtSignOptions['expiresIn']>('jwt.expiresIn'),
         },
       ),
       this.jwtService.signAsync(
@@ -588,7 +588,7 @@ export class AuthService {
         { sub: userId, email, role, type: 'refresh', jti: crypto.randomUUID(), ...session },
         {
           secret: this.configService.get<string>('jwt.refreshSecret'),
-          expiresIn: this.configService.get<string>('jwt.refreshExpiresIn'),
+          expiresIn: this.configService.get<JwtSignOptions['expiresIn']>('jwt.refreshExpiresIn'),
         },
       ),
     ]);

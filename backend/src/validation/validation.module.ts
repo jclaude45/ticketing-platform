@@ -4,7 +4,7 @@ import { ValidationService } from './validation.service';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { QrcodeModule } from '../qrcode/qrcode.module';
 import { NotificationsModule } from '../notifications/notifications.module';
-import { JwtModule } from '@nestjs/jwt';
+import { JwtModule, JwtSignOptions } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
 @Module({
@@ -17,7 +17,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         secret: configService.get<string>('jwt.secret'),
-        signOptions: { expiresIn: configService.get<string>('jwt.expiresIn') },
+        signOptions: { expiresIn: configService.get<JwtSignOptions['expiresIn']>('jwt.expiresIn') },
       }),
     }),
   ],
