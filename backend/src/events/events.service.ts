@@ -4,7 +4,9 @@ import {
   ForbiddenException,
   BadRequestException,
   Logger,
+  OnApplicationBootstrap,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { SubscriptionService } from '../subscription/subscription.service';
@@ -23,7 +25,7 @@ function cleanPerformers(names?: string[]): string[] {
 }
 
 @Injectable()
-export class EventsService {
+export class EventsService implements OnApplicationBootstrap {
   private readonly logger = new Logger(EventsService.name);
 
   constructor(
@@ -34,11 +36,47 @@ export class EventsService {
     private readonly storage: StorageService,
   ) {}
 
+  /**
+   * The web form sends the poster inline (data:image/jpeg;base64,…). Kept in the row,
+   * it was sent with every event list and repeated in every page's HTML (6 MB for the
+   * ticketing page): it is saved as a file and the row keeps its URL.
+   */
+  private async storeBanner(url: string | undefined): Promise<string | undefined> {
+    if (!url?.startsWith('data:')) return url;
+    const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=\s]+)$/.exec(url);
+    if (!m) throw new BadRequestException('Affiche : image JPEG, PNG ou WebP attendue');
+    const buffer = Buffer.from(m[2], 'base64');
+    this.storage.validateFileSize(buffer.length, 5 * 1024 * 1024);
+    const ext = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' }[m[1]];
+    const stored = await this.storage.uploadBuffer(buffer, `${randomUUID()}${ext}`, m[1], 'banners');
+    return stored.url;
+  }
+
+  /** Posters saved inline before storeBanner existed are moved to files once */
+  async onApplicationBootstrap() {
+    try {
+      const inline = await this.prisma.event.findMany({
+        where: { bannerUrl: { startsWith: 'data:' } },
+        select: { id: true, bannerUrl: true, organizerId: true },
+      });
+      for (const e of inline) {
+        const bannerUrl = await this.storeBanner(e.bannerUrl!);
+        await this.prisma.event.update({ where: { id: e.id }, data: { bannerUrl } });
+        await this.redisService.cacheDelete(`event:${e.id}`);
+        await this.redisService.cacheDeletePattern(`events:${e.organizerId}:*`);
+      }
+      if (inline.length) this.logger.log(`${inline.length} inline poster(s) moved to files`);
+    } catch (err) {
+      this.logger.error(`Moving inline posters failed: ${(err as Error).message}`);
+    }
+  }
+
   async create(organizerId: string, dto: CreateEventDto) {
     if (new Date(dto.endDate) <= new Date(dto.startDate)) {
       throw new BadRequestException('End date must be after start date');
     }
     await this.subscriptionService.checkEventCreation(organizerId);
+    const bannerUrl = await this.storeBanner(dto.bannerUrl);
 
     const event = await this.prisma.event.create({
       data: {
@@ -58,7 +96,7 @@ export class EventsService {
         ...(dto.type && { type: dto.type }),
         ...(dto.currency && { currency: dto.currency }),
         ...(dto.feePayer && { feePayer: dto.feePayer }),
-        bannerUrl: dto.bannerUrl,
+        bannerUrl,
         organizerId,
       },
       include: {
@@ -181,6 +219,7 @@ export class EventsService {
     if (dto.startDate && dto.endDate && new Date(dto.endDate) <= new Date(dto.startDate)) {
       throw new BadRequestException('End date must be after start date');
     }
+    const bannerUrl = await this.storeBanner(dto.bannerUrl);
 
     const updated = await this.prisma.event.update({
       where: { id },
@@ -199,7 +238,7 @@ export class EventsService {
         ...(dto.type && { type: dto.type }),
         ...(dto.currency && { currency: dto.currency }),
         ...(dto.feePayer && { feePayer: dto.feePayer }),
-        ...(dto.bannerUrl !== undefined && { bannerUrl: dto.bannerUrl }),
+        ...(bannerUrl !== undefined && { bannerUrl }),
       },
       include: {
         organizer: {
