@@ -10,6 +10,7 @@ import {
 import { publicApi, resolveMediaUrl } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { normalizeDrcPhone, formatDrcPhone } from '@/lib/phone';
+import { suggestMailDomain } from '@/lib/mail-domain';
 import { TicketVisual, ExportPDFButton, type TicketData } from './TicketCard';
 import { ProductCard, CartSummary, cartLines, money, variantLabel, type Cart, type ShopCatalog } from './Shop';
 import { StoreButtons } from '@/components/site/StoreButtons';
@@ -257,6 +258,7 @@ export function Checkout({
   const hasProducts = (catalog?.products.length ?? 0) > 0;
 
   const phoneOk = !!normalizeDrcPhone(phone);
+  const emailSuggestion = /\S+@\S+\.\S+/.test(email.trim()) ? suggestMailDomain(email.trim()) : null;
   const contactOk = name.trim().length >= 2 && /\S+@\S+\.\S+/.test(email.trim()) && phoneOk;
   const deliveryOk = merchCount === 0 || fulfillment === 'PICKUP' || (deliveryAddress.trim().length > 3 && deliveryCity.trim().length > 1);
   const methodOk = !isPaid || method !== null;
@@ -443,7 +445,15 @@ export function Checkout({
 
                 <div className="space-y-5">
                   <input value={name} onChange={e => setName(e.target.value)} placeholder="Nom complet" autoComplete="name" maxLength={100} className={underline} />
-                  <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email (pour recevoir vos billets)" autoComplete="email" maxLength={160} className={underline} />
+                  <div>
+                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email (pour recevoir vos billets)" autoComplete="email" maxLength={160} className={underline} />
+                    {emailSuggestion && (
+                      <p className="mt-1.5 text-xs text-[#707070]">
+                        Vouliez-vous dire{' '}
+                        <button type="button" onClick={() => setEmail(emailSuggestion)} className="font-semibold text-black underline">{emailSuggestion}</button> ?
+                      </p>
+                    )}
+                  </div>
                   <div>
                     <input type="tel" inputMode="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="Téléphone (089…, +24389… ou 89…)" autoComplete="tel" maxLength={30} aria-invalid={!!phone.trim() && !phoneOk} className={underline} />
                     {phone.trim() && !phoneOk && <p className="mt-1.5 text-xs text-red-600">Numéro invalide : 089…, +24389… ou 89…</p>}

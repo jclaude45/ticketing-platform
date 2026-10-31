@@ -14,6 +14,7 @@ import { OrganizerAlertsService } from '../notifications/organizer-alerts.servic
 import { tariffLabel } from '../tickets/event-days';
 import { buyerUnitPrice, flexPayAmount, roundMoney, ticketFeeSplit } from '../billing/pricing';
 import { normalizeDrcPhone } from '../common/phone';
+import { assertMailDomain } from '../common/email/mail-domain';
 
 export type PaymentMethod = 'mobile_money' | 'card';
 
@@ -56,6 +57,7 @@ export class PaymentService {
     const holderPhone = normalizeDrcPhone(dto.holderPhone);
     if (!holderPhone) throw new BadRequestException('Numéro de téléphone invalide : utilisez 089…, +24389… ou 89…');
     dto = { ...dto, holderPhone };
+    await assertMailDomain(dto.holderEmail);
 
     // ── Tickets ──
     const templateIds = ticketItems.map(i => i.templateId);

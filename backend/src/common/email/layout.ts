@@ -121,7 +121,7 @@ export function emailLayout(o: EmailLayoutOptions): string {
   <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden;">
     <tr><td bgcolor="${C.yellow}" style="height:6px;font-size:0;line-height:0;">&nbsp;</td></tr>
     <tr><td style="padding:26px 36px 8px;">
-      <a href="${SITE}" style="text-decoration:none;"><img src="${LOGO}" width="104" height="32" alt="ZAYA" style="display:block;border:0;width:104px;height:32px;"/></a>
+      <img src="${LOGO}" width="104" height="32" alt="ZAYA" style="display:block;border:0;width:104px;height:32px;"/>
     </td></tr>
     ${o.banner ? `<tr><td style="padding:18px 36px 0;"><img src="${esc(o.banner.src)}" width="488" alt="${esc(o.banner.alt)}" style="display:block;width:100%;max-width:488px;height:auto;border:0;border-radius:12px;"/></td></tr>` : ''}
     <tr><td style="padding:24px 36px 12px;">
@@ -132,9 +132,9 @@ export function emailLayout(o: EmailLayoutOptions): string {
     <tr><td style="padding:18px 36px 28px;border-top:1px solid ${C.line};">
       ${o.reason ? `<p style="margin:0 0 8px;font-family:${FONT};font-size:12px;line-height:1.5;color:${C.muted};">${o.reason}</p>` : ''}
       <p style="margin:0;font-family:${FONT};font-size:12px;line-height:1.5;color:${C.muted};">
-        <a href="${SITE}" style="color:${C.black};font-weight:bold;text-decoration:none;">ZAYA</a> — billetterie et contrôle d'accès<br/>
+        <strong style="color:${C.black};">ZAYA</strong> — billetterie et contrôle d'accès<br/>
         BACK2NEXT · RCCM CD/KNG/RCCM/26-B-03430 · Kinshasa, RDC<br/>
-        <a href="${SITE}/politique-de-confidentialite" style="color:${C.muted};">Confidentialité</a> · <a href="${SITE}/cgv" style="color:${C.muted};">Conditions de vente</a> · contact@zaya.live
+        Confidentialité et conditions de vente sur notre site · contact@zaya.live
       </p>
     </td></tr>
   </table>

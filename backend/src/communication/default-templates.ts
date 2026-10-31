@@ -58,7 +58,7 @@ const footer = () => `
       <td class="pad" style="border-top:1px solid #e6e6e6;padding:18px 32px 26px;">
         <p style="margin:0;color:#6b6b6b;font-family:${FONT};font-size:12px;line-height:1.6;">
           Vous recevez cet e-mail car vous êtes inscrit(e) à cet événement. Pour ne plus en recevoir, répondez à ce message.<br/>
-          Envoyé avec <a href="https://zaya.live" style="color:#111111;font-weight:bold;text-decoration:none;">ZAYA</a> — BACK2NEXT, Kinshasa
+          Envoyé avec <strong style="color:#111111;">ZAYA</strong> — BACK2NEXT, Kinshasa
         </p>
       </td>
     </tr>

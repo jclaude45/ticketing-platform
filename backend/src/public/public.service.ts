@@ -1,4 +1,6 @@
 import { button, details, emailLayout, emailText, esc, note, p, quote } from '../common/email/layout';
+import { ticketCalendar } from '../common/email/ics';
+import { assertMailDomain } from '../common/email/mail-domain';
 import { buyerUnitPrice } from '../billing/pricing';
 import { formatDrcPhone, normalizeDrcPhone } from '../common/phone';
 import {
@@ -234,6 +236,7 @@ export class PublicService {
     if (event.status !== 'PUBLISHED') throw new BadRequestException('Cet événement n\'accepte plus d\'inscriptions');
     const holderPhone = normalizeDrcPhone(dto.holderPhone);
     if (!holderPhone) throw new BadRequestException('Numéro de téléphone invalide : utilisez 089…, +24389… ou 89…');
+    await assertMailDomain(dto.holderEmail);
 
     // Load and validate all requested templates in one query
     const templateIds = dto.items.map(i => i.templateId);
@@ -516,21 +519,20 @@ export class PublicService {
     const outlookCalUrl = `https://outlook.live.com/calendar/0/deeplink/compose?subject=${calTitle}&startdt=${startDate.toISOString()}&enddt=${eventEnd.toISOString()}&location=${calLocation}`;
 
     // ICS attachment (Apple Calendar)
-    const icsContent = [
-      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//ZAYA//Ticketing//FR',
-      'BEGIN:VEVENT',
-      `UID:${event.id}-${holder.holderEmail}@zaya.live`,
-      `DTSTART:${calStart}`, `DTEND:${calEnd}`,
-      `SUMMARY:${event.name}`,
-      `LOCATION:${event.venue}\\, ${event.city}`,
-      `DESCRIPTION:Billet ZAYA pour ${holder.holderName}`,
-      'END:VEVENT', 'END:VCALENDAR',
-    ].join('\r\n');
+    const icsContent = ticketCalendar({
+      eventId: event.id,
+      holderEmail: holder.holderEmail,
+      start: startDate,
+      end: eventEnd,
+      title: event.name,
+      location: `${event.venue}, ${event.city}`,
+      description: `Billet ZAYA pour ${holder.holderName}`,
+    });
 
     // The QR code lives only in the PDF, drawn as vector shapes (no embedded PNG),
     // which keeps each attachment around 15-20KB and the email under Gmail's clip threshold.
     const attachments: { filename: string; content: Buffer | string; cid?: string; contentType?: string }[] = [];
-    attachments.push({ filename: 'evenement.ics', content: icsContent, contentType: 'text/calendar; method=REQUEST; charset=UTF-8' });
+    attachments.push({ filename: 'evenement.ics', content: icsContent, contentType: 'text/calendar; method=PUBLISH; charset=UTF-8' });
     if (bannerAttachment) attachments.push(bannerAttachment);
 
     for (const t of tickets) {
