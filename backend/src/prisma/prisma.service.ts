@@ -7,8 +7,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
   constructor() {
     super({
+      // Every SQL query in the production logs (~300 an hour) buried the real errors
       log: [
-        { emit: 'stdout', level: 'query' },
+        ...(process.env.NODE_ENV === 'production' ? [] : [{ emit: 'stdout' as const, level: 'query' as const }]),
         { emit: 'stdout', level: 'info' },
         { emit: 'stdout', level: 'warn' },
         { emit: 'stdout', level: 'error' },

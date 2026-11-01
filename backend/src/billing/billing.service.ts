@@ -1,11 +1,11 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { SubscriptionService } from '../subscription/subscription.service';
 import { FlexPayClient } from './flexpay.client';
 import { PRINT_UNIT_PRICES, PrintKind, flexPayAmount } from './pricing';
 import { receiptPdf } from './billing-pdf';
+import { flexPayReference } from '../common/flexpay-reference';
 import { normalizeDrcPhone } from '../common/phone';
 
 export interface PayInput {
@@ -76,7 +76,7 @@ export class BillingService {
       if (!phone) throw new BadRequestException('Numéro Mobile Money invalide : utilisez 089…, +24389… ou 89…');
       pay = { ...pay, phone };
     }
-    const reference = `ZAYAB-${crypto.randomBytes(12).toString('hex').toUpperCase()}`;
+    const reference = flexPayReference('ZAYAB-');
     const currency = 'USD';
     const payment = await this.prisma.billingPayment.create({
       data: {

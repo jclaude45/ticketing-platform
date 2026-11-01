@@ -6,7 +6,6 @@ import { TicketGenerationService } from '../tickets/ticket-generation.service';
 import { PublicService } from '../public/public.service';
 import { Payment, Role } from '@prisma/client';
 import axios from 'axios';
-import * as crypto from 'crypto';
 
 import { InitiatePaymentDto } from './dto/initiate-payment.dto';
 import { ShopService } from '../shop/shop.service';
@@ -14,6 +13,7 @@ import { OrganizerAlertsService } from '../notifications/organizer-alerts.servic
 import { tariffLabel } from '../tickets/event-days';
 import { buyerUnitPrice, flexPayAmount, roundMoney, ticketFeeSplit } from '../billing/pricing';
 import { normalizeDrcPhone } from '../common/phone';
+import { flexPayReference } from '../common/flexpay-reference';
 import { assertMailDomain } from '../common/email/mail-domain';
 
 export type PaymentMethod = 'mobile_money' | 'card';
@@ -118,7 +118,7 @@ export class PaymentService {
       .reduce((n, item) => n + item.quantity, 0);
     await this.publicService.reserveFreeTickets({ email: dto.holderEmail, phone: holderPhone, ip }, freeCount);
 
-    const reference = `ZAYA-${crypto.randomBytes(16).toString('hex').toUpperCase()}`;
+    const reference = flexPayReference('ZAYA-');
     const apiBase = this.config.get<string>('frontend.publicUrl') || 'https://zaya.live';
     const apiBackend = this.config.get<string>('BACKEND_URL') || 'https://api.zaya.live';
 
