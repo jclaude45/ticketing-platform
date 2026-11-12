@@ -38,4 +38,11 @@ export class RegisterDto {
   @IsString()
   @MaxLength(200)
   pow?: string;
+
+  /** Cloudflare Turnstile token (see TurnstileService) */
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(2048)
+  captcha?: string;
 }

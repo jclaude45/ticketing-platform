@@ -6,6 +6,7 @@ import { CheckCircle2, Loader2, MailCheck, XCircle } from 'lucide-react';
 import { useResendVerification } from '@/hooks/useAuth';
 import { authApi } from '@/lib/api';
 import { prepareProof } from '@/lib/proof-of-work';
+import { Captcha } from '@/components/auth/Captcha';
 import { AuthShell, authButton } from '@/components/site/AuthShell';
 
 function VerifyEmailContent() {
@@ -65,6 +66,7 @@ function VerifyEmailContent() {
       <div className="space-y-6">
         <MailCheck className="h-12 w-12 text-black" strokeWidth={1.5} />
         <p className="text-[#555]">Vous ne l&apos;avez pas reçu ? Regardez dans vos courriers indésirables, ou renvoyez-le.</p>
+        <Captcha />
         <button
           type="button"
           onClick={() => address && resend(address)}

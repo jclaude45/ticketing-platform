@@ -84,6 +84,7 @@ services:
       CONTACT_EMAIL: ${CONTACT_EMAIL:-}
       # Organizer app push notifications (Firebase service account JSON, base64); empty = no push
       FIREBASE_SERVICE_ACCOUNT_BASE64: ${FIREBASE_SERVICE_ACCOUNT_BASE64:-}
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       AWS_REGION: ${AWS_REGION}
@@ -135,6 +136,7 @@ services:
         NEXT_PUBLIC_SOCKET_URL: ${NEXT_PUBLIC_SOCKET_URL:-https://app.zaya.live}
         NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://app.zaya.live}
         NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-TicketPlatform}
+        NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${NEXT_PUBLIC_TURNSTILE_SITE_KEY:-}
     restart: always
     ports: !override ["127.0.0.1:3000:3000"]  # Only expose through Nginx; localhost kept for deploy health checks
     environment:

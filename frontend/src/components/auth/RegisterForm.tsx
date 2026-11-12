@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { prepareProof } from '@/lib/proof-of-work';
+import { Captcha } from '@/components/auth/Captcha';
 import { useForm } from 'react-hook-form';
 import { authField, authButton } from '@/components/site/AuthShell';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -183,6 +184,8 @@ export function RegisterForm() {
         </span>
       </label>
       {errors.acceptTerms && <p className="-mt-2 text-sm text-red-600">{errors.acceptTerms.message}</p>}
+
+      <Captcha className="mt-2" />
 
       <button
         type="submit"

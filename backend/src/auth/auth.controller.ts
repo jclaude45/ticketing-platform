@@ -20,6 +20,8 @@ import { AuthGuard } from '@nestjs/passport';
 import { Response as ExpressResponse } from 'express';
 import { AuthService } from './auth.service';
 import { ProofOfWorkService } from './proof-of-work.service';
+import { TurnstileService } from './turnstile.service';
+import { clientIp } from '../common/client-ip';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
@@ -47,6 +49,7 @@ export class AuthController {
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
     private readonly pow: ProofOfWorkService,
+    private readonly turnstile: TurnstileService,
   ) {}
 
   private setRefreshCookie(res: ExpressResponse, token: string, accountId: string) {
@@ -108,8 +111,9 @@ export class AuthController {
   @ApiOperation({ summary: 'Register a new organizer account' })
   @ApiResponse({ status: 201, description: 'User registered successfully' })
   @ApiResponse({ status: 409, description: 'Email already in use' })
-  async register(@Body() dto: RegisterDto) {
+  async register(@Body() dto: RegisterDto, @Request() req: any) {
     await this.pow.verify(dto.pow);
+    await this.turnstile.verify(dto.captcha, clientIp(req));
     return this.authService.register(dto);
   }
 
@@ -253,8 +257,9 @@ export class AuthController {
   @Throttle({ default: { limit: 3, ttl: 60000 } })
   @ApiOperation({ summary: 'Resend email verification link' })
   @ApiResponse({ status: 200, description: 'Verification email sent if account exists and is unverified' })
-  async resendVerification(@Body() dto: ResendVerificationDto) {
+  async resendVerification(@Body() dto: ResendVerificationDto, @Request() req: any) {
     await this.pow.verify(dto.pow);
+    await this.turnstile.verify(dto.captcha, clientIp(req));
     return this.authService.resendVerification(dto.email);
   }
 
@@ -264,8 +269,9 @@ export class AuthController {
   @Throttle({ default: { limit: 3, ttl: 60000 } })
   @ApiOperation({ summary: 'Request password reset email' })
   @ApiResponse({ status: 200, description: 'Password reset email sent if account exists' })
-  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+  async forgotPassword(@Body() dto: ForgotPasswordDto, @Request() req: any) {
     await this.pow.verify(dto.pow);
+    await this.turnstile.verify(dto.captcha, clientIp(req));
     return this.authService.forgotPassword(dto.email);
   }
 

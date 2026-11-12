@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { prepareProof } from '@/lib/proof-of-work';
+import { Captcha } from '@/components/auth/Captcha';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { motion } from 'framer-motion';
@@ -58,6 +59,8 @@ export function ForgotPasswordForm() {
         <input {...register('email')} type="email" autoComplete="email" placeholder="vous@exemple.com" className={authField} />
         {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>}
       </div>
+
+      <Captcha className="mt-2" />
 
       <button type="submit" disabled={forgotPassword.isPending} className={`${authButton} mt-4`}>
         {forgotPassword.isPending ? <><Loader2 className="h-4 w-4 animate-spin" />Envoi en cours...</> : 'Envoyer le lien'}

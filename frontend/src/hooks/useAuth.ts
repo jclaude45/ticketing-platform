@@ -90,8 +90,8 @@ export function useResendVerification() {
     onSuccess: () => {
       toast.success('Email de vérification renvoyé !');
     },
-    onError: () => {
-      toast.error('Impossible d\'envoyer l\'email. Réessaie dans quelques instants.');
+    onError: (error: { response?: { data?: { message?: string } } }) => {
+      toast.error(error.response?.data?.message ?? 'Impossible d\'envoyer l\'email. Réessaie dans quelques instants.');
     },
   });
 }
