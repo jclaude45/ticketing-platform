@@ -869,7 +869,7 @@ export const publicApi = {
     lastName: string; firstName: string; email: string; phone?: string; service?: string; company?: string;
     country?: string; profile?: string; message: string; newsletter?: boolean; website?: string;
   }) =>
-    publicClient.post('/public/contact', data),
+    publicClient.post('/public/contact', { ...data, captcha: takeCaptcha() }),
 };
 
 export default apiClient;

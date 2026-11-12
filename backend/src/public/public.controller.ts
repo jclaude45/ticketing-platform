@@ -7,11 +7,15 @@ import { PublicService } from './public.service';
 import { PurchaseTicketDto } from './dto/purchase-ticket.dto';
 import { ContactDto } from './dto/contact.dto';
 import { clientIp } from '../common/client-ip';
+import { TurnstileService } from '../auth/turnstile.service';
 
 @ApiTags('Public Ticketing')
 @Controller('public')
 export class PublicController {
-  constructor(private readonly service: PublicService) {}
+  constructor(
+    private readonly service: PublicService,
+    private readonly turnstile: TurnstileService,
+  ) {}
 
   @Get('events')
   @ApiOperation({ summary: 'List all published events' })
@@ -38,7 +42,8 @@ export class PublicController {
 
   @Post('contact')
   @ApiOperation({ summary: 'Landing page contact form' })
-  contact(@Body() dto: ContactDto, @Req() req: Request) {
+  async contact(@Body() dto: ContactDto, @Req() req: Request) {
+    await this.turnstile.verify(dto.captcha, clientIp(req));
     return this.service.sendContact(dto, clientIp(req));
   }
 

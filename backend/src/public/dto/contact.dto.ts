@@ -15,4 +15,6 @@ export class ContactDto {
   @IsOptional() @IsBoolean() newsletter?: boolean;
   /** Honeypot: hidden from people, filled by bots */
   @IsOptional() @IsString() @MaxLength(200) website?: string;
+  /** Cloudflare Turnstile token (see TurnstileService) */
+  @IsOptional() @IsString() @MaxLength(2048) captcha?: string;
 }

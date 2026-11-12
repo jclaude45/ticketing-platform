@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, ChevronDown, Loader2 } from 'lucide-react';
 import { publicApi } from '@/lib/api';
+import { Captcha } from '@/components/auth/Captcha';
 import { QUOTE_EVENT, QUOTE_OTHER, SERVICES } from './services';
 
 const COUNTRIES = [
@@ -143,7 +144,8 @@ export function ContactForm() {
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 
-        <div className="flex justify-end">
+        <div className="flex flex-wrap items-center justify-end gap-6">
+          <Captcha />
           <button type="submit" disabled={status === 'sending'}
             className="inline-flex min-w-[156px] items-center justify-center gap-2 rounded-full bg-black px-10 py-3 text-lg uppercase text-white transition-opacity hover:opacity-85 disabled:opacity-60">
             {status === 'sending' ? <Loader2 className="h-5 w-5 animate-spin" /> : isQuote ? 'Demander un devis' : 'Envoyer'}
