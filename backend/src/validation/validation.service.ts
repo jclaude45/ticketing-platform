@@ -9,6 +9,17 @@ import { ScanResult, TicketStatus, Role } from '@prisma/client';
 import { logTicketAction } from '../audit/ticket-history';
 import { formatDaysFr, kinshasaDay, kinshasaDayBounds } from '../tickets/event-days';
 
+/**
+ * QR codes now carry the server's signed `t` field; a wrong one is always refused. From
+ * TICKET_QR_TAG_REQUIRED_SINCE (ISO date) a ticket issued after it must carry it. Unset
+ * until every ZCONTRÔLE in use sends it for manual guest check-ins (it rebuilds the QR from
+ * the id and serial). Tickets issued before keep entering on their id + serial.
+ */
+const qrTagRequiredSince = (() => {
+  const d = new Date(process.env.TICKET_QR_TAG_REQUIRED_SINCE ?? '');
+  return Number.isNaN(d.getTime()) ? null : d;
+})();
+
 @Injectable()
 export class ValidationService {
   private readonly logger = new Logger(ValidationService.name);
@@ -83,14 +94,16 @@ export class ValidationService {
     // Parse QR code — supports v2 compact format {"id","sn","v":"2"} and legacy v1 {"p","s","v":"1"}
     let ticketId: string;
     let serialNumber: string;
+    let tag: unknown;
     let isLegacyV1 = false;
 
     try {
       const raw = JSON.parse(dto.qrContent);
       if (raw.v === '2') {
-        // V2 compact: just id + serial
+        // V2 compact: id + serial, and the server's tag on tickets issued since it exists
         ticketId = raw.id;
         serialNumber = raw.sn;
+        tag = raw.t;
       } else {
         // V1 legacy: full payload + RSA signature embedded in QR
         const payloadData = JSON.parse(raw.p);
@@ -98,7 +111,7 @@ export class ValidationService {
         serialNumber = payloadData.sn;
         isLegacyV1 = true;
       }
-      if (!ticketId || !serialNumber) throw new Error('missing fields');
+      if (typeof ticketId !== 'string' || typeof serialNumber !== 'string' || !ticketId || !serialNumber) throw new Error('missing fields');
     } catch {
       const scanRecord = await this.recordScan(controllerId, null, ScanResult.INVALID, dto, ipAddress);
       return {
@@ -108,14 +121,10 @@ export class ValidationService {
       };
     }
 
-    // Find ticket
+    // Both the id and the serial must match: the serial is printed on the ticket, so
+    // finding the ticket by either one let a made-up QR reach (and block) a real ticket
     const ticket = await this.prisma.ticket.findFirst({
-      where: {
-        AND: [
-          { OR: [{ id: ticketId }, { serialNumber }] },
-          { eventId },
-        ],
-      },
+      where: { id: ticketId, serialNumber, eventId },
       include: {
         event: {
           select: { id: true, name: true, status: true, endDate: true, organizerId: true },
@@ -133,38 +142,28 @@ export class ValidationService {
       };
     }
 
-    // Cryptographic verification:
-    // V1 (legacy): signature is embedded in the QR → verify against organizer public key
-    // V2 (compact): signature is stored in DB (qrCodeSignature) → verify ticket ID + serial match DB record
-    const organizerKeyPair = await this.prisma.keyPair.findFirst({
-      where: { organizerId: ticket.event.organizerId, isActive: true },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (organizerKeyPair) {
-      let signatureValid = true;
-
-      if (isLegacyV1) {
-        const verification = this.qrcodeService.verifyQRCode(dto.qrContent, organizerKeyPair.publicKey);
-        signatureValid = verification.isValid;
-      } else {
-        // V2: check that the scanned ticket ID and serial actually belong to each other in DB
-        signatureValid = (ticket.id === ticketId && ticket.serialNumber === serialNumber);
-      }
-
-      if (!signatureValid) {
-        await this.prisma.ticket.update({
-          where: { id: ticket.id },
-          data: { status: TicketStatus.FRAUDULENT },
-        });
-        const scanRecord = await this.recordScan(controllerId, ticket.id, ScanResult.FRAUDULENT, dto, ipAddress);
-        await this.broadcastScanResult(eventId, ScanResult.FRAUDULENT, ticket, scanRecord.id);
-        return {
-          result: ScanResult.FRAUDULENT,
-          message: 'Fraudulent ticket detected - invalid cryptographic signature',
-          scanId: scanRecord.id,
-        };
-      }
+    // Proof that ZAYA issued this QR. A bad one is refused without touching the ticket:
+    // whoever made the copy must not be able to get the real ticket blocked.
+    let forged = false;
+    if (isLegacyV1) {
+      // V1 (legacy): signature embedded in the QR, checked with the organizer's key
+      const organizerKeyPair = await this.prisma.keyPair.findFirst({
+        where: { organizerId: ticket.event.organizerId, isActive: true },
+        orderBy: { createdAt: 'desc' },
+      });
+      forged = !organizerKeyPair || !this.qrcodeService.verifyQRCode(dto.qrContent, organizerKeyPair.publicKey).isValid;
+    } else if (tag !== undefined || (qrTagRequiredSince && ticket.createdAt >= qrTagRequiredSince)) {
+      forged = !QrcodeService.ticketQrTagValid(ticket.id, tag);
+    }
+    if (forged) {
+      const scanRecord = await this.recordScan(controllerId, ticket.id, ScanResult.FRAUDULENT, dto, ipAddress);
+      await this.broadcastScanResult(eventId, ScanResult.FRAUDULENT, ticket, scanRecord.id);
+      this.logger.warn(`Forged QR for ticket ${ticket.serialNumber} at event ${eventId}`);
+      return {
+        result: ScanResult.FRAUDULENT,
+        message: 'Fraudulent ticket detected - invalid cryptographic signature',
+        scanId: scanRecord.id,
+      };
     }
 
     // Validity days of the tariff: several days = a pass, one entry per day

@@ -1,6 +1,7 @@
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
+import { QrcodeService } from '../qrcode/qrcode.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TicketGenerationService } from '../tickets/ticket-generation.service';
 import { PublicService } from '../public/public.service';
@@ -442,7 +443,7 @@ export class PaymentService {
       ticketId: t.id, serialNumber: t.serialNumber,
       templateName: tariffLabel(t.template.name, t.template.validDays), price: Number(t.price),
       // The QR is drawn from ticketId + serialNumber: no image copied into the order
-      currency: t.template.currency, qrCode: null,
+      currency: t.template.currency, qrCode: null, qrTag: QrcodeService.ticketQrTag(t.id),
     }));
 
     await this.prisma.payment.update({

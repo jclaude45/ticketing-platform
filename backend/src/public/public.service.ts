@@ -18,6 +18,7 @@ import { ConfigService } from '@nestjs/config';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const PDFDocument = require('pdfkit');
 import * as QRCode from 'qrcode';
+import { QrcodeService } from '../qrcode/qrcode.service';
 import * as fs from 'fs';
 import * as path from 'path';
 // sharp 0.35's CommonJS build exports the function itself, while its types only declare a default export
@@ -312,6 +313,7 @@ export class PublicService {
       price:        Number(t.template.price),
       currency:     t.template.currency,
       qrCode:       t.qrCode,
+      qrTag:        QrcodeService.ticketQrTag(t.id),
     }));
 
     this.sendConfirmationEmail(
@@ -646,7 +648,7 @@ export class PublicService {
     // Content must match QrcodeService.generateSignedQRCode (V2 compact format).
     let qrModules: { size: number; data: Uint8Array } | null = null;
     if (ticket.ticketId) {
-      const qrContent = JSON.stringify({ id: ticket.ticketId, sn: ticket.serialNumber, v: '2' });
+      const qrContent = QrcodeService.ticketQrContent(ticket.ticketId, ticket.serialNumber);
       qrModules = QRCode.create(qrContent, { errorCorrectionLevel: 'M' }).modules;
     }
 

@@ -143,7 +143,7 @@ export class TicketExportService {
     if (!ticket) throw new NotFoundException('Ticket not found');
 
     // Generate a compact QR buffer (same spec as the grouped export).
-    const qrContent = JSON.stringify({ id: ticket.id, sn: ticket.serialNumber, v: '2' });
+    const qrContent = QrcodeService.ticketQrContent(ticket.id, ticket.serialNumber);
     const qrBuffer: Buffer = await (QRCode as any).toBuffer(qrContent, {
       errorCorrectionLevel: 'L',
       type: 'png',
@@ -196,7 +196,7 @@ export class TicketExportService {
     const qrBuffers = await Promise.all(
       tickets.map((t) =>
         (QRCode as any).toBuffer(
-          JSON.stringify({ id: t.id, sn: t.serialNumber, v: '2' }),
+          QrcodeService.ticketQrContent(t.id, t.serialNumber),
           { errorCorrectionLevel: 'L', type: 'png', margin: 2, width: 250 },
         ),
       ),
@@ -370,7 +370,7 @@ export class TicketExportService {
     for (let i = 0; i < tickets.length; i += BATCH) {
       await Promise.all(
         tickets.slice(i, i + BATCH).map(async (ticket) => {
-          const content = JSON.stringify({ id: ticket.id, sn: ticket.serialNumber, v: '2' });
+          const content = QrcodeService.ticketQrContent(ticket.id, ticket.serialNumber);
           const buf = await (QRCode as any).toBuffer(content, {
             errorCorrectionLevel: 'L',
             type: 'png',

@@ -30,7 +30,7 @@ export interface CheckoutEvent {
   /** BUYER: ticket prices already include ZAYA's service fee */
   feePayer?: 'ORGANIZER' | 'BUYER';
 }
-interface PurchasedTicket { ticketId: string; serialNumber: string; templateName: string; price: number; currency: string; qrCode?: string | null }
+interface PurchasedTicket { ticketId: string; serialNumber: string; templateName: string; price: number; currency: string; qrCode?: string | null; qrTag?: string | null }
 interface MerchOrderSummary {
   code: string; status: string; fulfillment: 'PICKUP' | 'DELIVERY'; total: number; currency: string;
   items: { productName: string; size: string | null; color: string | null; quantity: number }[];
@@ -563,7 +563,7 @@ export function Checkout({
                   tickets={result.tickets.map((t, i): TicketData => ({
                     serialNumber: t.serialNumber, holderName: result.holderName, holderEmail: result.holderEmail,
                     eventName: result.eventName, templateName: t.templateName, price: t.price, currency: t.currency,
-                    ticketId: t.ticketId, qrCode: t.qrCode, eventStart: event.startDate,
+                    ticketId: t.ticketId, qrCode: t.qrCode, qrTag: t.qrTag, eventStart: event.startDate,
                     eventVenue: event.venue, eventCity: event.city, ticketIndex: i + 1, totalTickets: result.tickets.length,
                   }))}
                 />
@@ -576,7 +576,7 @@ export function Checkout({
                   <TicketVisual data={{
                     serialNumber: t.serialNumber, holderName: result.holderName, holderEmail: result.holderEmail,
                     eventName: result.eventName, templateName: t.templateName, price: t.price, currency: t.currency,
-                    ticketId: t.ticketId, qrCode: t.qrCode, eventStart: event.startDate,
+                    ticketId: t.ticketId, qrCode: t.qrCode, qrTag: t.qrTag, eventStart: event.startDate,
                     eventVenue: event.venue, eventCity: event.city, ticketIndex: i + 1, totalTickets: result.tickets.length,
                   }} />
                 </div>

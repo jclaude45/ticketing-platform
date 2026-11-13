@@ -18,6 +18,8 @@ export interface TicketData {
   currency: string;
   /** Former stored QR image, used only when the id is unknown */
   qrCode?: string | null;
+  /** Server signature of the QR (tickets issued since it exists) */
+  qrTag?: string | null;
   /** Start of the event (ISO) */
   eventStart?: string;
   eventVenue?: string;
@@ -26,9 +28,9 @@ export interface TicketData {
   totalTickets?: number;
 }
 
-/** Same content as the server's QR codes (V2 compact format) */
-export const ticketQrContent = (ticketId: string, serialNumber: string) =>
-  JSON.stringify({ id: ticketId, sn: serialNumber, v: '2' });
+/** Same content as the server's QR codes (V2 compact format, `t` signed by the server) */
+export const ticketQrContent = (ticketId: string, serialNumber: string, tag?: string | null) =>
+  JSON.stringify(tag ? { id: ticketId, sn: serialNumber, v: '2', t: tag } : { id: ticketId, sn: serialNumber, v: '2' });
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -90,7 +92,7 @@ export function TicketVisual({ data }: { data: TicketData }) {
 
       <div style={{ display: 'flex', justifyContent: 'center', margin: '22px 0 14px' }}>
         {data.ticketId ? (
-          <QRCodeSVG value={ticketQrContent(data.ticketId, data.serialNumber)} size={260} level="M" includeMargin={false} bgColor="#ffffff" fgColor="#000000" />
+          <QRCodeSVG value={ticketQrContent(data.ticketId, data.serialNumber, data.qrTag)} size={260} level="M" includeMargin={false} bgColor="#ffffff" fgColor="#000000" />
         ) : data.qrCode ? (
           <img src={data.qrCode} alt="QR code" style={{ width: 260, height: 260 }} />
         ) : null}
