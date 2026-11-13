@@ -66,18 +66,27 @@ export class AuthService {
       if (existingUser.isEmailVerified) {
         throw new ConflictException('Email already in use');
       }
-      // Account exists but not verified — generate a fresh token and resend
+      // Account exists but not verified: this sign-up replaces it. Keeping the first password
+      // let anyone register someone else's address in advance and walk into the account once
+      // its owner confirmed it. The link (only in the owner's inbox) now confirms this password.
       const newToken = this.cryptoService.generateSecureToken(32);
       const newTokenHash = this.cryptoService.hashData(newToken);
       const newExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const saltRounds = this.configService.get<number>('bcrypt.saltRounds') || 12;
       await this.prisma.user.update({
         where: { id: existingUser.id },
         data: {
+          password: await bcrypt.hash(dto.password, saltRounds),
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+          refreshToken: null,
+          passwordResetToken: null,
+          passwordResetExpiry: null,
           emailVerificationToken: newTokenHash,
           emailVerificationExpiry: newExpiry,
         },
       });
-      await this.sendVerificationEmail(existingUser.email, existingUser.firstName, newToken);
+      await this.sendVerificationEmail(existingUser.email, dto.firstName, newToken);
       return {
         message: 'A new verification email has been sent. Please check your inbox.',
         needsVerification: true,
