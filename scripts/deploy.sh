@@ -114,11 +114,12 @@ if [ "$SKIP_BACKUP" = true ] || [ "$FIRST_RUN" = true ]; then
 else
   BACKUP_DIR="/opt/zaya/backups"
   mkdir -p "$BACKUP_DIR"
+  chmod 700 "$BACKUP_DIR"   # dumps hold every customer's data
   BACKUP_FILE="${BACKUP_DIR}/pre-deploy-$(date +%Y%m%d_%H%M%S).sql.gz"
 
   if $COMPOSE exec -T postgres \
       pg_dump -U "${POSTGRES_USER}" "${POSTGRES_DB}" 2>/dev/null \
-      | gzip > "$BACKUP_FILE"; then
+      | (umask 077; gzip > "$BACKUP_FILE"); then
     log_success "Sauvegarde : ${BACKUP_FILE} ($(du -sh "$BACKUP_FILE" | cut -f1))"
   else
     log_warn "Sauvegarde échouée (service peut-être pas encore démarré)"
@@ -174,29 +175,8 @@ if [ "$FIRST_RUN" = true ]; then
 
     log_success "Certificat SSL obtenu pour ${DOMAIN}"
 
-    # Copier les certs dans docker/nginx/ssl/ pour nginx
-    CERT_DIR=""
-    for d in "/etc/letsencrypt/live/${DOMAIN}" "/etc/letsencrypt/live/${DOMAIN}-0001"; do
-      if sudo test -f "${d}/fullchain.pem" 2>/dev/null; then
-        CERT_DIR="$d"
-      fi
-    done
-    if [ -n "$CERT_DIR" ]; then
-      mkdir -p "${PROJECT_ROOT}/docker/nginx/ssl"
-      sudo cp "${CERT_DIR}/fullchain.pem" "${PROJECT_ROOT}/docker/nginx/ssl/"
-      sudo cp "${CERT_DIR}/privkey.pem"   "${PROJECT_ROOT}/docker/nginx/ssl/"
-      sudo cp "${CERT_DIR}/chain.pem"     "${PROJECT_ROOT}/docker/nginx/ssl/"
-      sudo chown deploy:deploy "${PROJECT_ROOT}/docker/nginx/ssl/"*.pem
-      log_success "Certificats copiés dans docker/nginx/ssl/"
-    else
-      log_warn "Impossible de localiser les certificats dans /etc/letsencrypt/live/"
-    fi
-
-    # Renouvellement automatique via cron
-    if ! crontab -l 2>/dev/null | grep -q certbot; then
-      (crontab -l 2>/dev/null; echo "0 3 * * * sudo certbot renew --quiet && docker compose -f /opt/zaya/app/docker-compose.yml -f /opt/zaya/app/docker-compose.prod.yml exec nginx nginx -s reload") | crontab -
-      log_success "Renouvellement automatique SSL configuré (cron 03:00 quotidien)"
-    fi
+    # nginx reads /etc/letsencrypt/live/ directly and the certbot container renews the
+    # certificates (webroot) and nginx reloads every 12 h: no copy and no host cron needed
   fi
 else
   log_section "2. SSL"
