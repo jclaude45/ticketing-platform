@@ -355,9 +355,10 @@ export class TeamService {
     if (!member) throw new NotFoundException('Team member not found');
 
     this.storage.validateFileSize(file.size, 5 * 1024 * 1024);
-    const ext = this.storage.imageExtension(file.buffer);
-    const key = `${memberId}-photo${ext}`;
-    const result = await this.storage.uploadBuffer(file.buffer, key, file.mimetype, 'team-photos');
+    this.storage.imageExtension(file.buffer);
+    const photo = await sharp(file.buffer).rotate().resize(800, 800, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 85 }).toBuffer();
+    const key = `${memberId}-photo-${Date.now()}.jpg`;
+    const result = await this.storage.uploadBuffer(photo, key, 'image/jpeg', 'team-photos');
 
     await this.prisma.teamMember.update({ where: { id: memberId }, data: { photoUrl: result.url } });
     return { photoUrl: result.url };

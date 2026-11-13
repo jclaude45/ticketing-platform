@@ -60,7 +60,7 @@ async function bootstrap() {
     require('express').static(uploadsPath, {
       setHeaders: (res: any) => {
         res.setHeader('X-Content-Type-Options', 'nosniff');
-        res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+        res.setHeader('Content-Security-Policy', "default-src 'none'");
       },
     }),
   );

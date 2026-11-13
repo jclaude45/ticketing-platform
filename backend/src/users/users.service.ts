@@ -14,6 +14,8 @@ import { UpdateUserDto, ChangePasswordDto, NotificationPrefsDto } from './dto/up
 import { notificationPrefs } from '../notifications/notification-prefs';
 import { Role } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const sharp: typeof import('sharp').default = require('sharp');
 
 @Injectable()
 export class UsersService {
@@ -238,11 +240,14 @@ export class UsersService {
     this.storageService.validateFileType(mimeType, ['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
     this.storageService.validateFileSize(fileBuffer.length, 5 * 1024 * 1024);
 
-    const ext = this.storageService.imageExtension(fileBuffer);
+    this.storageService.imageExtension(fileBuffer);
+    // A phone photo (24 Mpx, 3 MB) shown at 32 px: resized once, which also drops anything
+    // hidden in the file. A new name each time, browsers keep /uploads for 7 days.
+    const avatar = await sharp(fileBuffer).rotate().resize(512, 512, { fit: 'cover' }).jpeg({ quality: 85 }).toBuffer();
     const result = await this.storageService.uploadBuffer(
-      fileBuffer,
-      `${userId}${ext}`,
-      mimeType,
+      avatar,
+      `${userId}-${Date.now()}.jpg`,
+      'image/jpeg',
       'avatars',
     );
 
