@@ -9,6 +9,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
+import { shrinkImage } from '@/lib/image-resize';
 import {
   User, Lock, Shield, Bell, Key, ChevronRight,
   Eye, EyeOff, AlertTriangle, CheckCircle2, Loader2, RefreshCw, Camera,
@@ -71,14 +72,15 @@ function SettingsContent() {
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image trop volumineuse (max 5 Mo)');
-      return;
-    }
-    const formData = new FormData();
-    formData.append('avatar', file);
     setAvatarLoading(true);
     try {
+      const image = await shrinkImage(file, 1024);
+      if (image.size > 5 * 1024 * 1024) {
+        toast.error('Image trop volumineuse (max 5 Mo)');
+        return;
+      }
+      const formData = new FormData();
+      formData.append('avatar', image, image === file ? file.name : 'avatar.jpg');
       const res = await authApi.uploadAvatar(formData);
       const updated = (res.data as any)?.data ?? res.data;
       setUser(updated);

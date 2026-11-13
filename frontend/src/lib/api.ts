@@ -201,6 +201,7 @@ export const authApi = {
   uploadAvatar: (formData: FormData) =>
     apiClient.post<ApiResponse<User>>('/users/me/avatar', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000, // slow mobile connections
     }),
 
   updateSettings: (settings: UserSettings) =>
