@@ -17,6 +17,7 @@ export const RETENTION = {
   logsYears: 3,
   inactiveAccountYears: 3,
   unconfirmedAccountDays: 7,
+  unusedAccountDays: 90,
   accountingYears: 10,
 };
 
@@ -95,16 +96,25 @@ export class PrivacyService {
     // Sessions of browsers and phones that stopped refreshing
     await this.prisma.userSession.deleteMany({ where: { expiresAt: { lt: now } } });
 
-    // Sign-ups never confirmed within 7 days (robots used the form with strangers' addresses)
+    // Sign-ups never confirmed within 7 days (robots used the form with strangers' addresses).
+    // Confirmed but never used within 90 days too: company mail filters open the link and
+    // "confirm" the robot's account; a real person who confirmed gets time to come back.
     const unconfirmed = await this.prisma.user.findMany({
       where: {
         role: 'ORGANIZER',
-        isEmailVerified: false,
         lastLoginAt: null,
-        createdAt: { lt: before(RETENTION.unconfirmedAccountDays * DAY_MS) },
+        OR: [
+          { isEmailVerified: false, createdAt: { lt: before(RETENTION.unconfirmedAccountDays * DAY_MS) } },
+          { isEmailVerified: true, createdAt: { lt: before(RETENTION.unusedAccountDays * DAY_MS) } },
+        ],
         events: { none: {} },
         controllers: { none: {} },
         projectMemberships: { none: {} },
+        accountMemberships: { none: {} },
+        accountCollaborators: { none: {} },
+        subscription: null,
+        billingPayments: { none: {} },
+        payouts: { none: {} },
       },
       select: { id: true },
       take: 200,
