@@ -32,7 +32,9 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       throw new UnauthorizedException('No authorization header provided');
     }
 
-    const token = authHeader.split(' ')[1];
+    // Only "Bearer <token>": with any other header the strategy falls back to the cookie,
+    // and a revoked cookie would pass a blacklist check made on the header
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
     if (!token) {
       throw new UnauthorizedException('No token provided');
     }

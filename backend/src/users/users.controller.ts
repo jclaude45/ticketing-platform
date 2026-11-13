@@ -72,6 +72,7 @@ export class UsersController {
   }
 
   @Get(':id')
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Get user by ID' })
   async findById(@Param('id') id: string) {
     return this.usersService.findById(id);

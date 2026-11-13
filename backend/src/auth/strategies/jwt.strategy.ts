@@ -101,6 +101,8 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     });
     return {
       ...owner,
+      // The collaborator works on the owner's events, never with the owner's ZAYA admin rights
+      role: owner?.role === Role.ADMIN || owner?.role === Role.SUPER_ADMIN ? Role.ORGANIZER : owner?.role,
       workspacePermission: membership.permission,
       actor: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName },
     };

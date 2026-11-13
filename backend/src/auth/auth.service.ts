@@ -18,6 +18,7 @@ import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcryptjs';
 import { claimPendingTaskAssignments } from '../project/pending-assignees';
 import { authenticator } from 'otplib';
+import { assertNotLocked, clearFailures, passwordCounters, recordFailure, totpCounters } from './login-attempts';
 import { button, emailLayout, emailText, esc, note, p } from '../common/email/layout';
 import * as QRCode from 'qrcode';
 import { Role } from '@prisma/client';
@@ -177,23 +178,16 @@ export class AuthService {
   }
 
   async login(dto: LoginDto, ipAddress?: string, device: SessionDevice = {}) {
-    const bruteKey = `login:fail:${dto.email.toLowerCase()}`;
-    const MAX_ATTEMPTS = 10;
-    const BLOCK_TTL = 15 * 60; // 15 minutes in seconds
-
-    const failCount = parseInt((await this.redisService.get(bruteKey)) ?? '0', 10);
-    if (failCount >= MAX_ATTEMPTS) {
-      throw new UnauthorizedException('Too many failed attempts — please try again in 15 minutes');
-    }
+    const counters = passwordCounters('user', dto.email, ipAddress);
+    await assertNotLocked(this.redisService, counters);
 
     const user = await this.validateUser(dto.email, dto.password);
     if (!user) {
-      await this.redisService.set(bruteKey, String(failCount + 1), BLOCK_TTL);
+      await recordFailure(this.redisService, counters);
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    // Successful login — clear the counter
-    await this.redisService.del(bruteKey);
+    await clearFailures(this.redisService, counters);
 
     if (!user.isEmailVerified) {
       throw new UnauthorizedException('Please verify your email before logging in');
@@ -220,6 +214,9 @@ export class AuthService {
         select: { twoFactorSecret: true },
       });
 
+      // The password is right: wrong codes are counted on the account itself
+      await assertNotLocked(this.redisService, totpCounters(user.id));
+
       // Anti-replay: reject a code that was already used in this 90s window
       const replayKey = `totp_used:${user.id}:${dto.totpCode}`;
       if (await this.redisService.get(replayKey)) {
@@ -229,8 +226,11 @@ export class AuthService {
       const totp = authenticator.clone({ window: 1 });
       const isValid = totp.verify({ token: dto.totpCode, secret: fullUser.twoFactorSecret });
       if (!isValid) {
+        await recordFailure(this.redisService, totpCounters(user.id));
+        this.logger.warn(`Wrong two-factor code for user ${user.id} (right password)`);
         throw new UnauthorizedException('Invalid two-factor authentication code');
       }
+      await this.redisService.del(totpCounters(user.id)[0].key);
       await this.redisService.set(replayKey, '1', 90);
     }
 
@@ -393,8 +393,11 @@ export class AuthService {
       throw new ForbiddenException('La double authentification ne peut pas être désactivée pour les comptes administrateurs.');
     }
 
+    // Same counter as the sign-in: a stolen session cannot guess its way to turning 2FA off
+    await assertNotLocked(this.redisService, totpCounters(userId));
     const isValid = authenticator.clone({ window: 1 }).verify({ token: totpCode, secret: user.twoFactorSecret });
     if (!isValid) {
+      await recordFailure(this.redisService, totpCounters(userId));
       throw new UnauthorizedException('Invalid TOTP code');
     }
 
@@ -498,11 +501,16 @@ export class AuthService {
    * reaches routes marked @ControllerAccess(). Controllers invited with an existing ZAYA
    * account have no own password and use their account password.
    */
-  async controllerLogin(email: string, password: string) {
+  async controllerLogin(email: string, password: string, ipAddress?: string | null) {
+    const counters = passwordCounters('controller', email, ipAddress);
+    await assertNotLocked(this.redisService, counters);
     const controller = await this.prisma.controller.findFirst({
       where: { email: { equals: (email ?? '').trim(), mode: 'insensitive' } },
     });
-    if (!controller) throw new UnauthorizedException('Email ou mot de passe incorrect');
+    if (!controller) {
+      await recordFailure(this.redisService, counters);
+      throw new UnauthorizedException('Email ou mot de passe incorrect');
+    }
 
     let hash = controller.password;
     if (!hash) {
@@ -513,8 +521,10 @@ export class AuthService {
       throw new UnauthorizedException("Compte non activé : acceptez d'abord l'invitation reçue par email");
     }
     if (!(await bcrypt.compare(password ?? '', hash))) {
+      await recordFailure(this.redisService, counters);
       throw new UnauthorizedException('Email ou mot de passe incorrect');
     }
+    await clearFailures(this.redisService, counters);
 
     const tokens = await this.generateTokens(controller.id, controller.email, 'CONTROLLER');
     await this.prisma.controller.update({

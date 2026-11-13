@@ -130,7 +130,7 @@ export class AuthController {
     @Request() req: any,
     @Response({ passthrough: true }) res: ExpressResponse,
   ) {
-    const result = await this.authService.login(dto, req.ip, {
+    const result = await this.authService.login(dto, clientIp(req) ?? req.ip, {
       platform: req.headers['x-platform'] === 'mobile' ? 'mobile' : 'web',
       userAgent: req.headers['user-agent'],
     });
@@ -161,7 +161,7 @@ export class AuthController {
     @Request() req: any,
     @Response({ passthrough: true }) res: ExpressResponse,
   ) {
-    const result = await this.authService.controllerLogin(dto.email, dto.password);
+    const result = await this.authService.controllerLogin(dto.email, dto.password, clientIp(req) ?? req.ip);
     this.setRefreshCookie(res, result.refreshToken, result.user.id);
     this.setAccessCookie(res, result.accessToken);
     if (req.headers['x-platform'] === 'mobile') return result;
