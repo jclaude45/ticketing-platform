@@ -24,6 +24,7 @@ import * as path from 'path';
 // sharp 0.35's CommonJS build exports the function itself, while its types only declare a default export
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const sharp: typeof import('sharp').default = require('sharp');
+import { MAX_IMAGE_PIXELS } from '../common/image-limits';
 
 /** The "Z" of the ZAYA logo, copied from frontend/public/zaya-logo.svg. */
 const ZAYA_LOGO_Z_PATH =
@@ -487,7 +488,7 @@ export class PublicService {
     const bannerSource = this.readBannerSource(bannerUrl);
     if (bannerSource) {
       try {
-        const content = await sharp(bannerSource)
+        const content = await sharp(bannerSource, { limitInputPixels: MAX_IMAGE_PIXELS })
           .resize({ width: 1120, withoutEnlargement: true })
           .jpeg({ quality: 75 })
           .toBuffer();
@@ -657,7 +658,7 @@ export class PublicService {
     const bannerSource = this.readBannerSource(bannerUrl);
     if (bannerSource) {
       try {
-        thumbBuffer = await sharp(bannerSource)
+        thumbBuffer = await sharp(bannerSource, { limitInputPixels: MAX_IMAGE_PIXELS })
           .resize(240, 240, { fit: 'cover' })
           .jpeg({ quality: 80 })
           .toBuffer();

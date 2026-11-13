@@ -19,6 +19,8 @@ import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import * as nodemailer from 'nodemailer';
 
+const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
 @Injectable()
 export class ControllersService {
   private readonly logger = new Logger(ControllersService.name);
@@ -267,7 +269,6 @@ export class ControllersService {
   }
 
   async invite(organizerId: string, dto: InviteControllerDto) {
-    await this.subscriptions.assertCanAddController(organizerId);
     // Like assignEvent: an organizer's controller only scans that organizer's events.
     // Event ids are public, and this used to attach a controller to anyone's event.
     if (dto.eventIds?.length) {
@@ -276,14 +277,25 @@ export class ControllersService {
       if (owned !== ids.length) throw new ForbiddenException('Event does not belong to you');
     }
     const existing = await this.prisma.controller.findUnique({ where: { email: dto.email } });
-    if (existing) throw new ConflictException('A controller with this email already exists');
+    // Invitation not accepted yet (expired or lost): inviting again sends a new link
+    const reinvite = existing && !existing.isActive && existing.invitationToken && existing.organizerId === organizerId;
+    if (existing && !reinvite) throw new ConflictException('A controller with this email already exists');
+    // A new link for a pending invitation is not a new controller on the plan
+    if (!reinvite) await this.subscriptions.assertCanAddController(organizerId);
 
     // If this email already has a User account, activate directly without invitation.
     // The controllerLogin will fall back to the User password.
     const existingUser = await this.prisma.user.findUnique({ where: { email: dto.email } });
 
     let controller;
-    if (existingUser) {
+    if (reinvite) {
+      const invitationToken = crypto.randomBytes(32).toString('hex');
+      controller = await this.prisma.controller.update({
+        where: { id: existing.id },
+        data: { name: dto.name || existing.name, invitationToken, invitedAt: new Date() },
+      });
+      await this.sendInvitationEmail(dto.email, controller.name, invitationToken);
+    } else if (existingUser) {
       controller = await this.prisma.controller.create({
         data: {
           name: dto.name || `${existingUser.firstName} ${existingUser.lastName}`,
@@ -321,12 +333,17 @@ export class ControllersService {
     };
   }
 
+  /** The link works 7 days, as the e-mail says; the organizer can invite again after */
+  private invitationExpired(controller: { invitedAt: Date | null }) {
+    return !controller.invitedAt || Date.now() - controller.invitedAt.getTime() > INVITATION_TTL_MS;
+  }
+
   async getInvitation(token: string) {
     const controller = await this.prisma.controller.findUnique({
       where: { invitationToken: token },
       include: { organizer: { select: { firstName: true, lastName: true } } },
     });
-    if (!controller) throw new NotFoundException('Invitation not found or expired');
+    if (!controller || this.invitationExpired(controller)) throw new NotFoundException('Invitation not found or expired');
     if (controller.isActive) throw new BadRequestException('Invitation already accepted');
     return {
       name: controller.name,
@@ -339,7 +356,7 @@ export class ControllersService {
     const controller = await this.prisma.controller.findUnique({
       where: { invitationToken: token },
     });
-    if (!controller) throw new NotFoundException('Invitation not found or expired');
+    if (!controller || this.invitationExpired(controller)) throw new NotFoundException('Invitation not found or expired');
     if (controller.isActive) throw new BadRequestException('Invitation already accepted');
 
     const hashedPassword = await bcrypt.hash(dto.password, 12);

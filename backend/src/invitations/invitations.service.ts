@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, Role, TicketStatus } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
+import { assertSafeXlsx } from '../common/spreadsheet-guard';
 import { Readable } from 'stream';
 import { PrismaService } from '../prisma/prisma.service';
 import { TicketGenerationService } from '../tickets/ticket-generation.service';
@@ -405,6 +406,7 @@ export class InvitationsService {
       } else if (/\.xls$/i.test(file.originalname)) {
         throw new BadRequestException('Format .xls non pris en charge : enregistrez le fichier en .xlsx ou .csv');
       } else {
+        assertSafeXlsx(file.buffer);
         await wb.xlsx.load(file.buffer as unknown as ArrayBuffer);
       }
     } catch (err) {

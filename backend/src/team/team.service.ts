@@ -16,10 +16,12 @@ import * as QRCode from 'qrcode';
 // sharp 0.35's CommonJS build exports the function itself, while its types only declare a default export
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const sharp: typeof import('sharp').default = require('sharp');
+import { MAX_IMAGE_PIXELS } from '../common/image-limits';
 import * as fs from 'fs';
 import { Readable } from 'stream';
 import * as path from 'path';
 import * as ExcelJS from 'exceljs';
+import { assertSafeXlsx } from '../common/spreadsheet-guard';
 import * as nodemailer from 'nodemailer';
 
 const LOGO_SVG_PATH = path.join(__dirname, '../../assets/powered-logo.svg');
@@ -235,9 +237,11 @@ export class TeamService {
       if (/\.csv$/i.test(file.originalname) || /csv/.test(file.mimetype)) {
         await workbook.csv.read(Readable.from(file.buffer.toString('utf8').replace(/^\uFEFF/, '')));
       } else {
+        assertSafeXlsx(file.buffer);
         await workbook.xlsx.read(Readable.from(file.buffer));
       }
-    } catch {
+    } catch (err) {
+      if (err instanceof BadRequestException) throw err;
       throw new BadRequestException('Fichier Excel invalide ou corrompu');
     }
 
@@ -356,7 +360,7 @@ export class TeamService {
 
     this.storage.validateFileSize(file.size, 5 * 1024 * 1024);
     this.storage.imageExtension(file.buffer);
-    const photo = await sharp(file.buffer).rotate().resize(800, 800, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 85 }).toBuffer();
+    const photo = await sharp(file.buffer, { limitInputPixels: MAX_IMAGE_PIXELS }).rotate().resize(800, 800, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 85 }).toBuffer();
     const key = `${memberId}-photo-${Date.now()}.jpg`;
     const result = await this.storage.uploadBuffer(photo, key, 'image/jpeg', 'team-photos');
 

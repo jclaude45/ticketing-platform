@@ -92,7 +92,7 @@ export class EventsController {
   @Post(':id/banner')
   @Roles(Role.ORGANIZER, Role.ADMIN)
   @HttpCode(HttpStatus.OK)
-  @UseInterceptors(FileInterceptor('banner'))
+  @UseInterceptors(FileInterceptor('banner', { limits: { fileSize: 5 * 1024 * 1024, files: 1 } }))
   @ApiOperation({ summary: 'Upload the event poster (JPEG, PNG or WebP, 5 MB max)' })
   async uploadBanner(@Param('id') id: string, @CurrentUser() user: any, @UploadedFile() file: Express.Multer.File) {
     if (!file) throw new BadRequestException('Aucune image reçue');

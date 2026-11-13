@@ -192,7 +192,7 @@ services:
         max-file: "5"
 
   certbot:
-    image: certbot/certbot:latest
+    image: certbot/certbot:latest@sha256:f70ad0adbb7e117f0fe42a63c553f28ea451edabc0148757b6efcd9735acaa20
     container_name: ticketing_certbot
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt
@@ -209,7 +209,7 @@ services:
 
   # ── Monitoring — Uptime Kuma ──────────────────────────────────────────────
   uptime-kuma:
-    image: louislam/uptime-kuma:1
+    image: louislam/uptime-kuma:1@sha256:70233f4acb5163fd2a59a49909cf01e44415cecff13dba69e3a86647a2919f83
     container_name: ticketing_uptime_kuma
     restart: always
     volumes:
@@ -240,7 +240,7 @@ services:
   # Runs pg_dump every day at 02:00 UTC, keeps 30 daily + 4 weekly backups.
   # Backups stored in the postgres_backups volume (mount it to the host or S3).
   postgres-backup:
-    image: prodrigestivill/postgres-backup-local:16
+    image: prodrigestivill/postgres-backup-local:16@sha256:a0103fbce0c48ccc7693ddbb2a2bfa733048db845354f635efef9e4566de185d
     container_name: ticketing_postgres_backup
     restart: always
     depends_on:

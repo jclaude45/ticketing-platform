@@ -1,7 +1,7 @@
 # =============================================================================
 # Stage 1: Dependencies
 # =============================================================================
-FROM node:20-alpine AS deps
+FROM node:24-alpine AS deps
 
 WORKDIR /app
 
@@ -17,7 +17,7 @@ RUN npm ci
 # =============================================================================
 # Stage 2: Development
 # =============================================================================
-FROM node:20-alpine AS development
+FROM node:24-alpine AS development
 
 WORKDIR /app
 
@@ -46,7 +46,7 @@ CMD ["npm", "run", "dev"]
 # =============================================================================
 # Stage 3: Builder
 # =============================================================================
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
 
@@ -74,13 +74,13 @@ ENV NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
-# Build Next.js application with standalone output
+# Build Next.js application with standalone output (type errors stop the deploy here)
 RUN npm run build
 
 # =============================================================================
 # Stage 4: Runner (Production)
 # =============================================================================
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 
 WORKDIR /app
 

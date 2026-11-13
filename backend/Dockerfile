@@ -1,7 +1,7 @@
 # =============================================================================
 # Stage 1: Builder — compiles TypeScript, generates Prisma client
 # =============================================================================
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
 
@@ -16,11 +16,14 @@ COPY . .
 
 RUN npx prisma generate && npm run build && npx tsc -p tsconfig.scripts.json
 
+# The deploy stops here if a test fails: the running version stays in place
+RUN npx jest --ci
+
 # =============================================================================
 # Stage 2: Production deps — installs only prod deps with build tools,
 #           kept as a separate stage so the final image stays clean
 # =============================================================================
-FROM node:20-alpine AS prod-deps
+FROM node:24-alpine AS prod-deps
 
 WORKDIR /app
 
@@ -36,7 +39,7 @@ RUN npm install --omit=dev --ignore-scripts && \
 # =============================================================================
 # Stage 3: Development
 # =============================================================================
-FROM node:20-alpine AS development
+FROM node:24-alpine AS development
 
 WORKDIR /app
 
@@ -68,7 +71,7 @@ CMD ["npm", "run", "start:dev"]
 # =============================================================================
 # Stage 4: Production — no build tools, minimal attack surface
 # =============================================================================
-FROM node:20-alpine AS production
+FROM node:24-alpine AS production
 
 WORKDIR /app
 

@@ -86,7 +86,8 @@ export class UsersController {
 
   @Post('me/avatar')
   @HttpCode(HttpStatus.OK)
-  @UseInterceptors(FileInterceptor('avatar'))
+  // The site shrinks photos before sending; 10 MB still lets an untouched phone photo through
+  @UseInterceptors(FileInterceptor('avatar', { limits: { fileSize: 10 * 1024 * 1024, files: 1 } }))
   @ApiOperation({ summary: 'Upload avatar for current user' })
   async uploadAvatar(
     @CurrentUser('id') userId: string,

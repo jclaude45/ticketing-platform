@@ -16,6 +16,7 @@ import { Role } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const sharp: typeof import('sharp').default = require('sharp');
+import { MAX_IMAGE_PIXELS } from '../common/image-limits';
 
 @Injectable()
 export class UsersService {
@@ -243,7 +244,7 @@ export class UsersService {
     this.storageService.imageExtension(fileBuffer);
     // A phone photo (24 Mpx, 3 MB) shown at 32 px: resized once, which also drops anything
     // hidden in the file. A new name each time, browsers keep /uploads for 7 days.
-    const avatar = await sharp(fileBuffer).rotate().resize(512, 512, { fit: 'cover' }).jpeg({ quality: 85 }).toBuffer();
+    const avatar = await sharp(fileBuffer, { limitInputPixels: MAX_IMAGE_PIXELS }).rotate().resize(512, 512, { fit: 'cover' }).jpeg({ quality: 85 }).toBuffer();
     const result = await this.storageService.uploadBuffer(
       avatar,
       `${userId}-${Date.now()}.jpg`,

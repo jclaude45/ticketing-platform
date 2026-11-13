@@ -15,6 +15,8 @@ import { StorageService } from '../storage/storage.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { EventStatus, Role } from '@prisma/client';
+import { MAX_IMAGE_PIXELS } from '../common/image-limits';
+const sharp: typeof import('sharp').default = require('sharp');
 
 /** Names trimmed, empty ones and repeats removed (same name written twice, any case) */
 function cleanPerformers(names?: string[]): string[] {
@@ -299,6 +301,12 @@ export class EventsService implements OnApplicationBootstrap {
     }
     this.storage.validateFileType(file.mimetype, ['image/jpeg', 'image/png', 'image/webp']);
     this.storage.validateFileSize(file.buffer.length, 5 * 1024 * 1024);
+    // The poster is decoded for every ticket PDF and e-mail: its size is checked once here
+    const meta = await sharp(file.buffer).metadata().catch(() => null);
+    if (!meta?.width || !meta?.height) throw new BadRequestException('Image illisible');
+    if (meta.width * meta.height > MAX_IMAGE_PIXELS) {
+      throw new BadRequestException('Image trop grande : 60 millions de pixels au maximum');
+    }
     const ext = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' }[file.mimetype];
     // New name on every change: browsers and the app cache the old picture under its URL
     const stored = await this.storage.uploadBuffer(file.buffer, `${id}-${Date.now()}${ext}`, file.mimetype, 'banners');
