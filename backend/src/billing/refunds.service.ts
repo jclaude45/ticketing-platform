@@ -78,6 +78,9 @@ export class RefundsService {
     if (payment.status !== 'COMPLETED') throw new BadRequestException('Seule une commande payée peut être remboursée');
 
     const ticketIds = ((payment.ticketsData ?? []) as any[]).map((t) => t.ticketId).filter(Boolean);
+    if (role !== Role.ADMIN && role !== Role.SUPER_ADMIN) {
+      await this.assertOrganizerMayRefund(eventId, payment, ticketIds);
+    }
     const cancelled = await this.prisma.$transaction(async (tx) => {
       // One refund per order, even if two people click at the same time
       const claimed = await tx.payment.updateMany({ where: { id: payment.id, status: 'COMPLETED' }, data: { status: 'REFUNDED' } });
@@ -126,20 +129,53 @@ export class RefundsService {
     return { refunded: true, ticketsCancelled: cancelled.length };
   }
 
+  /**
+   * Limits of a refund asked by the organizer; beyond them the ZAYA team decides.
+   * - A ticket already scanned at the entrance: the buyer came in.
+   * - Money already paid out: the refund must fit in what ZAYA still holds for the event
+   *   (the 10 % reserve is there for that), otherwise ZAYA would pay it from its own pocket.
+   */
+  private async assertOrganizerMayRefund(eventId: string, payment: { amount: any; currency: string }, ticketIds: string[]) {
+    const used = ticketIds.length
+      ? await this.prisma.ticket.count({ where: { id: { in: ticketIds }, status: 'USED' } })
+      : 0;
+    if (used > 0) {
+      throw new BadRequestException('Des billets de cette commande ont déjà été scannés à l’entrée : contactez l’équipe ZAYA (contact@zaya.live) pour ce remboursement.');
+    }
+    const currency = payment.currency;
+    const paidOut = await this.prisma.payout.aggregate({ where: { eventId, currency }, _sum: { amount: true } });
+    const alreadyPaid = Number(paidOut._sum.amount ?? 0);
+    if (alreadyPaid <= 0) return;
+    // What the organizer is owed in all, as in PayoutsService: net of completed orders,
+    // minus ZAYA's fee on refunded ones (it stays due)
+    const [withNet, legacy, refunded] = await Promise.all([
+      this.prisma.payment.aggregate({ where: { eventId, currency, status: 'COMPLETED', netAmount: { not: null } }, _sum: { netAmount: true } }),
+      this.prisma.payment.aggregate({ where: { eventId, currency, status: 'COMPLETED', netAmount: null }, _sum: { amount: true } }),
+      this.prisma.payment.aggregate({ where: { eventId, currency, status: 'REFUNDED' }, _sum: { feeAmount: true } }),
+    ]);
+    const owed = Number(withNet._sum.netAmount ?? 0) + Number(legacy._sum.amount ?? 0) - Number(refunded._sum.feeAmount ?? 0);
+    // Refunding the order takes its whole amount off: its net, and its fee which stays due
+    if (owed - alreadyPaid - Number(payment.amount) < 0) {
+      throw new BadRequestException('Les recettes de cet événement vous ont déjà été versées : ce remboursement dépasse ce que ZAYA garde encore. Contactez l’équipe ZAYA (contact@zaya.live).');
+    }
+  }
+
   /** Every paid order of an event (cancelled event) */
   async refundAll(eventId: string, userId: string, role: Role, reason?: string) {
     await this.assertOwner(eventId, userId, role);
     const payments = await this.prisma.payment.findMany({ where: { eventId, status: 'COMPLETED' }, select: { id: true } });
     let done = 0;
+    const skipped = new Set<string>();
     for (const p of payments) {
       try {
         await this.refund(eventId, p.id, userId, role, reason);
         done += 1;
       } catch (err) {
+        skipped.add((err as Error).message);
         this.logger.warn(`Refund of ${p.id} skipped: ${(err as Error).message}`);
       }
     }
-    return { refunded: done, total: payments.length };
+    return { refunded: done, total: payments.length, skipped: [...skipped] };
   }
 
   /** Refunds for the ZAYA team: who to pay back, how much and how */

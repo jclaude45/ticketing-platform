@@ -45,6 +45,9 @@ export default function EventOrdersPage() {
     mutationFn: () => (toRefund === 'ALL' ? billingApi.refundAll(eventId, reason) : billingApi.refund(eventId, (toRefund as EventOrder).id, reason)),
     onSuccess: (res: any) => {
       toast.success(toRefund === 'ALL' ? `${res.refunded} commande(s) remboursée(s)` : 'Commande remboursée : l’acheteur est prévenu par e-mail');
+      if (toRefund === 'ALL' && res.refunded < res.total) {
+        toast.error(`${res.total - res.refunded} commande(s) non remboursée(s). ${res.skipped?.[0] ?? ''}`, { duration: 10000 });
+      }
       setToRefund(null);
       setReason('');
       refresh();

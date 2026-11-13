@@ -653,7 +653,7 @@ export const billingApi = {
   refund: async (eventId: string, paymentId: string, reason?: string) =>
     data<{ refunded: boolean; ticketsCancelled: number }>(await apiClient.post(`/events/${eventId}/orders/${paymentId}/refund`, { reason })),
   refundAll: async (eventId: string, reason?: string) =>
-    data<{ refunded: number; total: number }>(await apiClient.post(`/events/${eventId}/orders/refund-all`, { reason })),
+    data<{ refunded: number; total: number; skipped?: string[] }>(await apiClient.post(`/events/${eventId}/orders/refund-all`, { reason })),
   adminRefunds: async () => data<AdminRefund[]>(await apiClient.get('/admin/refunds')),
   markRefundPaid: async (id: string, body: { reference?: string; note?: string }) =>
     data<unknown>(await apiClient.post(`/admin/refunds/${id}/paid`, body)),
