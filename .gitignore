@@ -51,3 +51,6 @@ backend/prisma/migrations/*.sql
 
 # Docker
 docker/data/
+
+# Files uploaded by users of a local backend (personal data)
+backend/public/uploads/

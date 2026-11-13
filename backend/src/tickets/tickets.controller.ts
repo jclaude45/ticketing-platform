@@ -330,7 +330,11 @@ export class TicketsController {
     @CurrentUser() user: any,
   ) {
     const job = await this.exportQueue.getJob(jobId);
-    if (!job) throw new NotFoundException('Export job not found');
+    // Job ids are sequential: someone else's job answers "not found", like a missing one
+    const isAdmin = user.role === Role.ADMIN || user.role === Role.SUPER_ADMIN;
+    if (!job || job.data?.eventId !== eventId || (!isAdmin && job.data?.userId !== user.id)) {
+      throw new NotFoundException('Export job not found');
+    }
 
     const state = await job.getState();
     if (state === 'completed') {

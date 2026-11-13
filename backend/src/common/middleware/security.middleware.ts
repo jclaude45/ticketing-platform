@@ -36,17 +36,14 @@ export class SecurityMiddleware implements NestMiddleware {
       /chmod\s+[0-9]/i,
     ];
 
-    // Inline images (ticket preview, poster) are opaque base64: random runs like "oNMf…="
-    // match /on\w+\s*=/ and blocked saving a ticket design. Their payload is not scanned.
-    const requestBody = JSON.stringify(req.body ?? '').replace(
-      /data:[\w.+/-]+;base64,[A-Za-z0-9+/=]+/g,
-      'data:;base64,',
-    );
+    // Only the URL and user agent (a few KB at most). Bodies are not scanned: on a large body
+    // some of these patterns backtrack quadratically (400 KB froze the server for 27 s, from
+    // an anonymous request), and they never made text safe anyway (escaping on output does).
     const requestUrl = req.url ?? '';
     const userAgent = req.headers['user-agent'] ?? '';
 
     const isSuspicious = suspiciousPatterns.some(
-      p => p.test(requestBody) || p.test(requestUrl) || p.test(userAgent),
+      p => p.test(requestUrl) || p.test(userAgent),
     );
 
     if (isSuspicious) {

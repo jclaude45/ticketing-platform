@@ -34,6 +34,7 @@ import { ControllerAccess } from '../common/decorators/controller-access.decorat
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Throttle } from '@nestjs/throttler';
 import { ConfigService } from '@nestjs/config';
+import { safeUser } from './safe-user';
 import {
   LEGACY_REFRESH_COOKIE, REFRESH_COOKIE_PATH, refreshCookieName, pickRefreshCookie, allRefreshCookies,
 } from './session-cookies';
@@ -324,7 +325,6 @@ export class AuthController {
   @ApiOperation({ summary: 'Get current authenticated user profile' })
   @ApiResponse({ status: 200, description: 'Current user profile' })
   async getMe(@CurrentUser() user: any) {
-    const { password, refreshToken, twoFactorSecret, ...safeUser } = user;
-    return safeUser;
+    return safeUser(user);
   }
 }

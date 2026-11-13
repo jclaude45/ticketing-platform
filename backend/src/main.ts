@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import { ExpressAdapter } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -13,7 +14,12 @@ import { ConfigService } from '@nestjs/config';
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
 
-  const app = await NestFactory.create(AppModule, {
+  // Paths are matched exactly: "/api/v1/Users/me" reached the /users/me route while the
+  // collaborator permission checks (workspace.ts) and the nginx rate limits saw another path
+  const server = require('express')();
+  server.set('case sensitive routing', true);
+
+  const app = await NestFactory.create(AppModule, new ExpressAdapter(server), {
     logger: ['error', 'warn', 'log'],
   });
 
@@ -45,7 +51,19 @@ async function bootstrap() {
   const { mkdirSync } = await import('fs');
   const uploadsPath = join(process.cwd(), 'public', 'uploads');
   mkdirSync(uploadsPath, { recursive: true });
-  app.use('/uploads', require('express').static(uploadsPath));
+  // Only images, never interpreted as a page: an uploaded file is served from the app's own
+  // origin, where a script would run with the visitor's session
+  const IMAGE_FILE = /\.(jpe?g|png|webp|gif)$/i;
+  app.use(
+    '/uploads',
+    (req: any, res: any, next: any) => (IMAGE_FILE.test(req.path) ? next() : res.status(404).end()),
+    require('express').static(uploadsPath, {
+      setHeaders: (res: any) => {
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+      },
+    }),
+  );
 
   app.use((helmet as any)());
   app.use((compression as any)());

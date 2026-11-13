@@ -268,6 +268,13 @@ export class ControllersService {
 
   async invite(organizerId: string, dto: InviteControllerDto) {
     await this.subscriptions.assertCanAddController(organizerId);
+    // Like assignEvent: an organizer's controller only scans that organizer's events.
+    // Event ids are public, and this used to attach a controller to anyone's event.
+    if (dto.eventIds?.length) {
+      const ids = [...new Set(dto.eventIds)];
+      const owned = await this.prisma.event.count({ where: { id: { in: ids }, organizerId } });
+      if (owned !== ids.length) throw new ForbiddenException('Event does not belong to you');
+    }
     const existing = await this.prisma.controller.findUnique({ where: { email: dto.email } });
     if (existing) throw new ConflictException('A controller with this email already exists');
 

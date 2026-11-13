@@ -170,6 +170,8 @@ services:
 
   nginx:
     restart: always
+    # Reloads every 12 h so the certificates renewed by the certbot container are picked up
+    command: ["/bin/sh", "-c", "while :; do sleep 12h; nginx -s reload; done & exec nginx -g 'daemon off;'"]
     volumes:
       - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./docker/nginx/ssl:/etc/nginx/ssl:ro

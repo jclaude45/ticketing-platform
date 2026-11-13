@@ -20,9 +20,13 @@ const RANK: Record<WorkspacePermission, number> = { VIEWER: 0, TICKETING: 1, MAN
 export const hasPermission = (granted: WorkspacePermission, needed: WorkspacePermission) =>
   RANK[granted] >= RANK[needed];
 
-/** Request path without the global /api/v1 prefix and query string. */
+/**
+ * Request path without the global /api/v1 prefix and query string, lowercased with repeated
+ * slashes collapsed, so "/Users/me" cannot slip past the prefixes below (routing is also
+ * case-sensitive, see main.ts).
+ */
 export function routePath(req: Request): string {
-  const path = (req.originalUrl ?? req.url ?? '').split('?')[0];
+  const path = (req.originalUrl ?? req.url ?? '').split('?')[0].toLowerCase().replace(/\/{2,}/g, '/');
   return path.replace(/^\/api\/v\d+/, '') || '/';
 }
 
@@ -49,6 +53,9 @@ export function requiredPermission(method: string, path: string): WorkspacePermi
   if (path === '/admin' || path.startsWith('/admin/')) return null;
   if (path === '/users' || path.startsWith('/users/')) return null;
   if (path.startsWith('/subscriptions')) return isRead ? 'VIEWER' : null;
+  // Money leaving the account: where payouts are sent, the plan, refunds to buyers
+  if (path === '/billing/payout-info' || path === '/billing/plan') return null;
+  if (/^\/events\/[^/]+\/orders(\/|$)/.test(path) && !isRead) return null;
 
   if (path.startsWith('/account/collaborators')) return 'ADMIN';
   if (path.startsWith('/account/zones')) return isRead ? 'VIEWER' : 'ADMIN';

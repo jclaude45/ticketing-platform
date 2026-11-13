@@ -1,5 +1,6 @@
 import { Injectable, ExecutionContext } from '@nestjs/common';
 import { ThrottlerGuard } from '@nestjs/throttler';
+import { clientIp } from '../common/client-ip';
 
 /**
  * Rate-limits by authenticated user ID instead of IP address.
@@ -10,6 +11,6 @@ import { ThrottlerGuard } from '@nestjs/throttler';
 @Injectable()
 export class ThrottlerByUserGuard extends ThrottlerGuard {
   protected async getTracker(req: Record<string, any>): Promise<string> {
-    return req.user?.id ?? req.ip;
+    return req.user?.id ?? clientIp(req as any) ?? req.ip;
   }
 }

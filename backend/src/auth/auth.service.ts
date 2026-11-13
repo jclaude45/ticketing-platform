@@ -22,6 +22,7 @@ import { button, emailLayout, emailText, esc, note, p } from '../common/email/la
 import * as QRCode from 'qrcode';
 import { Role } from '@prisma/client';
 import * as nodemailer from 'nodemailer';
+import { safeUser } from './safe-user';
 
 /** Where a session was opened (shown later in a list of signed-in devices) */
 export interface SessionDevice {
@@ -246,10 +247,8 @@ export class AuthService {
       this.logger.warn(`Claiming pending task assignments failed: ${err?.message}`),
     );
 
-    const { password: _, refreshToken: __, ...safeUser } = user as any;
-
     return {
-      user: safeUser,
+      user: safeUser(user),
       ...tokens,
     };
   }

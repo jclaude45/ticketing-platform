@@ -14,7 +14,6 @@ import { UpdateUserDto, ChangePasswordDto, NotificationPrefsDto } from './dto/up
 import { notificationPrefs } from '../notifications/notification-prefs';
 import { Role } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
-import * as path from 'path';
 
 @Injectable()
 export class UsersService {
@@ -239,7 +238,7 @@ export class UsersService {
     this.storageService.validateFileType(mimeType, ['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
     this.storageService.validateFileSize(fileBuffer.length, 5 * 1024 * 1024);
 
-    const ext = path.extname(originalName).toLowerCase() || '.jpg';
+    const ext = this.storageService.imageExtension(fileBuffer);
     const result = await this.storageService.uploadBuffer(
       fileBuffer,
       `${userId}${ext}`,
