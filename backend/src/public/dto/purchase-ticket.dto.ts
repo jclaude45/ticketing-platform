@@ -14,6 +14,9 @@ export class PurchaseTicketDto {
   @IsEmail() holderEmail: string;
   @IsString() @MaxLength(30) holderPhone: string;
 
+  /** Cloudflare Turnstile token (anti-robot) */
+  @IsOptional() @IsString() @MaxLength(2048) captcha?: string;
+
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(20)

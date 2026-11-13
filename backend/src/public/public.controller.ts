@@ -67,7 +67,10 @@ export class PublicController {
 
   @Post('events/:id/register')
   @ApiOperation({ summary: 'Purchase / register for a ticket' })
-  purchaseTicket(@Param('id') eventId: string, @Body() dto: PurchaseTicketDto, @Req() req: Request) {
-    return this.service.purchaseTicket(eventId, dto, clientIp(req));
+  async purchaseTicket(@Param('id') eventId: string, @Body() dto: PurchaseTicketDto, @Req() req: Request) {
+    // Free tickets: a robot would empty the event's places
+    await this.turnstile.verify(dto.captcha, clientIp(req));
+    const { captcha, ...order } = dto;
+    return this.service.purchaseTicket(eventId, order, clientIp(req));
   }
 }

@@ -4,15 +4,19 @@ import { clientIp } from '../common/client-ip';
 import { PaymentService } from './payment.service';
 import { InitiatePaymentDto } from './dto/initiate-payment.dto';
 import { FlexPayWebhookGuard } from './flexpay-webhook.guard';
+import { TurnstileService } from '../auth/turnstile.service';
 
 @Controller('public')
 export class PaymentController {
   private readonly logger = new Logger(PaymentController.name);
-  constructor(private readonly paymentService: PaymentService) {}
+  constructor(private readonly paymentService: PaymentService, private readonly turnstile: TurnstileService) {}
 
   @Post('events/:eventId/initiate-payment')
-  initiatePayment(@Param('eventId') eventId: string, @Body() dto: InitiatePaymentDto, @Req() req: Request) {
-    return this.paymentService.initiatePayment(eventId, dto, clientIp(req));
+  async initiatePayment(@Param('eventId') eventId: string, @Body() dto: InitiatePaymentDto, @Req() req: Request) {
+    // A robot could otherwise send mobile money requests to any phone number, in a loop
+    await this.turnstile.verify(dto.captcha, clientIp(req));
+    const { captcha, ...order } = dto;
+    return this.paymentService.initiatePayment(eventId, order, clientIp(req));
   }
 
   @Post('payments/callback')

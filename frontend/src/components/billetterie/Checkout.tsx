@@ -14,6 +14,8 @@ import { suggestMailDomain } from '@/lib/mail-domain';
 import { TicketVisual, ExportPDFButton, type TicketData } from './TicketCard';
 import { ProductCard, CartSummary, cartLines, money, variantLabel, type Cart, type ShopCatalog } from './Shop';
 import { StoreButtons } from '@/components/site/StoreButtons';
+import { Captcha } from '@/components/auth/Captcha';
+import { takeCaptcha } from '@/lib/captcha';
 import { formatEventDayTime, formatPrice, capitalize, tariffDaysLabel } from '@/components/site/format';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -269,7 +271,8 @@ export function Checkout({
   const mutation = useMutation({
     mutationFn: (): Promise<{ data: unknown }> => {
       const holder = { holderName: name.trim(), holderEmail: email.trim(), holderPhone: normalizeDrcPhone(phone)! };
-      if (!isPaid) return publicApi.purchaseTicket(event.id, { ...holder, items });
+      const captcha = takeCaptcha();
+      if (!isPaid) return publicApi.purchaseTicket(event.id, { ...holder, items, captcha });
       return publicApi.initiatePayment(event.id, {
         ...holder,
         items,
@@ -283,6 +286,7 @@ export function Checkout({
           }),
         }),
         paymentMethod: method!,
+        captcha,
       });
     },
     onMutate: () => setPayError(null),
@@ -522,6 +526,7 @@ export function Checkout({
                   {payError && (
                     <p className="flex items-start gap-1.5 text-sm text-red-600"><AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />{payError}</p>
                   )}
+                  <Captcha className="flex justify-center" />
                   <BuyButton disabled={!canPay} loading={mutation.isPending} onClick={() => mutation.mutate()}>
                     {isPaid ? `Acheter · ${formatPrice(grandTotal, currency)}` : 'Obtenir mes billets'}
                   </BuyButton>

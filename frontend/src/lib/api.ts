@@ -843,6 +843,7 @@ export const publicApi = {
     holderName: string;
     holderEmail: string;
     holderPhone: string;
+    captcha?: string;
     items: { templateId: string; quantity: number }[];
   }) =>
     publicClient.post(`/public/events/${eventId}/register`, data),
@@ -851,6 +852,7 @@ export const publicApi = {
     holderName: string;
     holderEmail: string;
     holderPhone: string;
+    captcha?: string;
     items: { templateId: string; quantity: number }[];
     merch?: { variantId: string; quantity: number }[];
     fulfillment?: 'PICKUP' | 'DELIVERY';

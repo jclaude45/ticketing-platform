@@ -11,6 +11,9 @@ export class InitiatePaymentDto {
   @IsEmail() holderEmail: string;
   @IsString() @MaxLength(30) holderPhone: string;
 
+  /** Cloudflare Turnstile token (anti-robot) */
+  @IsOptional() @IsString() @MaxLength(2048) captcha?: string;
+
   @IsOptional() @IsArray() @ArrayMaxSize(20)
   @ValidateNested({ each: true }) @Type(() => TicketItemDto)
   items?: TicketItemDto[];
