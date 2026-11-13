@@ -85,8 +85,13 @@ function SettingsContent() {
       const updated = (res.data as any)?.data ?? res.data;
       setUser(updated);
       toast.success('Photo de profil mise à jour');
-    } catch {
-      toast.error('Erreur lors du téléchargement');
+    } catch (err: any) {
+      const status = err?.response?.status;
+      toast.error(
+        !err?.response || status === 408
+          ? 'La connexion a coupé pendant l’envoi. Vérifiez votre réseau (ou VPN) et réessayez.'
+          : [err.response.data?.message].flat()[0] ?? 'Erreur lors de l’envoi de la photo',
+      );
     } finally {
       setAvatarLoading(false);
       if (avatarInputRef.current) avatarInputRef.current.value = '';
