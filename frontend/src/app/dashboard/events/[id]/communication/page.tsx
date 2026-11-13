@@ -769,10 +769,7 @@ function TemplateCard({
               </button>
             </div>
             <div className="flex-1 overflow-auto bg-gray-100 dark:bg-gray-950 p-4">
-              <div
-                className="max-w-[600px] mx-auto bg-white rounded-lg overflow-hidden shadow"
-                dangerouslySetInnerHTML={{ __html: template.body }}
-              />
+              <EmailPreview html={template.body} className="w-full max-w-[600px] h-[70vh] mx-auto block bg-white rounded-lg shadow" />
             </div>
             <div className="px-6 py-3 border-t border-gray-200 dark:border-gray-800 bg-amber-50 dark:bg-amber-900/20">
               <p className="text-xs text-amber-700 dark:text-amber-400">
@@ -1119,10 +1116,7 @@ function NewCampaignModal({
             </div>
 
             {showPreview && isEmail ? (
-              <div
-                className="w-full min-h-[200px] border-b border-gray-200 dark:border-gray-700 bg-white py-4 text-sm overflow-auto"
-                dangerouslySetInnerHTML={{ __html: form.body }}
-              />
+              <EmailPreview html={form.body} className="w-full h-[480px] block border-b border-gray-200 dark:border-gray-700 bg-white" />
             ) : (
               <textarea
                 value={form.body}
@@ -1366,4 +1360,13 @@ function CampaignStatsModal({
       </div>
     </div>
   );
+}
+
+/**
+ * E-mail HTML shown in a sandboxed frame: no script runs and it cannot reach the dashboard.
+ * Templates are written by the organizer's collaborators too; injected into the page, a
+ * <img onerror> in one ran with the session of whoever opened the preview.
+ */
+function EmailPreview({ html, className }: { html: string; className?: string }) {
+  return <iframe title="Aperçu de l’e-mail" sandbox="" srcDoc={html} className={className} />;
 }

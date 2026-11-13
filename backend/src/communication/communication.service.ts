@@ -8,6 +8,15 @@ import { Twilio } from 'twilio';
 import { CreateCampaignDto, UpdateCampaignDto, ScheduleCampaignDto } from './dto/create-campaign.dto';
 import { CreateTemplateDto, UpdateTemplateDto } from './dto/create-template.dto';
 import { DEFAULT_TEMPLATES } from './default-templates';
+import { SubscriptionService } from '../subscription/subscription.service';
+import { esc } from '../common/email/layout';
+
+/**
+ * Free plan: campaigns leave from ZAYA's mail domain, and a free account (made by a bot as
+ * easily as by a person) must not turn it into a spam channel that gets it blocklisted.
+ */
+const FREE_CAMPAIGNS_PER_EVENT = 5;
+const FREE_RECIPIENTS_PER_DAY = 300;
 
 @Injectable()
 export class CommunicationService {
@@ -21,6 +30,7 @@ export class CommunicationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly subscriptions: SubscriptionService,
   ) {
     this.mailerTransport = nodemailer.createTransport({
       host: config.get('email.host'),
@@ -230,13 +240,14 @@ export class CommunicationService {
       throw new BadRequestException('Envoi déjà en cours');
     }
 
+    // Build recipients from ticket holders
+    const recipients = await this.buildRecipients(campaign.eventId, campaignId);
+    await this.assertSendAllowed(campaign, recipients);
+
     await this.prisma.notificationCampaign.update({
       where: { id: campaignId },
       data: { status: CampaignStatus.SENDING },
     });
-
-    // Build recipients from ticket holders
-    const recipients = await this.buildRecipients(campaign.eventId, campaignId);
 
     this.dispatchCampaign(campaign, recipients).catch(err =>
       this.logger.error(`Erreur envoi campagne ${campaignId}: ${err.message}`)
@@ -377,6 +388,7 @@ export class CommunicationService {
     for (const campaign of due) {
       try {
         const recipients = await this.buildRecipients(campaign.eventId, campaign.id);
+        await this.assertSendAllowed(campaign, recipients);
         await this.dispatchCampaign(campaign, recipients);
       } catch (err) {
         this.logger.error(`Échec campagne ${campaign.id}: ${err.message}`);
@@ -389,6 +401,31 @@ export class CommunicationService {
   }
 
   // ─── PRIVATE HELPERS ──────────────────────────────────────────
+
+  /** Plan limits of a send: communication allowed, and the free plan's caps */
+  private async assertSendAllowed(campaign: { id: string; eventId: string; event: { organizerId: string } }, recipients: { status: RecipientStatus }[]) {
+    const organizerId = campaign.event.organizerId;
+    const { plan } = await this.subscriptions.getEffectivePlan(organizerId);
+    if (!plan.allowCommunication) throw new ForbiddenException('Votre forfait ne comprend pas les campagnes.');
+    if (plan.code !== 'FREE') return;
+
+    const SENT_STATUSES = [CampaignStatus.SENDING, CampaignStatus.SENT, CampaignStatus.PARTIALLY_SENT];
+    const sentForEvent = await this.prisma.notificationCampaign.count({
+      where: { eventId: campaign.eventId, id: { not: campaign.id }, status: { in: SENT_STATUSES } },
+    });
+    if (sentForEvent >= FREE_CAMPAIGNS_PER_EVENT) {
+      throw new ForbiddenException(`Le forfait gratuit permet ${FREE_CAMPAIGNS_PER_EVENT} campagnes par événement. Passez à un forfait payant pour en envoyer davantage.`);
+    }
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const sentToday = await this.prisma.campaignRecipient.count({
+      where: { status: RecipientStatus.SENT, sentAt: { gte: since }, campaign: { event: { organizerId } } },
+    });
+    const toSend = recipients.filter((r) => r.status !== RecipientStatus.SENT).length;
+    if (sentToday + toSend > FREE_RECIPIENTS_PER_DAY) {
+      throw new ForbiddenException(`Le forfait gratuit permet ${FREE_RECIPIENTS_PER_DAY} envois par 24 heures (déjà ${sentToday}, cette campagne : ${toSend}). Réessayez plus tard ou passez à un forfait payant.`);
+    }
+  }
+
 
   private async buildRecipients(eventId: string, campaignId: string) {
     // Check if recipients already created
@@ -449,7 +486,10 @@ export class CommunicationService {
 
       // No poster: drop its row rather than show a broken image
       const source = vars.bannerUrl ? campaign.body : campaign.body.replace(/<tr>\s*<td[^>]*>\s*<img src="\{\{bannerUrl\}\}"[\s\S]*?<\/td>\s*<\/tr>/g, '');
-      const body = this.renderTemplate(source, vars);
+      // Values typed by buyers and organizers go into HTML: escaped, never markup
+      const body = this.renderTemplate(source, campaign.channel === NotificationChannel.EMAIL
+        ? Object.fromEntries(Object.entries(vars).map(([k, v]) => [k, esc(String(v ?? ''))]))
+        : vars);
       const subject = campaign.subject ? this.renderTemplate(campaign.subject, vars) : undefined;
 
       try {
@@ -503,6 +543,8 @@ export class CommunicationService {
       to,
       subject,
       html,
+      // Mail apps show a "Se désinscrire" button; the request reaches the ZAYA team
+      headers: { 'List-Unsubscribe': `<mailto:contact@zaya.live?subject=${encodeURIComponent(`Désinscription ${to}`)}>` },
     });
   }
 
