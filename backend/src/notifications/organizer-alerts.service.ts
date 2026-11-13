@@ -156,6 +156,58 @@ export class OrganizerAlertsService {
     }
   }
 
+  /**
+   * A buyer paid but the tickets could not be issued (tariff sold out meanwhile, event
+   * cancelled…). The order stays « En cours »: the organizer and the ZAYA team are told,
+   * whatever their settings, so the buyer gets a ticket or a refund.
+   */
+  async paidWithoutTickets(paymentId: string, reason: string) {
+    try {
+      const pay = await this.prisma.payment.findUnique({
+        where: { id: paymentId },
+        select: {
+          reference: true, amount: true, currency: true, holderName: true, holderEmail: true, holderPhone: true,
+          event: { select: { id: true, name: true, organizer: { select: { id: true, email: true, firstName: true } } } },
+        },
+      });
+      if (!pay) return;
+      const admins = await this.prisma.user.findMany({
+        where: { role: { in: ['ADMIN', 'SUPER_ADMIN'] }, isActive: true },
+        select: { id: true, email: true, firstName: true },
+      });
+      const amount = `${Number(pay.amount).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} ${pay.currency}`;
+      const subject = `Paiement reçu sans billet — ${pay.event.name}`;
+      const link = `/dashboard/events/${pay.event.id}/orders`;
+      for (const user of [pay.event.organizer, ...admins.filter((a) => a.id !== pay.event.organizer.id)]) {
+        await this.notifications.create(user.id, {
+          title: subject,
+          message: `${pay.holderName} a payé ${amount} mais ses billets n'ont pas pu être émis (${pay.reference}).`,
+          type: 'error',
+          link,
+        }).catch(() => {});
+        await this.send(user.email, subject, {
+          eyebrow: 'Action requise',
+          intro: [
+            `Bonjour ${user.firstName ?? ''},`,
+            'Un acheteur a payé sa commande, mais ses billets n’ont pas pu être émis. La commande reste « En cours ».',
+          ],
+          rows: [
+            ['Événement', pay.event.name],
+            ['Référence', pay.reference],
+            ['Acheteur', pay.holderName],
+            ['Contact', [pay.holderEmail, pay.holderPhone].filter(Boolean).join(' · ') || '—'],
+            ['Montant', amount],
+            ['Cause', reason],
+          ],
+          outro: 'Contactez l’acheteur : ajoutez des places au tarif et émettez ses billets, ou remboursez-le avec l’équipe ZAYA.',
+          cta: ['Voir les commandes', `${this.app}${link}`],
+        });
+      }
+    } catch (err) {
+      this.logger.error(`Paid-without-tickets alert for payment ${paymentId} failed: ${(err as Error).message}`);
+    }
+  }
+
   /** Every quarter of an hour: scan summaries, then sold-out events */
   @Cron('*/15 * * * *')
   async quarterly() {

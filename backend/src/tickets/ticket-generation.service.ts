@@ -37,6 +37,8 @@ export class TicketGenerationService {
       metadata?: Prisma.InputJsonValue;
       /** For the ticket history: where the batch comes from (default: the organizer) */
       source?: TicketSource;
+      /** The seats were already taken from the tariff (paid order holding them since checkout) */
+      stockHeld?: boolean;
     },
   ) {
     // Validate event
@@ -70,7 +72,7 @@ export class TicketGenerationService {
       throw new BadRequestException('Veuillez fournir soit un nombre de billets (count), soit une liste de participants (holders).');
     }
 
-    if (count > template.availableCount) {
+    if (!options?.stockHeld && count > template.availableCount) {
       throw new BadRequestException(
         `Cannot generate ${count} tickets. Only ${template.availableCount} available in this template.`,
       );
@@ -107,67 +109,70 @@ export class TicketGenerationService {
     // Decrypt private key — stored encrypted (AES-256-GCM) in DB
     const plainPrivateKey = this.cryptoService.decryptAES(keyPair.privateKey, encKey);
 
-    // Count existing tickets FOR THIS TEMPLATE only — serial numbers restart at 1 per template.
-    // The template discriminator (tmplDisc) embedded in the serial ensures global @unique is
-    // never violated even when multiple templates share the same event + eventCode.
-    const existingCount = await this.prisma.ticket.count({
-      where: { eventId, templateId: dto.templateId },
-    });
-
     const ticketsData: any[] = [];
     const year = new Date().getFullYear();
     const eventCode = this.cryptoService.generateEventCode(event.name, year);
     // 6-char template discriminator — derived from the template UUID so it is globally unique.
     const tmplDisc = dto.templateId.replace(/-/g, '').slice(0, 6).toUpperCase();
-
     const purchasedAt = new Date();
-    for (let i = 0; i < count; i++) {
-      const sequence = existingCount + i + 1;
-      // Format: <eventCode>-<tmplDisc>-<sequence>  e.g.  KNK2026-A1B2C3-00001
-      const serialNumber = `${eventCode}-${tmplDisc}-${sequence.toString().padStart(5, '0')}`;
 
-      const holderName = holders[i]?.holderName?.trim();
-      const holderEmail = holders[i]?.holderEmail?.trim();
-      const holderPhone = holders[i]?.holderPhone?.trim();
-
-      // The id is chosen here, so the ticket is signed once with its final id. No QR image is
-      // stored: it is drawn from the id and serial wherever it is shown (PDF, e-mail, page).
-      const id = randomUUID();
-      const signature = this.qrcodeService.signTicket(
-        { ticketId: id, serialNumber, eventId, eventName: event.name, holderName, templateId: dto.templateId },
-        plainPrivateKey,
-      );
-
-      ticketsData.push({
-        id,
-        serialNumber,
-        qrCode: null,
-        qrCodeSignature: signature,
-        holderName: holderName || null,
-        holderEmail: holderEmail || null,
-        holderPhone: holderPhone || null,
-        status: TicketStatus.VALID,
-        price: options?.price ?? template.price,
-        currency: template.currency,
-        purchasedAt,
-        eventId,
-        templateId: dto.templateId,
-        ...(options?.metadata !== undefined && { metadata: options.metadata }),
-        source,
-      });
-    }
-
-    // Batch insert tickets + atomic stock decrement in one transaction.
-    // updateMany with gte condition is the critical section: prevents overselling
-    // even when concurrent requests both passed the pre-flight check above.
+    // Stock decrement, serial numbers and insert in one transaction. The tariff row stays
+    // locked until commit: concurrent batches for the same tariff (two payments confirmed at
+    // once) take turns, so the stock never goes below zero and no serial number is reused.
     await this.prisma.$transaction(async (tx) => {
-      const reserved = await tx.ticketTemplate.updateMany({
-        where: { id: dto.templateId, availableCount: { gte: count } },
-        data: { availableCount: { decrement: count } },
-      });
-      if (reserved.count === 0) {
-        throw new BadRequestException(`Stock épuisé : plus assez de places disponibles pour ce type de billet.`);
+      await tx.$queryRaw`SELECT id FROM "TicketTemplate" WHERE id = ${dto.templateId} FOR UPDATE`;
+      if (!options?.stockHeld) {
+        const reserved = await tx.ticketTemplate.updateMany({
+          where: { id: dto.templateId, availableCount: { gte: count } },
+          data: { availableCount: { decrement: count } },
+        });
+        if (reserved.count === 0) {
+          throw new BadRequestException(`Stock épuisé : plus assez de places disponibles pour ce type de billet.`);
+        }
       }
+
+      // Serial numbers restart at 1 per template. The template discriminator (tmplDisc)
+      // embedded in the serial keeps the global @unique even when templates share an eventCode.
+      const existingCount = await tx.ticket.count({
+        where: { eventId, templateId: dto.templateId },
+      });
+
+      for (let i = 0; i < count; i++) {
+        const sequence = existingCount + i + 1;
+        // Format: <eventCode>-<tmplDisc>-<sequence>  e.g.  KNK2026-A1B2C3-00001
+        const serialNumber = `${eventCode}-${tmplDisc}-${sequence.toString().padStart(5, '0')}`;
+
+        const holderName = holders[i]?.holderName?.trim();
+        const holderEmail = holders[i]?.holderEmail?.trim();
+        const holderPhone = holders[i]?.holderPhone?.trim();
+
+        // The id is chosen here, so the ticket is signed once with its final id. No QR image is
+        // stored: it is drawn from the id and serial wherever it is shown (PDF, e-mail, page).
+        const id = randomUUID();
+        const signature = this.qrcodeService.signTicket(
+          { ticketId: id, serialNumber, eventId, eventName: event.name, holderName, templateId: dto.templateId },
+          plainPrivateKey,
+        );
+
+        ticketsData.push({
+          id,
+          serialNumber,
+          qrCode: null,
+          qrCodeSignature: signature,
+          holderName: holderName || null,
+          holderEmail: holderEmail || null,
+          holderPhone: holderPhone || null,
+          status: TicketStatus.VALID,
+          price: options?.price ?? template.price,
+          currency: template.currency,
+          purchasedAt,
+          eventId,
+          templateId: dto.templateId,
+          ...(options?.metadata !== undefined && { metadata: options.metadata }),
+          source,
+        });
+      }
+
       // One insert per 1 000 tickets instead of one per ticket
       for (let i = 0; i < ticketsData.length; i += 1000) {
         await tx.ticket.createMany({ data: ticketsData.slice(i, i + 1000) });

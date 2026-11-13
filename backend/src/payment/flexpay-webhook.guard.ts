@@ -1,6 +1,7 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
+import { createHash, timingSafeEqual } from 'crypto';
 
 @Injectable()
 export class FlexPayWebhookGuard implements CanActivate {
@@ -19,7 +20,9 @@ export class FlexPayWebhookGuard implements CanActivate {
       throw new UnauthorizedException('Missing webhook authorization');
     }
 
-    if (token !== this.expectedToken) {
+    // Compared in constant time (hashes have the same length whatever the token sent)
+    const digest = (v: string) => createHash('sha256').update(v).digest();
+    if (!timingSafeEqual(digest(token), digest(this.expectedToken))) {
       throw new UnauthorizedException('Invalid webhook token');
     }
 

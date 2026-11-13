@@ -5,7 +5,7 @@ import { QrcodeService } from '../qrcode/qrcode.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TicketGenerationService } from '../tickets/ticket-generation.service';
 import { PublicService } from '../public/public.service';
-import { Payment, Role } from '@prisma/client';
+import { Payment, Prisma, Role } from '@prisma/client';
 import axios from 'axios';
 
 import { InitiatePaymentDto } from './dto/initiate-payment.dto';
@@ -18,6 +18,12 @@ import { flexPayReference } from '../common/flexpay-reference';
 import { assertMailDomain } from '../common/email/mail-domain';
 
 export type PaymentMethod = 'mobile_money' | 'card';
+
+/** A ticket line of an order; `held` marks seats taken from the tariff at checkout */
+type OrderItem = { templateId: string; quantity: number; held?: boolean };
+
+/** What FlexPay says about a transaction. PENDING: not settled yet (or not known yet). */
+type Verification = 'VERIFIED' | 'REJECTED' | 'PENDING' | 'UNREACHABLE';
 
 @Injectable()
 export class PaymentService {
@@ -123,7 +129,11 @@ export class PaymentService {
     const apiBase = this.config.get<string>('frontend.publicUrl') || 'https://zaya.live';
     const apiBackend = this.config.get<string>('BACKEND_URL') || 'https://api.zaya.live';
 
-    const payment = await this.prisma.payment.create({
+    // The seats are taken now, with the order: a buyer who pays always gets a ticket, and the
+    // last places cannot be paid twice. A payment that fails gives them back.
+    const payment = await this.prisma.$transaction(async (tx) => {
+      await this.takeSeats(tx, ticketItems.map(item => ({ ...item, name: templates.find(t => t.id === item.templateId)!.name })));
+      return tx.payment.create({
       data: {
         reference,
         eventId,
@@ -137,8 +147,9 @@ export class PaymentService {
         feeAmount: roundMoney(split.fee + (merchQuote?.fee ?? 0), currency),
         feePayer: event.feePayer,
         netAmount: roundMoney(split.organizerGets + merchNet, currency),
-        items: ticketItems as any,
+        items: ticketItems.map(item => ({ templateId: item.templateId, quantity: item.quantity, held: true })) as any,
       },
+      });
     });
 
     try {
@@ -153,9 +164,8 @@ export class PaymentService {
       }
       return await this.initiateCard(payment, event, total, currency, apiBase, apiBackend);
     } catch (err) {
-      // Nothing will be paid: free the reserved items and close the payment
-      await this.shop.cancelForPayment(payment.id);
-      await this.prisma.payment.updateMany({ where: { id: payment.id, status: 'PENDING' }, data: { status: 'FAILED' } });
+      // Nothing will be paid: free the seats and shop items and close the payment
+      await this.failPayment(payment);
       throw err;
     }
   }
@@ -268,33 +278,31 @@ export class PaymentService {
     if (!body.reference) return { received: true };
 
     const payment = await this.prisma.payment.findUnique({ where: { reference: body.reference } });
-    if (!payment || payment.status !== 'PENDING') {
+    const success = String(body.code) === '0';
+    // A success can arrive after the order was failed (buyer validated late): it is still
+    // honored, the buyer has paid. Anything else only concerns pending orders.
+    if (!payment || !(payment.status === 'PENDING' || (payment.status === 'FAILED' && success))) {
       this.logger.warn(`Payment ${body.reference} not pending — ignoring callback`);
       return { received: true };
     }
 
-    if (String(body.code) !== '0') {
-      this.logger.log(`FlexPay callback reported failure for ${body.reference}: code=${body.code}`);
-      await this.failPayment(payment);
-      return { received: true };
-    }
-
-    // Re-verify the transaction with FlexPay before generating tickets
+    // FlexPay's own record decides, for a success as for a failure: the callback alone could
+    // come early (the transaction not settled yet) or be replayed
     const verifyRef = payment.orderNumber || body.orderNumber;
     if (!verifyRef) {
-      this.logger.warn(`No orderNumber to verify for ${body.reference} — rejecting`);
-      await this.failPayment(payment);
+      this.logger.warn(`No orderNumber to verify for ${body.reference} — left to the status checks`);
       return { received: true };
     }
 
     const verification = await this.verifyWithFlexPay(verifyRef, Number(payment.amount));
-    if (verification === 'UNREACHABLE') return { received: true }; // stays PENDING: a later check can complete it
-    if (verification === 'REJECTED') {
+    if (verification === 'VERIFIED') {
+      await this.claimAndGenerate(payment, body.provider_reference || body.provider_ref);
+    } else if (verification === 'REJECTED') {
       await this.failPayment(payment);
-      return { received: true };
+    } else if (!success) {
+      this.logger.log(`FlexPay callback reported failure for ${body.reference} (code=${body.code}) but the transaction is ${verification} — kept pending`);
     }
-
-    await this.claimAndGenerate(payment, body.provider_reference || body.provider_ref);
+    // PENDING / UNREACHABLE: stays pending, a status check or the 15-minute sweep settles it
     return { received: true };
   }
 
@@ -316,8 +324,10 @@ export class PaymentService {
     // If still pending, check with FlexPay (the callback may be late or lost)
     if (payment.status === 'PENDING' && payment.orderNumber) {
       const verification = await this.verifyWithFlexPay(payment.orderNumber, Number(payment.amount));
-      if (verification === 'VERIFIED') {
-        await this.claimAndGenerate(payment);
+      if (verification === 'VERIFIED') await this.claimAndGenerate(payment);
+      // FlexPay says the payment failed: the buyer sees it now and the seats go back on sale
+      else if (verification === 'REJECTED') await this.failPayment(payment);
+      if (verification === 'VERIFIED' || verification === 'REJECTED') {
         const updated = await this.prisma.payment.findUnique({ where: { reference } });
         return { status: updated!.status, tickets: updated!.ticketsData, merchOrder: await this.shop.orderSummaryForPayment(payment.id) };
       }
@@ -328,7 +338,8 @@ export class PaymentService {
 
   /**
    * Every 15 minutes: settles orders still pending after an hour (callback lost, buyer gone,
-   * push refused). FlexPay decides; an order FlexPay never received is failed.
+   * push refused). FlexPay decides; an order FlexPay never received or never settled is
+   * failed and its seats go back on sale. A success reported later is still honored.
    */
   @Cron('*/15 * * * *')
   async settleStalePayments() {
@@ -344,7 +355,7 @@ export class PaymentService {
         }
         const verification = await this.verifyWithFlexPay(payment.orderNumber, Number(payment.amount));
         if (verification === 'VERIFIED') await this.claimAndGenerate(payment);
-        else if (verification === 'REJECTED') await this.failPayment(payment);
+        else if (verification === 'REJECTED' || verification === 'PENDING') await this.failPayment(payment);
       } catch (err) {
         this.logger.error(`Cannot settle pending payment ${payment.reference}: ${err.message}`);
       }
@@ -352,21 +363,48 @@ export class PaymentService {
     if (stale.length) this.logger.log(`Checked ${stale.length} stale pending payment(s)`);
   }
 
-  /** Marks a pending payment failed and releases any shop items it reserved. */
+  /** Marks a pending payment failed and gives back the seats and shop items it held. */
   private async failPayment(payment: { id: string }) {
-    const failed = await this.prisma.payment.updateMany({ where: { id: payment.id, status: 'PENDING' }, data: { status: 'FAILED' } });
-    if (failed.count) await this.shop.cancelForPayment(payment.id);
+    const failed = await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.payment.updateMany({ where: { id: payment.id, status: 'PENDING' }, data: { status: 'FAILED' } });
+      if (!claimed.count) return false;
+      const row = await tx.payment.findUnique({ where: { id: payment.id }, select: { items: true } });
+      for (const item of (row?.items ?? []) as OrderItem[]) {
+        if (!item.held) continue;
+        await tx.ticketTemplate.updateMany({ where: { id: item.templateId }, data: { availableCount: { increment: item.quantity } } });
+      }
+      return true;
+    });
+    if (failed) await this.shop.cancelForPayment(payment.id);
+  }
+
+  /** Takes the seats of an order from their tariffs: all of them or none. */
+  private async takeSeats(tx: Prisma.TransactionClient, items: { templateId: string; quantity: number; name?: string }[]) {
+    for (const item of items) {
+      const taken = await tx.ticketTemplate.updateMany({
+        where: { id: item.templateId, availableCount: { gte: item.quantity } },
+        data: { availableCount: { decrement: item.quantity } },
+      });
+      if (!taken.count) {
+        throw new BadRequestException(`Plus assez de places pour "${item.name ?? 'ce billet'}" : elles viennent d'être prises`);
+      }
+    }
   }
 
   /** Confirms with FlexPay that the transaction succeeded for the expected amount. */
-  private async verifyWithFlexPay(orderNumber: string, expectedAmount: number): Promise<'VERIFIED' | 'REJECTED' | 'UNREACHABLE'> {
+  private async verifyWithFlexPay(orderNumber: string, expectedAmount: number): Promise<Verification> {
     try {
       const res = await axios.get(
         `${this.FLEXPAY_CHECK_URL}/${orderNumber}`,
         { headers: { Authorization: `Bearer ${this.FLEXPAY_TOKEN}` }, timeout: 10000 },
       );
       const data = res.data;
-      if (data.code !== '0' || data.transaction?.status !== '0') return 'REJECTED';
+      // Unknown order: FlexPay may not have recorded it yet
+      if (data.code !== '0') return 'PENDING';
+      // Transaction status: 0 paid, 1 failed, anything else still waiting for the buyer
+      const status = String(data.transaction?.status);
+      if (status === '1') return 'REJECTED';
+      if (status !== '0') return 'PENDING';
       const verifiedAmount = parseFloat(data.transaction?.amount || '0');
       if (Math.abs(verifiedAmount - expectedAmount) > 0.01) {
         this.logger.warn(`Amount mismatch for order ${orderNumber}: expected ${expectedAmount}, FlexPay returned ${verifiedAmount}`);
@@ -380,27 +418,39 @@ export class PaymentService {
   }
 
   /**
-   * Atomic PENDING → PROCESSING claim: when the callback and a status poll confirm the same
-   * payment at the same time, only one of them generates the tickets.
+   * Atomic PENDING (or FAILED) → PROCESSING claim: when the callback and a status poll confirm
+   * the same payment at the same time, only one of them generates the tickets.
    */
   private async claimAndGenerate(payment: any, providerRef?: string) {
-    const claimed = await this.prisma.payment.updateMany({
+    // A pending order still holds its seats; a failed one gave them back and takes them again
+    let seatsHeld = true;
+    let claimed = await this.prisma.payment.updateMany({
       where: { id: payment.id, status: 'PENDING' },
       data: { status: 'PROCESSING' },
     });
+    if (claimed.count === 0) {
+      seatsHeld = false;
+      claimed = await this.prisma.payment.updateMany({
+        where: { id: payment.id, status: 'FAILED' },
+        data: { status: 'PROCESSING' },
+      });
+      if (claimed.count) this.logger.warn(`Payment ${payment.reference} confirmed after it was failed — issuing the tickets`);
+    }
     if (claimed.count === 0) {
       this.logger.log(`Payment ${payment.reference} already being processed — skipping`);
       return;
     }
     try {
-      await this.generateTicketsForPayment(payment, providerRef);
+      await this.generateTicketsForPayment(payment, providerRef, seatsHeld);
     } catch (err) {
-      // Left in PROCESSING on purpose: retrying could duplicate partially generated tickets
+      // Left in PROCESSING on purpose: retrying could duplicate partially generated tickets.
+      // The buyer has paid: the ZAYA team and the organizer are told to sort it out.
       this.logger.error(`Ticket generation failed for paid order ${payment.reference}: ${err.message}`);
+      void this.organizerAlerts.paidWithoutTickets(payment.id, err.message);
     }
   }
 
-  private async generateTicketsForPayment(payment: any, providerRef?: string) {
+  private async generateTicketsForPayment(payment: any, providerRef: string | undefined, seatsHeld: boolean) {
     const event = await this.prisma.event.findUnique({
       where: { id: payment.eventId },
       select: {
@@ -410,9 +460,13 @@ export class PaymentService {
         organizer: { select: { firstName: true, lastName: true, email: true } },
       },
     });
-    if (!event) return;
+    if (!event) throw new Error('event not found');
 
-    const items = payment.items as { templateId: string; quantity: number }[];
+    const items = payment.items as OrderItem[];
+    // Orders from before seats were held at checkout, or failed then paid: take the seats now,
+    // all at once, so a sold-out tariff never leaves half an order issued
+    const held = seatsHeld && items.every(i => i.held);
+    if (!held && items.length) await this.prisma.$transaction(tx => this.takeSeats(tx, items));
     // The ticket shows what the buyer paid: the 9 % is in it when the buyer pays the fee
     const templates = await this.prisma.ticketTemplate.findMany({
       where: { id: { in: items.map(i => i.templateId) } },
@@ -429,7 +483,7 @@ export class PaymentService {
       const result = await this.ticketGeneration.generateTickets(
         payment.eventId, event.organizerId, Role.ORGANIZER,
         { templateId: item.templateId, holders: Array.from({ length: item.quantity }, () => holder) },
-        { source: 'ONLINE', price: paidPrice(item.templateId) },
+        { source: 'ONLINE', price: paidPrice(item.templateId), stockHeld: true },
       );
       allTicketIds.push(...result.tickets.map((t: any) => t.id));
     }
