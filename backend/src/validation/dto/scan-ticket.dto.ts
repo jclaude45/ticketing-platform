@@ -50,4 +50,9 @@ export class OfflineScanDto {
   @IsString()
   @IsNotEmpty()
   deviceId: string;
+
+  @ApiPropertyOptional({ description: "The phone's clock when sending the batch: corrects the scan times of a phone set to the wrong time" })
+  @IsOptional()
+  @IsDateString()
+  deviceNow?: string;
 }

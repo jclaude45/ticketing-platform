@@ -23,7 +23,7 @@ const eventId = 'evt-1';
 String qr(String id, String sn) => jsonEncode({'id': id, 'sn': sn, 'v': '2'});
 
 Map<String, dynamic> serverTicket(String id, String sn, {String status = 'VALID', String? checkedInAt, bool guest = false}) =>
-    {'id': id, 'serialNumber': sn, 'holderName': 'Invité $id', 'templateName': 'VIP', 'status': status, 'checkedInAt': checkedInAt, 'guest': guest};
+    {'id': id, 'serialNumber': sn, 'holderName': 'Invité $id', 'templateName': 'VIP', 'status': status, 'checkedInAt': checkedInAt, 'guest': guest, if (guest) 'qrTag': 'TAG$id'};
 
 class FakeStorage extends SecureStorage {
   @override
@@ -300,6 +300,23 @@ void main() {
     });
   });
 
+  test('upgrade to v5: QR tag added, ticket lists downloaded again in full', () async {
+    final path = '${dir.path}/v4.db';
+    final v4 = await openDatabase(path, version: 4, onCreate: (d, _) async {
+      await d.execute('CREATE TABLE tickets (id TEXT PRIMARY KEY, event_id TEXT NOT NULL, serial_number TEXT, '
+          'qr_code TEXT, holder_name TEXT, status TEXT, used_at TEXT, is_guest INTEGER DEFAULT 0, valid_days TEXT)');
+      await d.execute('CREATE TABLE offline_packs (event_id TEXT PRIMARY KEY, generated_at TEXT NOT NULL, downloaded_at TEXT NOT NULL)');
+      await d.insert('offline_packs', {'event_id': 'e', 'generated_at': '2026-10-01T10:00:00Z', 'downloaded_at': '2026-10-01T10:00:00Z'});
+    });
+    await v4.close();
+    final upgraded = LocalDatabase(path: path);
+    final d = await upgraded.database;
+    final cols = (await d.rawQuery('PRAGMA table_info(tickets)')).map((c) => c['name']).toList();
+    expect(cols, contains('qr_tag'));
+    expect(await upgraded.getOfflinePack('e'), isNull);
+    await d.close();
+  });
+
   test('upgrade to v4: validity days added, ticket lists downloaded again in full', () async {
     final path = '${dir.path}/v3.db';
     final v3 = await openDatabase(path, version: 3, onCreate: (d, _) async {
@@ -344,6 +361,11 @@ void main() {
       expect(list.first.checkedIn, isFalse);
       final counts = await guests().counts(eventId);
       expect((counts.checkedIn, counts.total, counts.remaining), (1, 3, 2));
+    });
+
+    test("a guest's QR content carries ZAYA's tag from the offline list", () async {
+      final guest = (await guests().list(eventId)).first;
+      expect(jsonDecode(guest.qrContent), {'id': 't1', 'sn': guest.serialNumber, 'v': '2', 't': 'TAGt1'});
     });
 
     test('a guest let in from the list offline is counted in and queued', () async {

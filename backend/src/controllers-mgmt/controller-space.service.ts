@@ -1,6 +1,7 @@
 import { Injectable, ForbiddenException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { ScanResult, TicketStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { QrcodeService } from '../qrcode/qrcode.service';
 import { STATUS_LABELS } from '../shop/shop.service';
 import { MerchLookupDto } from './dto/merch-lookup.dto';
 import { AddGuestDto } from './dto/add-guest.dto';
@@ -98,7 +99,9 @@ export class ControllerSpaceService {
     return {
       generatedAt,
       full: !sinceDate,
-      tickets: tickets.map((t) => ({
+      tickets: tickets.map((t) => {
+        const guest = (t.metadata as { source?: string } | null)?.source === INVITATION_SOURCE;
+        return {
         id: t.id,
         serialNumber: t.serialNumber,
         holderName: t.holderName,
@@ -108,8 +111,11 @@ export class ControllerSpaceService {
         status: t.status,
         checkedInAt: t.checkedInAt,
         // Invitation tickets make the app's guest list (the metadata itself stays here)
-        guest: (t.metadata as { source?: string } | null)?.source === INVITATION_SOURCE,
-      })),
+        guest,
+        // A guest checked in by name has no QR to read: the app rebuilds it with this tag
+        ...(guest && { qrTag: QrcodeService.ticketQrTag(t.id) }),
+        };
+      }),
     };
   }
 

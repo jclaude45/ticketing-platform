@@ -15,8 +15,9 @@
 -keep class okhttp3.** { *; }
 -keep interface okhttp3.** { *; }
 
-# SQLite
+# SQLCipher (sqflite_sqlcipher): native code calls these classes by name
 -keep class net.sqlcipher.** { *; }
+-keep class net.zetetic.** { *; }
 
 # Hive
 -keep class com.hivedb.** { *; }

@@ -56,7 +56,8 @@ class ScannerRemoteSourceImpl implements ScannerRemoteSource {
     try {
       final response = await dioClient.post(
         ApiEndpoints.syncScans(eventId),
-        data: {'scans': scans, 'deviceId': deviceId},
+        // The phone's clock: the server corrects the scan times of a phone set to the wrong time
+        data: {'scans': scans, 'deviceId': deviceId, 'deviceNow': DateTime.now().toUtc().toIso8601String()},
         options: Options(receiveTimeout: const Duration(minutes: 2)),
       );
       final body = response.data as Map<String, dynamic>? ?? {};

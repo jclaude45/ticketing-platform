@@ -36,8 +36,9 @@ class AppConstants {
   static const int cacheExpiryHours = 24;
 
   // Database
-  static const String dbName = 'ticket_scanner.db';
-  static const int dbVersion = 4; // v2: offline packs + pending_scans.ticket_id; v3: tickets.is_guest; v4: tickets.valid_days
+  static const String dbName = 'ticket_scanner.db'; // before 1.1.1: not encrypted, copied once then deleted
+  static const String secureDbName = 'zcontrole.db'; // encrypted (SQLCipher)
+  static const int dbVersion = 5; // v2: offline packs + pending_scans.ticket_id; v3: tickets.is_guest; v4: tickets.valid_days; v5: tickets.qr_tag
 
   // Tables
   static const String eventsTable = 'events';

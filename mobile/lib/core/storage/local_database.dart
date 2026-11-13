@@ -1,7 +1,12 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_sqlcipher/sqflite.dart' as cipher;
 
 import '../constants/app_constants.dart';
+import 'secure_storage.dart';
 
 class LocalDatabase {
   /// [path]: another file (tests); default is the app's database.
@@ -16,22 +21,80 @@ class LocalDatabase {
   }
 
   Future<Database> _initDatabase() async {
-    final path = _path ?? join(await getDatabasesPath(), AppConstants.dbName);
+    // Tests: a plain file through sqflite
+    final testPath = _path;
+    if (testPath != null) return openDatabase(testPath, version: AppConstants.dbVersion, onCreate: _createDatabase, onUpgrade: _upgradeDatabase, onConfigure: _configure);
 
-    return openDatabase(
-      path,
-      version: AppConstants.dbVersion,
-      onCreate: _createDatabase,
-      onUpgrade: _upgradeDatabase,
-      onConfigure: (db) async {
-        await db.execute('PRAGMA foreign_keys = ON');
-        try {
-          await db.execute('PRAGMA journal_mode = WAL');
-        } catch (_) {
-          // WAL mode not supported on all Android configurations
-        }
-      },
-    );
+    // On the phone the ticket lists (ids, serials, names) and pending scans are encrypted:
+    // a copy of the app's files is useless without the key kept in the secure storage
+    final dir = await getDatabasesPath();
+    final securePath = join(dir, AppConstants.secureDbName);
+    final key = await SecureStorage().databaseKey();
+    final legacyPath = join(dir, AppConstants.dbName);
+    if (await File(legacyPath).exists()) {
+      if (!await _encryptLegacy(legacyPath, securePath, key)) {
+        // Copy failed: keep working on the old file (no pending scan lost), retried next launch
+        return openDatabase(legacyPath, version: AppConstants.dbVersion, onCreate: _createDatabase, onUpgrade: _upgradeDatabase, onConfigure: _configure);
+      }
+    }
+    try {
+      return await _openEncrypted(securePath, key);
+    } catch (err) {
+      // Unreadable (key lost with the secure storage): start again, the lists download again
+      debugPrint('Encrypted database unreadable, recreated: $err');
+      await _deleteFiles(securePath);
+      return _openEncrypted(securePath, key);
+    }
+  }
+
+  Future<Database> _openEncrypted(String path, String key) => cipher.openDatabase(
+        path,
+        password: key,
+        version: AppConstants.dbVersion,
+        onCreate: _createDatabase,
+        onUpgrade: _upgradeDatabase,
+        onConfigure: _configure,
+      );
+
+  Future<void> _configure(Database db) async {
+    await db.execute('PRAGMA foreign_keys = ON');
+    try {
+      await db.rawQuery('PRAGMA journal_mode = WAL');
+    } catch (_) {
+      // WAL mode not supported on all Android configurations
+    }
+  }
+
+  /// Copies the database of versions before 1.1.1 (plain file) into the encrypted one,
+  /// pending scans included, then deletes it. False if the copy failed (old file kept).
+  Future<bool> _encryptLegacy(String legacyPath, String securePath, String key) async {
+    Database? legacy;
+    try {
+      await _deleteFiles(securePath); // a copy interrupted earlier
+      legacy = await cipher.openDatabase(legacyPath); // no key: the old plain file
+      final version = Sqflite.firstIntValue(await legacy.rawQuery('PRAGMA user_version')) ?? 0;
+      final escaped = securePath.replaceAll("'", "''");
+      await legacy.execute("ATTACH DATABASE '$escaped' AS encrypted KEY '$key'");
+      await legacy.rawQuery("SELECT sqlcipher_export('encrypted')");
+      await legacy.execute('PRAGMA encrypted.user_version = $version');
+      await legacy.execute('DETACH DATABASE encrypted');
+      await legacy.close();
+      legacy = null;
+      await _deleteFiles(legacyPath);
+      return true;
+    } catch (err) {
+      debugPrint('Encrypting the local database failed: $err');
+      await legacy?.close();
+      await _deleteFiles(securePath);
+      return false;
+    }
+  }
+
+  static Future<void> _deleteFiles(String path) async {
+    for (final suffix in ['', '-wal', '-shm', '-journal']) {
+      final f = File('$path$suffix');
+      if (await f.exists()) await f.delete();
+    }
   }
 
   Future<void> _createDatabase(Database db, int version) async {
@@ -75,6 +138,7 @@ class LocalDatabase {
         synced_at TEXT,
         is_guest INTEGER DEFAULT 0,
         valid_days TEXT,
+        qr_tag TEXT,
         FOREIGN KEY (event_id) REFERENCES ${AppConstants.eventsTable}(id)
       )
     ''');
@@ -149,6 +213,17 @@ class LocalDatabase {
     if (oldVersion < 2) await _createV2(db, alterPendingScans: true);
     if (oldVersion < 3) await _upgradeV3(db);
     if (oldVersion < 4) await _upgradeV4(db);
+    if (oldVersion < 5) await _upgradeV5(db);
+  }
+
+  /// v5: ZAYA's QR tag of guest tickets (a guest let in by name sends it like a scanned QR).
+  /// The lists already on the phone don't have it: forgetting them downloads them in full.
+  Future<void> _upgradeV5(Database db) async {
+    final cols = await db.rawQuery('PRAGMA table_info(${AppConstants.ticketsTable})');
+    if (cols.isNotEmpty && !cols.any((c) => c['name'] == 'qr_tag')) {
+      await db.execute('ALTER TABLE ${AppConstants.ticketsTable} ADD COLUMN qr_tag TEXT');
+    }
+    await db.delete(AppConstants.offlinePacksTable);
   }
 
   /// v4: days a ticket is valid (tariffs of one day, passes of several). The lists already
@@ -305,6 +380,7 @@ class LocalDatabase {
             'is_guest': t['guest'] == true ? 1 : 0,
             // 'YYYY-MM-DD' days, comma separated; empty = the whole event
             'valid_days': (t['validDays'] as List<dynamic>?)?.join(',') ?? '',
+            'qr_tag': t['qrTag'],
           },
           conflictAlgorithm: ConflictAlgorithm.replace,
         );

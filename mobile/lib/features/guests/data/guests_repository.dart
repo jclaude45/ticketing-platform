@@ -20,12 +20,15 @@ class Guest {
   final String? ticketType;
   final DateTime? checkedInAt;
 
-  const Guest({required this.id, required this.serialNumber, required this.name, this.ticketType, this.checkedInAt});
+  /// ZAYA's tag of the ticket's QR (from the offline list): the server checks it
+  final String? qrTag;
+
+  const Guest({required this.id, required this.serialNumber, required this.name, this.ticketType, this.checkedInAt, this.qrTag});
 
   bool get checkedIn => checkedInAt != null;
 
   /// Same content as the ticket's QR (v2), so a manual check-in follows the scan path
-  String get qrContent => jsonEncode({'id': id, 'sn': serialNumber, 'v': '2'});
+  String get qrContent => jsonEncode({'id': id, 'sn': serialNumber, 'v': '2', if (qrTag != null && qrTag!.isNotEmpty) 't': qrTag});
 }
 
 /// Entries of the event on the phone: tickets that can enter, and those already in.
@@ -49,7 +52,7 @@ class GuestsRepository {
     final database = await db.database;
     final rows = await database.query(
       AppConstants.ticketsTable,
-      columns: ['id', 'serial_number', 'holder_name', 'ticket_type', 'status', 'used_at'],
+      columns: ['id', 'serial_number', 'holder_name', 'ticket_type', 'status', 'used_at', 'qr_tag'],
       where: "event_id = ? AND is_guest = 1 AND status IN ('valid', 'used')",
       whereArgs: [eventId],
     );
@@ -61,6 +64,7 @@ class GuestsRepository {
         serialNumber: r['serial_number'] as String,
         name: name == null || name.isEmpty ? 'Billet ${r['serial_number']}' : name,
         ticketType: r['ticket_type'] as String?,
+        qrTag: r['qr_tag'] as String?,
         // A ticket marked used without a time (old offline entry) still counts as in
         checkedInAt: r['status'] == 'used' ? DateTime.tryParse(usedAt ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0) : null,
       );

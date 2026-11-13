@@ -1,6 +1,6 @@
 name: ticketing_scanner
 description: Secure ticket validation app for event controllers
-version: 1.1.0+2
+version: 1.1.1+3
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -20,6 +20,8 @@ dependencies:
 
   # Local Storage
   sqflite: ^2.3.2
+  # The phone's copy of the ticket lists and pending scans, encrypted (SQLCipher)
+  sqflite_sqlcipher: ^3.4.1
   path: ^1.8.3
   # Secure Storage
   flutter_secure_storage: ^9.0.0
@@ -38,6 +40,8 @@ dependencies:
   lottie: ^3.6.1
 dev_dependencies:
   flutter_test:
+    sdk: flutter
+  integration_test:
     sdk: flutter
   flutter_lints: ^3.0.1
   sqflite_common_ffi: ^2.4.3

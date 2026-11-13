@@ -142,6 +142,9 @@ export class ValidationService {
       };
     }
 
+    // An offline scan cannot have happened before the ticket existed: the phone's clock is wrong
+    if (scannedAt && scannedAt < ticket.createdAt) scannedAt = undefined;
+
     // Proof that ZAYA issued this QR. A bad one is refused without touching the ticket:
     // whoever made the copy must not be able to get the real ticket blocked.
     let forged = false;
@@ -233,10 +236,15 @@ export class ValidationService {
       };
     }
 
-    // A pass enters once a day: refused only if it already entered today
+    // A pass enters once a day: refused only if it already entered today. The check and the
+    // entry are made under a lock on the ticket: two doors scanning the same pass at the same
+    // moment (or two phones syncing) cannot both let it in.
     if (isPass) {
       const { start, end } = kinshasaDayBounds(today);
-      const enteredToday = await this.prisma.scanValidation.findFirst({
+      const entryAt = scannedAt ?? new Date();
+      const entry = await this.prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${ticket.id}, 0))`;
+        const enteredToday = await tx.scanValidation.findFirst({
         where: {
           ticketId: ticket.id,
           result: ScanResult.VALID,
@@ -246,8 +254,21 @@ export class ValidationService {
           ],
         },
         orderBy: { scannedAt: 'asc' },
+        });
+        if (enteredToday) return { enteredToday };
+        // Entry of the day: the ticket shows as used, with the latest entry time
+        await tx.ticket.update({ where: { id: ticket.id }, data: { status: TicketStatus.USED, checkedInAt: entryAt } });
+        // The day it counts for is written now, inside the lock (an offline sync used to add it after)
+        const scan = await tx.scanValidation.create({
+          data: {
+            ticketId: ticket.id, controllerId, result: ScanResult.VALID, deviceId: dto.deviceId, location: dto.location,
+            ipAddress, notes: dto.notes, isSynced: true, ...(scannedAt && { offlineScannedAt: scannedAt }),
+          },
+        });
+        return { scan };
       });
-      if (enteredToday) {
+      if (entry.enteredToday) {
+        const enteredToday = entry.enteredToday;
         const scanRecord = await this.recordScan(controllerId, ticket.id, ScanResult.ALREADY_USED, dto, ipAddress);
         await this.broadcastScanResult(eventId, ScanResult.ALREADY_USED, ticket, scanRecord.id);
         return {
@@ -257,10 +278,8 @@ export class ValidationService {
           checkedInAt: enteredToday.offlineScannedAt ?? enteredToday.scannedAt,
         };
       }
-      // Entry of the day: the ticket shows as used, with the latest entry time
-      const entryAt = scannedAt ?? new Date();
-      await this.prisma.ticket.update({ where: { id: ticket.id }, data: { status: TicketStatus.USED, checkedInAt: entryAt } });
-      const scanRecord = await this.recordScan(controllerId, ticket.id, ScanResult.VALID, dto, ipAddress);
+      const scanRecord = entry.scan!;
+      await this.afterScan(controllerId, ticket.id, ScanResult.VALID);
       await this.broadcastScanResult(eventId, ScanResult.VALID, ticket, scanRecord.id);
       return {
         result: ScanResult.VALID,
@@ -336,13 +355,21 @@ export class ValidationService {
 
     const MAX_OFFLINE_AGE_MS = 24 * 60 * 60 * 1000; // client timestamps clamped to 24h ago max
     const now = Date.now();
+    // The phone tells its clock when sending: a phone set to another day or hour (by mistake
+    // or to make a ticket enter outside its dates) has its scan times put back on server time
+    const deviceNow = dto.deviceNow ? new Date(dto.deviceNow).getTime() : NaN;
+    const skew = Number.isNaN(deviceNow) ? 0 : now - deviceNow;
+    const CLOCK_TOLERANCE_MS = 2 * 60 * 1000;
+    if (Math.abs(skew) > CLOCK_TOLERANCE_MS) {
+      this.logger.warn(`Offline sync from device ${dto.deviceId}: clock off by ${Math.round(skew / 1000)} s — scan times corrected`);
+    }
 
     for (const { scan, index } of uniqueScans) {
       try {
         // H3: clamp offline timestamp — reject timestamps in the future or >24h in the past
         let offlineTs: Date | null = null;
         if (scan.offlineScannedAt) {
-          const parsed = new Date(scan.offlineScannedAt).getTime();
+          const parsed = new Date(scan.offlineScannedAt).getTime() + (Math.abs(skew) > CLOCK_TOLERANCE_MS ? skew : 0);
           if (!isNaN(parsed) && parsed <= now && parsed >= now - MAX_OFFLINE_AGE_MS) {
             offlineTs = new Date(parsed);
           }
@@ -427,9 +454,14 @@ export class ValidationService {
         isSynced: true,
       },
     });
+    if (ticketId) await this.afterScan(controllerId, ticketId, result);
+    return scan;
+  }
 
+  /** Ticket history and fraud alert for a recorded scan */
+  private async afterScan(controllerId: string, ticketId: string, result: ScanResult) {
     // Ticket history: every scan of a known ticket (an unreadable QR has no event)
-    if (ticketId) {
+    {
       const info = await this.prisma.ticket.findUnique({
         where: { id: ticketId },
         select: { serialNumber: true, holderName: true, eventId: true, event: { select: { name: true } } },
@@ -451,8 +483,6 @@ export class ValidationService {
       // The organizer is told right away (if they chose to be); never delays the answer to the scanner
       if (result === ScanResult.FRAUDULENT) void this.organizerAlerts.fraudDetected(ticketId, controller?.name);
     }
-
-    return scan;
   }
 
   private async broadcastScanResult(

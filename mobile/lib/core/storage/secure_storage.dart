@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:uuid/uuid.dart';
@@ -93,6 +94,19 @@ class SecureStorage {
   }
 
   // Ends the session; the intro flag and the device id stay
+  /// Key of the encrypted database on the phone, made on first use. Kept on sign-out (the
+  /// database outlives sessions); lost only with the app's data, and the database with it.
+  Future<String> databaseKey() async {
+    final existing = await _storage.read(key: _databaseKeyKey);
+    if (existing != null && existing.isNotEmpty) return existing;
+    final random = Random.secure();
+    final key = List.generate(32, (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
+    await _storage.write(key: _databaseKeyKey, value: key);
+    return key;
+  }
+
+  static const _databaseKeyKey = 'local_db_key';
+
   Future<void> clearAll() async {
     for (final key in [AppConstants.tokenKey, AppConstants.refreshTokenKey, AppConstants.userKey, _selectedEventKey]) {
       await _storage.delete(key: key);
