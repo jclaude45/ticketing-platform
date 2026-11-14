@@ -11,16 +11,20 @@ export function formatPrice(amount: number, currency = 'USD') {
   return `${value} ${SYMBOLS[currency] ?? currency}`;
 }
 
+/** Events are shown in their own time, whoever reads the page: the server renders in UTC and
+ *  a browser abroad in its own zone, which gave two different hours for the same event */
+const EVENT_TZ = 'Africa/Kinshasa';
+
 /** "jeudi 26 déc. 2023" */
 export function formatEventDay(iso: string) {
-  return new Date(iso).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric', timeZone: EVENT_TZ });
 }
 
 /** "jeudi 26 déc., 22:00" */
 export function formatEventDayTime(iso: string) {
   const d = new Date(iso);
-  const day = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' });
-  const time = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const day = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short', timeZone: EVENT_TZ });
+  const time = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: EVENT_TZ });
   return `${day}, ${time}`;
 }
 
