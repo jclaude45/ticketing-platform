@@ -62,7 +62,9 @@ services:
     restart: always
     ports: !override ["127.0.0.1:3001:3001"]  # Only expose through Nginx; localhost kept for deploy health checks
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      # zaya_app only reads and writes rows (no superuser, no DDL); the owner account is used
+      # for migrations only, given to that one command by deploy.sh
+      DATABASE_URL: postgresql://${APP_DB_USER:-${POSTGRES_USER}}:${APP_DB_PASSWORD:-${POSTGRES_PASSWORD}}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       JWT_SECRET: ${JWT_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}

@@ -244,7 +244,9 @@ else
   $COMPOSE up -d backend
   sleep 10
 
-  $COMPOSE exec -T backend npx prisma migrate deploy \
+  # Migrations change the schema: they run with the owner account, the app's own one cannot
+  $COMPOSE exec -T -e DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}" \
+    backend npx prisma migrate deploy \
     && log_success "Migrations appliquées" \
     || log_error "Échec des migrations. Vérifier : $COMPOSE logs backend"
 fi
