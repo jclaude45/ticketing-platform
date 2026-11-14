@@ -318,6 +318,12 @@ for i in $(seq 1 20); do
   sleep 3
 done
 
+# nginx resolves backend/frontend once, at start: recreated containers can come back with
+# each other's IP (502 on every page), so it reads the current addresses again
+$COMPOSE exec -T nginx nginx -s reload 2>/dev/null \
+  && log_success "nginx rechargé (adresses des conteneurs à jour)" \
+  || log_warn "Rechargement de nginx impossible : lancer $COMPOSE exec nginx nginx -s reload"
+
 # =============================================================================
 # ÉTAPE 10 — Tests de smoke
 # =============================================================================
