@@ -21,7 +21,7 @@ import * as fs from 'fs';
 import { Readable } from 'stream';
 import * as path from 'path';
 import * as ExcelJS from 'exceljs';
-import { assertSafeXlsx } from '../common/spreadsheet-guard';
+import { loadXlsx } from '../common/spreadsheet-guard';
 import * as nodemailer from 'nodemailer';
 
 const LOGO_SVG_PATH = path.join(__dirname, '../../assets/powered-logo.svg');
@@ -237,8 +237,7 @@ export class TeamService {
       if (/\.csv$/i.test(file.originalname) || /csv/.test(file.mimetype)) {
         await workbook.csv.read(Readable.from(file.buffer.toString('utf8').replace(/^\uFEFF/, '')));
       } else {
-        assertSafeXlsx(file.buffer);
-        await workbook.xlsx.read(Readable.from(file.buffer));
+        await loadXlsx(workbook, file.buffer);
       }
     } catch (err) {
       if (err instanceof BadRequestException) throw err;

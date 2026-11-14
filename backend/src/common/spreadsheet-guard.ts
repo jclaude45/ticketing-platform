@@ -1,5 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
 import { inflateRawSync } from 'zlib';
+import * as ExcelJS from 'exceljs';
+import * as JSZip from 'jszip';
+import { posix } from 'path';
 
 /** What a guest list or team list can unzip to: far above any real file */
 const MAX_UNZIPPED_BYTES = 50 * 1024 * 1024;
@@ -45,5 +48,49 @@ export function assertSafeXlsx(buf: Buffer) {
       }
     } else throw refuse();
     if (budget < 0) throw refuse();
+  }
+}
+
+/**
+ * Some tools (the .NET OpenXML SDK, behind many converters and generators) write every tag
+ * with a prefix, <x:workbook xmlns:x="...">. That is valid, but ExcelJS only reads unprefixed
+ * tags and fails on such a file. The prefix of each part's root element becomes the default
+ * namespace again, the same document in the form Excel itself writes. The same tools write
+ * links as absolute paths (Target="/xl/tables/table1.xml"), which ExcelJS cannot follow:
+ * they become relative to their part, as Excel writes them.
+ */
+async function unprefixXlsx(buf: Buffer): Promise<Buffer> {
+  const zip = await JSZip.loadAsync(buf);
+  for (const part of Object.values(zip.files)) {
+    if (part.dir || !/\.(xml|rels)$/i.test(part.name)) continue;
+    let xml = await part.async('string');
+    if (part.name.endsWith('.rels')) {
+      const base = posix.dirname(posix.dirname(part.name));
+      const relative = xml.replace(/Target="\/([^"]*)"/g, (_, target) => `Target="${posix.relative(base, target)}"`);
+      if (relative !== xml) zip.file(part.name, (xml = relative));
+    }
+    const root = /<([A-Za-z_][\w.-]*):[A-Za-z_][\w.-]*[\s/>]/.exec(xml.replace(/<\?[^?]*\?>/g, ''));
+    if (!root) continue;
+    const prefix = root[1];
+    if (!new RegExp(`xmlns:${prefix}=`).test(xml) || /\sxmlns=/.test(xml)) continue;
+    zip.file(
+      part.name,
+      xml
+        .replace(new RegExp(`(</?)${prefix}:`, 'g'), '$1')
+        .replace(new RegExp(`xmlns:${prefix}=`, 'g'), 'xmlns='),
+    );
+  }
+  return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+}
+
+/** Opens an uploaded .xlsx: checked first, then read as written or with its tag prefixes removed */
+export async function loadXlsx(wb: ExcelJS.Workbook, buf: Buffer): Promise<void> {
+  assertSafeXlsx(buf);
+  try {
+    await wb.xlsx.load(buf as unknown as ArrayBuffer);
+  } catch (err) {
+    const fixed = await unprefixXlsx(buf).catch(() => null);
+    if (!fixed) throw err;
+    await wb.xlsx.load(fixed as unknown as ArrayBuffer);
   }
 }

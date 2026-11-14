@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, Role, TicketStatus } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
-import { assertSafeXlsx } from '../common/spreadsheet-guard';
+import { loadXlsx } from '../common/spreadsheet-guard';
 import { Readable } from 'stream';
 import { PrismaService } from '../prisma/prisma.service';
 import { TicketGenerationService } from '../tickets/ticket-generation.service';
@@ -406,8 +406,7 @@ export class InvitationsService {
       } else if (/\.xls$/i.test(file.originalname)) {
         throw new BadRequestException('Format .xls non pris en charge : enregistrez le fichier en .xlsx ou .csv');
       } else {
-        assertSafeXlsx(file.buffer);
-        await wb.xlsx.load(file.buffer as unknown as ArrayBuffer);
+        await loadXlsx(wb, file.buffer);
       }
     } catch (err) {
       if (err instanceof BadRequestException) throw err;
@@ -420,7 +419,10 @@ export class InvitationsService {
     const normalize = (v: string) =>
       v.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\*/g, '').trim().replace(/\s+/g, ' ');
     const ALIASES = {
-      name: ['nom', 'name', 'nom complet', 'full name', 'invite', 'participant', 'prenom nom'],
+      name: [
+        'nom', 'name', 'nom complet', 'full name', 'invite', 'participant', 'prenom nom',
+        'nom et prenom', 'prenom et nom', "nom de l'invite", 'nom de l’invite', 'nom invite',
+      ],
       firstName: ['prenom', 'first name', 'firstname'],
       lastName: ['nom de famille', 'last name', 'lastname'],
       email: ['email', 'e-mail', 'mail', 'courriel', 'adresse email', 'adresse e-mail'],
