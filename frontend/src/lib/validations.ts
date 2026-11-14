@@ -86,6 +86,8 @@ export const createEventSchema = z.object({
   currency: z.enum(['CDF','USD','EUR','XAF','GBP']).default('USD'),
   /** Who pays ZAYA's 9 % on paid tickets */
   feePayer: z.enum(['ORGANIZER', 'BUYER']).default('ORGANIZER'),
+  /** Once over, the event stays on the public site, marked as ended */
+  showAfterEnd: z.boolean().default(true),
   venue: z.string().min(2, 'Le lieu est requis').max(200),
   address: z.string().max(300).optional(),
   city: z.string().min(1, 'La ville est requise').max(100),

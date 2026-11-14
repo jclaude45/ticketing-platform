@@ -824,7 +824,8 @@ export const notificationsApi = {
 const publicClient = axios.create({ baseURL: '/api' });
 
 export const publicApi = {
-  listEvents: (params?: { page?: number; limit?: number; search?: string; city?: string; type?: string }) =>
+  /** past: events already over that their organizer keeps on the site */
+  listEvents: (params?: { page?: number; limit?: number; search?: string; city?: string; type?: string; past?: boolean }) =>
     publicClient.get('/public/events', { params }),
   getCities: () =>
     publicClient.get('/public/events/cities'),

@@ -75,10 +75,14 @@ export class PublicService {
 
   // ─── List published events ──────────────────────────────────────────────────
 
-  async listEvents(page = 1, limit = 12, search?: string, city?: string, type?: string) {
+  async listEvents(page = 1, limit = 12, search?: string, city?: string, type?: string, past = false) {
     const skip = (page - 1) * limit;
-    // Events already over stay reachable by their link, but are no longer listed
-    const where: any = { status: 'PUBLISHED', endDate: { gte: new Date() }, AND: [] };
+    // Upcoming events by default; past=true lists the ones already over that their organizer
+    // keeps on the site (marked as ended), most recent first
+    const now = new Date();
+    const where: any = past
+      ? { status: { in: ['PUBLISHED', 'COMPLETED'] }, endDate: { lt: now }, showAfterEnd: true, AND: [] }
+      : { status: 'PUBLISHED', endDate: { gte: now }, AND: [] };
 
     if (search) {
       where.AND.push({
@@ -102,7 +106,7 @@ export class PublicService {
         where,
         skip,
         take: limit,
-        orderBy: { startDate: 'asc' },
+        orderBy: { startDate: past ? 'desc' : 'asc' },
         select: LIST_SELECT,
       }),
       this.prisma.event.count({ where }),
@@ -172,7 +176,7 @@ export class PublicService {
         id: true, name: true, description: true, performers: true,
         venue: true, address: true, city: true, country: true, type: true,
         startDate: true, endDate: true,
-        bannerUrl: true, totalCapacity: true, status: true, feePayer: true,
+        bannerUrl: true, totalCapacity: true, status: true, feePayer: true, showAfterEnd: true,
         organizer: { select: { firstName: true, lastName: true, avatar: true } },
         ticketTemplates: {
           select: {
@@ -189,9 +193,15 @@ export class PublicService {
     });
 
     if (!event) throw new NotFoundException('Événement introuvable');
-    if (event.status !== 'PUBLISHED') throw new NotFoundException('Cet événement n\'est pas disponible');
+    // Once over, the page stays (sales closed) unless the organizer took the event off the site
+    const ended = event.endDate.getTime() < Date.now();
+    const visible = event.status === 'PUBLISHED' || (ended && event.status === 'COMPLETED');
+    if (!visible || (ended && !event.showAfterEnd)) {
+      throw new NotFoundException('Cet événement n\'est pas disponible');
+    }
 
-    return this.formatEvent(event);
+    const { showAfterEnd: _, ...rest } = event;
+    return this.formatEvent(rest);
   }
 
   // ─── Purchase ticket ────────────────────────────────────────────────────────
@@ -238,6 +248,7 @@ export class PublicService {
     });
     if (!event) throw new NotFoundException('Événement introuvable');
     if (event.status !== 'PUBLISHED') throw new BadRequestException('Cet événement n\'accepte plus d\'inscriptions');
+    if (event.endDate.getTime() < Date.now()) throw new BadRequestException('Cet événement est terminé');
     const holderPhone = normalizeDrcPhone(dto.holderPhone);
     if (!holderPhone) throw new BadRequestException('Numéro de téléphone invalide : utilisez 089…, +24389… ou 89…');
     await assertMailDomain(dto.holderEmail);
@@ -455,6 +466,7 @@ export class PublicService {
       ticketTemplates: templates,
       minPrice,
       soldOut: templates.every((t: any) => t.availableCount === 0),
+      ended: new Date(e.endDate).getTime() < Date.now(),
     };
   }
 

@@ -216,6 +216,8 @@ model Event {
   merchPickupInfo  String?
   /// Who pays ZAYA's 9 % on paid tickets: 'ORGANIZER' (taken from the price) or 'BUYER' (added to it)
   feePayer         String   @default("ORGANIZER")
+  /// Once over, the event stays on the public site (marked as ended) unless the organizer turns this off
+  showAfterEnd     Boolean  @default(true)
   payouts          Payout[]
 }
 

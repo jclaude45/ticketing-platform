@@ -5,7 +5,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
-  Building2, CalendarClock, Church, Drama, Eye, Flame, GraduationCap, Laugh, Loader2, Music, Palette, Presentation, Search, Ticket, Trophy, Wine, X,
+  Building2, CalendarClock, Church, Drama, Eye, Flame, GraduationCap, History, Laugh, Loader2, Music, Palette, Presentation, Search, Ticket, Trophy, Wine, X,
 } from 'lucide-react';
 import { publicApi, resolveMediaUrl } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -16,6 +16,8 @@ export interface PublicEvent {
   venue: string; city: string; country: string; type?: string;
   startDate: string; endDate: string; bannerUrl?: string;
   totalCapacity: number; minPrice: number | null; soldOut: boolean;
+  /** Already over: kept on the site by its organizer, tickets no longer sold */
+  ended?: boolean;
   ticketTemplates: { id: string; name: string; price: number; currency: string; availableCount: number }[];
   organizer: { firstName: string; lastName: string };
   _count: { tickets: number };
@@ -136,9 +138,12 @@ function EventCard({ event, rank }: { event: PublicEvent; rank?: number }) {
             {rank}
           </span>
         )}
+        {event.ended && (
+          <span className="absolute left-3 top-3 z-10 rounded-full bg-black px-3 py-1 text-xs font-bold uppercase text-white">Terminé</span>
+        )}
         {event.bannerUrl ? (
           <Image src={resolveMediaUrl(event.bannerUrl)!} alt={event.name} fill sizes="(min-width: 1024px) 230px, 45vw"
-            className="object-cover transition-transform duration-500 group-hover:scale-105" />
+            className={cn('object-cover transition-transform duration-500 group-hover:scale-105', event.ended && 'grayscale')} />
         ) : (
           <div className="flex h-full items-center justify-center"><Ticket className="h-14 w-14 text-[#bbb]" strokeWidth={1.4} /></div>
         )}
@@ -147,7 +152,7 @@ function EventCard({ event, rank }: { event: PublicEvent; rank?: number }) {
       <div className="mt-1.5 space-y-1 text-[15px] text-[#8a8a8a] lg:text-base">
         <p>{formatEventDay(event.startDate)}</p>
         <p className="truncate">{event.venue}</p>
-        <p>{fromPriceLabel(event)}</p>
+        <p>{event.ended ? 'Événement terminé' : fromPriceLabel(event)}</p>
       </div>
     </Link>
   );
@@ -183,6 +188,8 @@ function Rail({ title, icon, events, ranked = false }: { title: string; icon: Re
 export interface BilletterieInitial {
   hero: Page | null;
   list: Page | null;
+  /** Events already over, kept on the site */
+  past: Page | null;
   highlights: Highlights | null;
   cities: string[] | null;
   fetchedAt: number;
@@ -240,6 +247,21 @@ export function BilletterieView({ initial }: { initial?: BilletterieInitial }) {
     staleTime: 30_000,
     placeholderData: prev => prev,
   });
+
+  // Below the upcoming ones, with the same filters: events over that their organizer keeps on the site
+  const past = useInfiniteQuery({
+    queryKey: ['public-events-past', search, city, type],
+    queryFn: ({ pageParam }) =>
+      publicApi.listEvents({ page: pageParam, limit: 8, past: true, search: search || undefined, city: city || undefined, type: type || undefined })
+        .then(r => unwrap(r) as Page),
+    initialPageParam: 1,
+    getNextPageParam: last => (last.meta && last.meta.page < last.meta.totalPages ? last.meta.page + 1 : undefined),
+    initialData: !search && !city && !type && initial?.past ? { pages: [initial.past], pageParams: [1] } : undefined,
+    initialDataUpdatedAt: initial?.fetchedAt,
+    staleTime: 60_000,
+    placeholderData: prev => prev,
+  });
+  const pastEvents = useMemo(() => past.data?.pages.flatMap(p => p.data) ?? [], [past.data]);
 
   const events = useMemo(() => list.data?.pages.flatMap(p => p.data) ?? [], [list.data]);
   const filtered = !!(type || city || search);
@@ -364,6 +386,30 @@ export function BilletterieView({ initial }: { initial?: BilletterieInitial }) {
           </>
         )}
       </section>
+
+      {/* ── Past events ── */}
+      {pastEvents.length > 0 && (
+        <section id="evenements-passes" className="mx-auto max-w-[1366px] px-6 pb-20 lg:px-[147px]">
+          <h2 className="t-heading flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black text-white [&>svg]:h-5 [&>svg]:w-5"><History /></span>
+            Événements passés
+          </h2>
+          <div className="mt-8 grid grid-cols-2 gap-x-5 gap-y-10 lg:grid-cols-4 lg:gap-x-[51px] lg:gap-y-[60px]">
+            {pastEvents.map(e => <EventCard key={e.id} event={e} />)}
+          </div>
+          {past.hasNextPage && (
+            <div className="mt-14 text-center">
+              <button
+                onClick={() => past.fetchNextPage()}
+                disabled={past.isFetchingNextPage}
+                className="inline-flex items-center gap-2 rounded-full border border-black px-8 py-3 text-base uppercase transition-colors hover:bg-black hover:text-white disabled:opacity-60"
+              >
+                {past.isFetchingNextPage && <Loader2 className="h-4 w-4 animate-spin" />} Voir plus
+              </button>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* ── Welcome banner ── */}
       <section className="mx-auto max-w-[1366px] px-6 pb-10 lg:px-[69px]">

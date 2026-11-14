@@ -24,14 +24,16 @@ export class PublicController {
   @ApiQuery({ name: 'search', required: false, type: String })
   @ApiQuery({ name: 'city',   required: false, type: String })
   @ApiQuery({ name: 'type',   required: false, type: String })
+  @ApiQuery({ name: 'past',   required: false, type: Boolean, description: 'Events already over, kept on the site' })
   listEvents(
     @Query('page',  new DefaultValuePipe(1),  ParseIntPipe) page:  number,
     @Query('limit', new DefaultValuePipe(12), ParseIntPipe) limit: number,
     @Query('search') search?: string,
     @Query('city')   city?: string,
     @Query('type')   type?: string,
+    @Query('past')   past?: string,
   ) {
-    return this.service.listEvents(page, Math.min(limit, 50), search, city, type);
+    return this.service.listEvents(page, Math.min(limit, 50), search, city, type, past === 'true' || past === '1');
   }
 
   @Get('plans')

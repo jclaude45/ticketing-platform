@@ -31,6 +31,8 @@ export interface PublicEvent {
   totalCapacity: number;
   minPrice: number | null;
   soldOut: boolean;
+  /** Already over: the page stays, tickets are no longer sold */
+  ended?: boolean;
   ticketTemplates: CheckoutTemplate[];
   organizer: { firstName: string; lastName: string; avatar?: string | null };
   _count: { tickets: number };
@@ -148,7 +150,8 @@ export function EventView({ id, initialEvent }: { id: string; initialEvent?: Pub
   }
 
   const available = event.ticketTemplates.filter(t => t.availableCount > 0);
-  const canBuy = available.length > 0 && new Date(event.endDate).getTime() > Date.now();
+  const ended = event.ended || new Date(event.endDate).getTime() <= Date.now();
+  const canBuy = available.length > 0 && !ended;
   const organizerName = `${event.organizer.firstName} ${event.organizer.lastName}`.trim();
   const mapsQuery = [event.venue, event.address, event.city, event.country].filter(Boolean).join(', ');
   const hasProducts = (catalog?.products.length ?? 0) > 0;
@@ -180,6 +183,9 @@ export function EventView({ id, initialEvent }: { id: string; initialEvent?: Pub
             <h1 className="t-title break-words text-[30px] sm:text-[36px] lg:text-[40px]">{event.name}</h1>
             {organizerName && <p className="t-fact mt-3">{organizerName}</p>}
             <p className="t-fact mt-1">{capitalize(formatEventDayTime(event.startDate))}</p>
+            {ended && (
+              <p className="mt-3 inline-block rounded-full bg-black px-3 py-1 text-xs font-bold uppercase text-white">Événement terminé</p>
+            )}
             {!!event.performers?.length && (
               <p className="t-lead mt-2 text-[#555]">Avec <span className="text-black">{event.performers.join(', ')}</span></p>
             )}
@@ -202,7 +208,7 @@ export function EventView({ id, initialEvent }: { id: string; initialEvent?: Pub
                     Acheter
                   </button>
                 ) : (
-                  <span className="text-lg font-semibold uppercase text-white/70">{event.soldOut ? 'Complet' : 'Ventes terminées'}</span>
+                  <span className="text-lg font-semibold uppercase text-white/70">{ended ? 'Événement terminé' : event.soldOut ? 'Complet' : 'Ventes terminées'}</span>
                 )}
               </div>
             )}

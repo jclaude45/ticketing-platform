@@ -139,6 +139,7 @@ export function EventForm({ event, isEdit, draft }: EventFormProps) {
           type: event.type ?? 'OTHER',
           currency: (event as any).currency ?? 'USD',
           feePayer: (event as any).feePayer ?? 'ORGANIZER',
+          showAfterEnd: (event as any).showAfterEnd ?? true,
           venue: event.venue,
           address: event.address ?? '',
           city: event.city,
@@ -148,7 +149,7 @@ export function EventForm({ event, isEdit, draft }: EventFormProps) {
           totalCapacity: event.totalCapacity,
           bannerUrl: event.bannerUrl ?? '',
         }
-      : { totalCapacity: 100, type: 'OTHER', currency: 'USD', feePayer: 'ORGANIZER', ...(draft?.data?.values ?? {}) },
+      : { totalCapacity: 100, type: 'OTHER', currency: 'USD', feePayer: 'ORGANIZER', showAfterEnd: true, ...(draft?.data?.values ?? {}) },
   });
 
   // ── Draft (creation only): saved on the server a moment after each change ──
@@ -381,6 +382,16 @@ export function EventForm({ event, isEdit, draft }: EventFormProps) {
                 <input {...register('endDate')} type="datetime-local" className={inputClass} />
               </Field>
             </div>
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 p-4 dark:border-gray-700">
+              <input type="checkbox" {...register('showAfterEnd' as any)} className="mt-0.5 h-4 w-4 flex-shrink-0 accent-black" />
+              <span>
+                <span className="block text-sm font-semibold text-black dark:text-white">Garder l&apos;événement sur le site une fois terminé</span>
+                <span className="mt-1 block text-xs text-gray-500">
+                  Il reste visible dans « Événements passés », marqué « Terminé », et ses billets ne sont plus vendus.
+                  Décochez pour le retirer du site dès sa fin.
+                </span>
+              </span>
+            </label>
             <Field label="Lieu" error={errors.venue?.message} required>
               <input {...register('venue')} placeholder="Ex : Show Buzz" className={inputClass} />
             </Field>

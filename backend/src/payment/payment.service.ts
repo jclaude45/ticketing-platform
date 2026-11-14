@@ -60,6 +60,10 @@ export class PaymentService {
     if (!ticketItems.length && !merchItems.length) {
       throw new BadRequestException('Votre commande est vide');
     }
+    // The page of an event already over stays on the site: its tickets are no longer sold
+    if (ticketItems.length && event.endDate.getTime() < Date.now()) {
+      throw new BadRequestException('Cet événement est terminé : ses billets ne sont plus en vente');
+    }
     // Required for every order, like the e-mail; with Mobile Money it is also the paying number
     const holderPhone = normalizeDrcPhone(dto.holderPhone);
     if (!holderPhone) throw new BadRequestException('Numéro de téléphone invalide : utilisez 089…, +24389… ou 89…');

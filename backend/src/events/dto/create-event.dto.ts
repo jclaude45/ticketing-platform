@@ -10,6 +10,7 @@ import {
   IsIn,
   IsArray,
   ArrayMaxSize,
+  IsBoolean,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { EventStatus, EventType } from '@prisma/client';
@@ -92,6 +93,11 @@ export class CreateEventDto {
   @IsOptional()
   @IsIn(['ORGANIZER', 'BUYER'])
   feePayer?: 'ORGANIZER' | 'BUYER';
+
+  @ApiPropertyOptional({ default: true, description: 'Keep the event on the public site (marked as ended) once it is over' })
+  @IsOptional()
+  @IsBoolean()
+  showAfterEnd?: boolean;
 
   @ApiPropertyOptional({ example: 'https://example.com/banner.jpg' })
   @IsOptional()

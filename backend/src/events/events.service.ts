@@ -98,6 +98,7 @@ export class EventsService implements OnApplicationBootstrap {
         ...(dto.type && { type: dto.type }),
         ...(dto.currency && { currency: dto.currency }),
         ...(dto.feePayer && { feePayer: dto.feePayer }),
+        ...(dto.showAfterEnd !== undefined && { showAfterEnd: dto.showAfterEnd }),
         bannerUrl,
         organizerId,
       },
@@ -240,6 +241,7 @@ export class EventsService implements OnApplicationBootstrap {
         ...(dto.type && { type: dto.type }),
         ...(dto.currency && { currency: dto.currency }),
         ...(dto.feePayer && { feePayer: dto.feePayer }),
+        ...(dto.showAfterEnd !== undefined && { showAfterEnd: dto.showAfterEnd }),
         ...(bannerUrl !== undefined && { bannerUrl }),
       },
       include: {
