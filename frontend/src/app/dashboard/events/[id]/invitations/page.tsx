@@ -502,7 +502,7 @@ export default function InvitationsPage() {
                     <td className="px-5 py-3 text-right whitespace-nowrap">
                       {(inv.status === 'INVITED' || inv.status === 'VALID') && (
                         <button type="button" title="QR de cette invitation (PNG)"
-                          onClick={() => download(`${inv.id}/qr.png`, `qr-${(inv.holderName ?? 'invite').replace(/[\s/\\:*?"<>|]+/g, '-')}.png`, 'Impossible de télécharger le QR')}
+                          onClick={() => download(`${inv.id}/qr`, `qr-${(inv.holderName ?? 'invite').replace(/[\s/\\:*?"<>|]+/g, '-')}.png`, 'Impossible de télécharger le QR')}
                           className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800">
                           <QrCode className="h-3.5 w-3.5" /> QR
                         </button>

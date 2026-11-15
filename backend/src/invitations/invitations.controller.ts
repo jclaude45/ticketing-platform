@@ -100,7 +100,8 @@ export class InvitationsController {
     return this.invitationsService.regenerateOpenLink(eventId, user.id, user.role);
   }
 
-  @Get('form/open-link/qr.png')
+  // No '.png' in the path: nginx sends URLs ending like static files to the website
+  @Get('form/open-link/qr')
   @Roles(Role.ORGANIZER, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'QR code of the shared link (PNG)' })
   async openQr(@Param('eventId') eventId: string, @CurrentUser() user: any, @Res() res: Response) {
@@ -118,7 +119,7 @@ export class InvitationsController {
     res.end(zip);
   }
 
-  @Get(':ticketId/qr.png')
+  @Get(':ticketId/qr')
   @Roles(Role.ORGANIZER, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: "QR code of one guest's invitation (PNG)" })
   async guestQr(@Param('eventId') eventId: string, @Param('ticketId') ticketId: string, @CurrentUser() user: any, @Res() res: Response) {

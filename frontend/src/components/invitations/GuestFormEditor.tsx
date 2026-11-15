@@ -260,7 +260,7 @@ function SharedLink({ eventId, draft, update, templates, saved, dirty }: {
   });
   const downloadQr = async () => {
     try {
-      const res = await apiClient.get(`/events/${eventId}/invitations/form/open-link/qr.png`, { responseType: 'blob' });
+      const res = await apiClient.get(`/events/${eventId}/invitations/form/open-link/qr`, { responseType: 'blob' });
       const url = URL.createObjectURL(res.data as Blob);
       const a = Object.assign(document.createElement('a'), { href: url, download: 'qr-invitation.png' });
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
