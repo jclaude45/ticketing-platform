@@ -7,6 +7,10 @@ import {
   IsIn,
   IsObject,
   IsDateString,
+  IsEmail,
+  IsInt,
+  Min,
+  Max,
   ArrayMaxSize,
   MaxLength,
 } from 'class-validator';
@@ -38,6 +42,23 @@ export class SaveGuestFormDto {
   @IsArray()
   @ArrayMaxSize(30)
   fields: unknown[];
+
+  @ApiPropertyOptional({ description: 'Shared link (one QR for everyone): whoever opens it signs up' })
+  @IsOptional()
+  @IsBoolean()
+  openEnabled?: boolean;
+
+  @ApiPropertyOptional({ description: 'Category of the invitations made through the shared link' })
+  @IsOptional()
+  @IsString()
+  openTemplateId?: string | null;
+
+  @ApiPropertyOptional({ description: 'Most sign-ups through the shared link (none: up to the seats)' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100000)
+  openLimit?: number | null;
 }
 
 /** A guest's answer on their confirmation page */
@@ -59,8 +80,41 @@ export class GuestAnswerDto {
   @MaxLength(30)
   phone?: string;
 
+  @ApiPropertyOptional({ description: 'Paper invitation made without an address: where the ticket goes' })
+  @IsOptional()
+  @IsEmail()
+  @MaxLength(160)
+  email?: string;
+
   @ApiPropertyOptional({ description: '{ questionId: optionId | text | boolean }' })
   @IsOptional()
   @IsObject()
   answers?: Record<string, unknown>;
+}
+
+/** Sign-up through the shared link (QR printed on every paper invitation) */
+export class OpenSignUpDto {
+  @ApiProperty({ example: 'Marie Dupont' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(120)
+  name: string;
+
+  @ApiProperty({ example: 'marie@example.com' })
+  @IsEmail()
+  @MaxLength(160)
+  email: string;
+
+  @ApiPropertyOptional({ example: '0891234567' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  phone?: string;
+
+  @ApiPropertyOptional({ description: '{ questionId: optionId | text | boolean }' })
+  @IsOptional()
+  @IsObject()
+  answers?: Record<string, unknown>;
+
+  @IsOptional() @IsString() @MaxLength(2048) captcha?: string;
 }

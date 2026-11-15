@@ -9,13 +9,13 @@ import { publicApi, resolveMediaUrl } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { capitalize, formatEventDayTime } from '@/components/site/format';
 
-type Option = { id: string; label: string; left?: number };
-type Field = { id: string; type: 'CHOICE' | 'TEXT' | 'YESNO'; label: string; help?: string | null; required: boolean; options?: Option[] };
-type Answers = Record<string, string | boolean>;
+export type Option = { id: string; label: string; left?: number };
+export type Field = { id: string; type: 'CHOICE' | 'TEXT' | 'YESNO'; label: string; help?: string | null; required: boolean; options?: Option[] };
+export type Answers = Record<string, string | boolean>;
 
 interface GuestPage {
   event: { name: string; startDate: string; endDate: string; timeZone?: string; venue: string; address?: string | null; city: string; bannerUrl?: string | null; organizer: string };
-  guest: { name: string | null; email: string | null; phone: string | null; category: string };
+  guest: { name: string | null; email: string | null; phone: string | null; category: string; emailEditable?: boolean };
   form: { intro: string | null; askPhone: 'HIDDEN' | 'OPTIONAL' | 'REQUIRED'; deadline: string; fields: Field[] };
   answer: { status: 'CONFIRMED' | 'DECLINED'; answers: Answers; updatedAt: string } | null;
   state: 'OPEN' | 'CLOSED' | 'CANCELLED' | 'USED';
@@ -28,7 +28,7 @@ const errorText = (e: any) => {
   return Array.isArray(m) ? m[0] : m || 'Une erreur est survenue. Réessayez.';
 };
 
-const underline = 'w-full border-0 border-b border-[#9a9a9a] bg-transparent px-0.5 pb-1.5 pt-1 text-[17px] text-black placeholder:text-[#9a9a9a] focus:border-black focus:outline-none focus:ring-0 disabled:text-[#777]';
+export const underline = 'w-full border-0 border-b border-[#9a9a9a] bg-transparent px-0.5 pb-1.5 pt-1 text-[17px] text-black placeholder:text-[#9a9a9a] focus:border-black focus:outline-none focus:ring-0 disabled:text-[#777]';
 const pill = (on: boolean) => cn(
   'rounded-full border px-4 py-2 text-[15px] transition-colors disabled:cursor-not-allowed disabled:opacity-40',
   on ? 'border-black bg-black text-white' : 'border-[#bbb] bg-white text-black hover:border-black',
@@ -44,6 +44,7 @@ export function GuestRsvpView({ token }: { token: string }) {
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [answers, setAnswers] = useState<Answers>({});
   const [editing, setEditing] = useState(false);
   const [formError, setFormError] = useState('');
@@ -59,7 +60,9 @@ export function GuestRsvpView({ token }: { token: string }) {
 
   const send = useMutation({
     mutationFn: (attending: boolean) =>
-      publicApi.answerInvitation(token, attending ? { attending, name: name.trim(), phone: phone.trim() || undefined, answers } : { attending }).then(unwrap),
+      publicApi.answerInvitation(token, attending
+        ? { attending, name: name.trim(), phone: phone.trim() || undefined, email: data?.guest.emailEditable ? email.trim() : undefined, answers }
+        : { attending }).then(unwrap),
     onSuccess: (page) => {
       setFormError('');
       queryClient.setQueryData(['guest-invitation', token], page);
@@ -94,6 +97,7 @@ export function GuestRsvpView({ token }: { token: string }) {
   const deadline = capitalize(formatEventDayTime(form.deadline, event.timeZone));
   const needPhone = form.askPhone === 'REQUIRED';
   const missing = !name.trim()
+    || (guest.emailEditable && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))
     || (needPhone && !phone.trim())
     || form.fields.some((f) => f.required && (answers[f.id] === undefined || answers[f.id] === ''));
 
@@ -141,8 +145,10 @@ export function GuestRsvpView({ token }: { token: string }) {
               <input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} autoComplete="name" className={cn(underline, 'mt-1')} />
             </label>
             <label className="block">
-              <span className="text-sm font-semibold">E-mail</span>
-              <input value={guest.email ?? ''} disabled className={cn(underline, 'mt-1')} />
+              <span className="text-sm font-semibold">E-mail{guest.emailEditable ? ' *' : ''}</span>
+              {guest.emailEditable
+                ? <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={160} autoComplete="email" className={cn(underline, 'mt-1')} />
+                : <input value={guest.email ?? ''} disabled className={cn(underline, 'mt-1')} />}
               <span className="mt-1 block text-xs text-[#777]">Votre billet sera envoyé à cette adresse.</span>
             </label>
             {form.askPhone !== 'HIDDEN' && (
@@ -152,39 +158,7 @@ export function GuestRsvpView({ token }: { token: string }) {
               </label>
             )}
 
-            {form.fields.map((f) => (
-              <div key={f.id}>
-                <p className="text-sm font-semibold">{f.label}{f.required ? ' *' : ''}</p>
-                {f.help && <p className="mt-0.5 text-xs text-[#777]">{f.help}</p>}
-                {f.type === 'TEXT' && (
-                  <input value={(answers[f.id] as string) ?? ''} onChange={(e) => set(f.id, e.target.value)} maxLength={500} className={cn(underline, 'mt-1')} />
-                )}
-                {f.type === 'YESNO' && (
-                  <div className="mt-3 flex gap-2">
-                    {[true, false].map((v) => (
-                      <button key={String(v)} type="button" onClick={() => set(f.id, answers[f.id] === v && !f.required ? undefined : v)} className={pill(answers[f.id] === v)}>
-                        {v ? 'Oui' : 'Non'}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {f.type === 'CHOICE' && (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {f.options!.map((o) => {
-                      const on = answers[f.id] === o.id;
-                      const full = o.left === 0 && !on;
-                      return (
-                        <button key={o.id} type="button" disabled={full}
-                          onClick={() => set(f.id, on && !f.required ? undefined : o.id)} className={pill(on)}>
-                          {o.label}
-                          {full ? ' · complet' : o.left !== undefined && o.left <= 10 ? ` · ${o.left} place${o.left > 1 ? 's' : ''}` : ''}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            ))}
+            <QuestionFields fields={form.fields} answers={answers} set={set} />
           </div>
 
           {formError && <p className="mt-6 flex items-start gap-2 text-[15px] text-red-700"><AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />{formError}</p>}
@@ -245,6 +219,50 @@ export function GuestRsvpView({ token }: { token: string }) {
         <Link href="/billetterie" className="underline underline-offset-2">ZAYA</Link>.
       </p>
     </div>
+  );
+}
+
+
+/** The organizer's questions: lists of choices (places left shown), yes / no, free text */
+export function QuestionFields({ fields, answers, set }: {
+  fields: Field[]; answers: Answers; set: (id: string, v: string | boolean | undefined) => void;
+}) {
+  return (
+    <>
+      {fields.map((f) => (
+        <div key={f.id}>
+          <p className="text-sm font-semibold">{f.label}{f.required ? ' *' : ''}</p>
+          {f.help && <p className="mt-0.5 text-xs text-[#777]">{f.help}</p>}
+          {f.type === 'TEXT' && (
+            <input value={(answers[f.id] as string) ?? ''} onChange={(e) => set(f.id, e.target.value)} maxLength={500} className={cn(underline, 'mt-1')} />
+          )}
+          {f.type === 'YESNO' && (
+            <div className="mt-3 flex gap-2">
+              {[true, false].map((v) => (
+                <button key={String(v)} type="button" onClick={() => set(f.id, answers[f.id] === v && !f.required ? undefined : v)} className={pill(answers[f.id] === v)}>
+                  {v ? 'Oui' : 'Non'}
+                </button>
+              ))}
+            </div>
+          )}
+          {f.type === 'CHOICE' && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {f.options!.map((o) => {
+                const on = answers[f.id] === o.id;
+                const full = o.left === 0 && !on;
+                return (
+                  <button key={o.id} type="button" disabled={full}
+                    onClick={() => set(f.id, on && !f.required ? undefined : o.id)} className={pill(on)}>
+                    {o.label}
+                    {full ? ' · complet' : o.left !== undefined && o.left <= 10 ? ` · ${o.left} place${o.left > 1 ? 's' : ''}` : ''}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ))}
+    </>
   );
 }
 

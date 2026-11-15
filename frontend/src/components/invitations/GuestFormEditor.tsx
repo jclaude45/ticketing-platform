@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, ChevronDown, ClipboardList, Loader2, Plus, Save, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronDown, ClipboardList, Loader2, Plus, QrCode, RefreshCw, Save, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -17,6 +17,9 @@ export interface FormField {
 export interface GuestForm {
   enabled: boolean; deadline: string | null; intro: string | null;
   askPhone: 'HIDDEN' | 'OPTIONAL' | 'REQUIRED'; fields: FormField[];
+  /** Shared link: the same QR on every paper invitation, whoever opens it signs up */
+  openEnabled?: boolean; openTemplateId?: string | null; openLimit?: number | null;
+  openUrl?: string | null; openCount?: number;
 }
 
 const TYPE_LABELS: Record<FieldType, string> = { CHOICE: 'Liste de choix', YESNO: 'Oui / Non', TEXT: 'Texte libre' };
@@ -62,6 +65,9 @@ export function GuestFormEditor({ eventId, form, templates, timeZone = DEFAULT_T
         ...x,
         options: x.type === 'CHOICE' ? x.options?.map((o) => ({ ...o, limit: o.limit || null })) : undefined,
       })),
+      openEnabled: !!f.openEnabled,
+      openTemplateId: f.openTemplateId || null,
+      openLimit: f.openLimit || null,
     }),
     onSuccess: () => {
       toast.success('Formulaire enregistré');
@@ -220,6 +226,8 @@ export function GuestFormEditor({ eventId, form, templates, timeZone = DEFAULT_T
         </div>
       )}
 
+      <SharedLink eventId={eventId} draft={draft} update={update} templates={templates} saved={form} dirty={dirty} />
+
       {dirty && (
         <div className="mt-5 flex items-center justify-end gap-3">
           <button type="button" onClick={() => { setDirty(false); setDraft(form ? { ...form } : null); }} className="text-sm text-gray-500 hover:underline">
@@ -232,6 +240,88 @@ export function GuestFormEditor({ eventId, form, templates, timeZone = DEFAULT_T
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+/** The same QR for every paper invitation: whoever scans it signs up (up to a number of places) */
+function SharedLink({ eventId, draft, update, templates, saved, dirty }: {
+  eventId: string; draft: GuestForm; update: (p: Partial<GuestForm>) => void;
+  templates: { id: string; name: string }[]; saved: GuestForm | undefined; dirty: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const regenerate = useMutation({
+    mutationFn: async () => apiClient.post(`/events/${eventId}/invitations/form/open-link/regenerate`),
+    onSuccess: () => {
+      toast.success('Nouveau lien créé : les anciens QR ne fonctionnent plus');
+      queryClient.invalidateQueries({ queryKey: ['guest-form', eventId] });
+    },
+    onError: () => toast.error('Impossible de régénérer le lien'),
+  });
+  const downloadQr = async () => {
+    try {
+      const res = await apiClient.get(`/events/${eventId}/invitations/form/open-link/qr.png`, { responseType: 'blob' });
+      const url = URL.createObjectURL(res.data as Blob);
+      const a = Object.assign(document.createElement('a'), { href: url, download: 'qr-invitation.png' });
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Impossible de télécharger le QR');
+    }
+  };
+  const live = saved?.openEnabled && saved.openUrl;
+
+  return (
+    <div className="mt-5 rounded-xl border border-gray-200 p-4 dark:border-gray-700">
+      <label className="flex cursor-pointer items-start gap-3">
+        <input type="checkbox" checked={!!draft.openEnabled} onChange={(e) => update({ openEnabled: e.target.checked })} className="mt-0.5 h-4 w-4 accent-indigo-600" />
+        <span>
+          <span className="block text-sm font-semibold text-gray-900 dark:text-white">QR commun (le même sur toutes les invitations papier)</span>
+          <span className="mt-0.5 block text-xs text-gray-500">
+            Quiconque scanne ce QR peut s&apos;inscrire : il donne son nom et son e-mail, répond à vos questions et reçoit son billet.
+            Limitez le nombre d&apos;inscriptions si besoin.
+          </span>
+        </span>
+      </label>
+      {draft.openEnabled && (
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Catégorie des invitations *</span>
+            <select value={draft.openTemplateId ?? ''} onChange={(e) => update({ openTemplateId: e.target.value || null })} className={input}>
+              <option value="">Choisir…</option>
+              {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Inscriptions maximum</span>
+            <input type="number" min={1} value={draft.openLimit ?? ''} placeholder="Jusqu'aux places de la catégorie"
+              onChange={(e) => update({ openLimit: e.target.value ? Math.max(1, parseInt(e.target.value, 10) || 1) : null })} className={input} />
+          </label>
+        </div>
+      )}
+      {draft.openEnabled && live && !dirty && (
+        <div className="mt-4 flex flex-col gap-3 rounded-lg bg-gray-50 p-3 text-sm dark:bg-gray-800/50">
+          <p className="text-gray-600 dark:text-gray-400">
+            {saved!.openCount ?? 0} inscrit(s){saved!.openLimit ? ` sur ${saved!.openLimit}` : ''} par ce QR
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <input readOnly value={saved!.openUrl!} onFocus={(e) => e.target.select()} className={cn(input, 'min-w-0 flex-1 font-mono text-xs')} />
+            <button type="button" onClick={() => { navigator.clipboard?.writeText(saved!.openUrl!); toast.success('Lien copié'); }}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium hover:border-indigo-400 dark:border-gray-600">Copier</button>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <button type="button" onClick={downloadQr} className="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:underline">
+              <QrCode className="h-4 w-4" /> Télécharger le QR (PNG)
+            </button>
+            <button type="button" disabled={regenerate.isPending}
+              onClick={() => { if (window.confirm('Créer un nouveau lien ? Les QR déjà imprimés ne fonctionneront plus.')) regenerate.mutate(); }}
+              className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-red-600 disabled:opacity-50">
+              <RefreshCw className="h-4 w-4" /> Régénérer le lien
+            </button>
+          </div>
+        </div>
+      )}
+      {draft.openEnabled && dirty && <p className="mt-3 text-xs text-gray-500">Enregistrez le formulaire pour obtenir le lien et son QR.</p>}
     </div>
   );
 }

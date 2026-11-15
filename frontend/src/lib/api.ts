@@ -837,8 +837,13 @@ export const publicApi = {
   /** A guest's invitation page (the token comes from the link in the e-mail) */
   getInvitation: (token: string) =>
     publicClient.get(`/public/invitations/${encodeURIComponent(token)}`),
-  answerInvitation: (token: string, body: { attending: boolean; name?: string; phone?: string; answers?: Record<string, string | boolean> }) =>
+  answerInvitation: (token: string, body: { attending: boolean; name?: string; phone?: string; email?: string; answers?: Record<string, string | boolean> }) =>
     publicClient.post(`/public/invitations/${encodeURIComponent(token)}`, body),
+  /** Shared invitation link (one QR printed on every paper invitation) */
+  getOpenInvitation: (token: string) =>
+    publicClient.get(`/public/invitations/open/${encodeURIComponent(token)}`),
+  signUpOpenInvitation: (token: string, body: { name: string; email: string; phone?: string; answers?: Record<string, string | boolean>; captcha?: string }) =>
+    publicClient.post(`/public/invitations/open/${encodeURIComponent(token)}`, body),
   /** Event shop: products on sale, delivery options */
   getShop: (id: string) =>
     publicClient.get(`/public/events/${id}/shop`),

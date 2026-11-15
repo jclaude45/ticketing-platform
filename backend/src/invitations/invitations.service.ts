@@ -8,12 +8,15 @@ import {
 import { Prisma, Role, TicketStatus } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import { loadXlsx } from '../common/spreadsheet-guard';
-import { Readable } from 'stream';
+import { PassThrough, Readable } from 'stream';
+import { randomBytes } from 'crypto';
+import * as archiver from 'archiver';
+import * as QRCode from 'qrcode';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { TicketGenerationService } from '../tickets/ticket-generation.service';
 import { PublicService } from '../public/public.service';
-import { MAX_GUESTS_PER_BATCH } from './dto/invitation.dto';
+import { MAX_GUESTS_PER_BATCH, type DeliveryMode } from './dto/invitation.dto';
 import { tariffLabel } from '../tickets/event-days';
 import { ASK_PHONE, answerLabel, cleanFields, guestToken, type Answers, type FormField } from './guest-form';
 import { SaveGuestFormDto } from './dto/guest-form.dto';
@@ -21,7 +24,8 @@ import { SaveGuestFormDto } from './dto/guest-form.dto';
 /** Invitation tickets are regular tickets tagged with metadata.source = INVITATION. */
 export const INVITATION_SOURCE = 'INVITATION';
 
-export type EmailStatus = 'PENDING' | 'SENT' | 'FAILED';
+/** NONE: paper invitation, no e-mail is sent (the guest confirms by scanning its QR code) */
+export type EmailStatus = 'PENDING' | 'SENT' | 'FAILED' | 'NONE';
 
 interface InvitationMetadata {
   source: typeof INVITATION_SOURCE;
@@ -30,10 +34,12 @@ interface InvitationMetadata {
   message: string | null;
   emailStatus: EmailStatus;
   emailSentAt?: string;
+  delivery?: DeliveryMode;
 }
 
 export interface Guest {
   name: string;
+  /** Empty for a paper invitation whose address is not known */
   email: string;
   row?: number; // spreadsheet row, for error reporting
 }
@@ -46,6 +52,13 @@ export interface GuestIssue {
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** "Marie Kabila" → "Marie-Kabila": a file name every system accepts */
+const fileSlug = (s: string) =>
+  s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'invite';
+
+/** 144-bit random token of the shared link */
+const newOpenToken = () => randomBytes(18).toString('base64url');
 
 @Injectable()
 export class InvitationsService {
@@ -67,9 +80,12 @@ export class InvitationsService {
     templateId: string,
     guests: Guest[],
     message?: string | null,
+    delivery: DeliveryMode = 'EMAIL',
   ) {
     const event = await this.loadEvent(eventId, userId, role);
     const cleanMessage = message?.trim() || null;
+    // Paper invitations are printed with their QR code: the address is optional, nothing is sent
+    const paper = delivery === 'PAPER';
 
     // Validate + dedupe within the batch
     const errors: GuestIssue[] = [];
@@ -80,18 +96,18 @@ export class InvitationsService {
       const name = (g.name ?? '').trim();
       const email = (g.email ?? '').trim().toLowerCase();
       if (!name) { errors.push({ row: g.row, name: '-', email, reason: 'Nom manquant' }); continue; }
-      if (!EMAIL_RE.test(email)) { errors.push({ row: g.row, name, email, reason: 'Email invalide ou manquant' }); continue; }
-      if (seen.has(email)) { skipped.push({ row: g.row, name, email, reason: 'Doublon dans la liste' }); continue; }
-      seen.add(email);
+      if (!(paper && !email) && !EMAIL_RE.test(email)) { errors.push({ row: g.row, name, email, reason: 'Email invalide ou manquant' }); continue; }
+      if (email && seen.has(email)) { skipped.push({ row: g.row, name, email, reason: 'Doublon dans la liste' }); continue; }
+      if (email) seen.add(email);
       valid.push({ name, email, row: g.row });
     }
 
     // Skip guests who already hold an active invitation for this event
-    if (valid.length) {
+    if (valid.some((g) => g.email)) {
       const existing = await this.prisma.ticket.findMany({
         where: {
           eventId,
-          holderEmail: { in: valid.map((g) => g.email) }, // invitation emails are stored lowercased
+          holderEmail: { in: valid.filter((g) => g.email).map((g) => g.email) }, // invitation emails are stored lowercased
           status: { not: TicketStatus.CANCELLED },
           metadata: { path: ['source'], equals: INVITATION_SOURCE },
         },
@@ -99,7 +115,7 @@ export class InvitationsService {
       });
       const already = new Set(existing.map((t) => t.holderEmail?.toLowerCase()));
       for (let i = valid.length - 1; i >= 0; i--) {
-        if (already.has(valid[i].email)) {
+        if (valid[i].email && already.has(valid[i].email)) {
           skipped.unshift({ ...valid[i], reason: 'Déjà invité(e) à cet événement' });
           valid.splice(i, 1);
         }
@@ -115,7 +131,8 @@ export class InvitationsService {
       invitedBy: userId,
       invitedAt: new Date().toISOString(),
       message: cleanMessage,
-      emailStatus: 'PENDING',
+      emailStatus: paper ? 'NONE' : 'PENDING',
+      ...(paper && { delivery }),
     };
 
     // Confirmation form on: the guest gets a link and the ticket only once they confirm.
@@ -125,10 +142,11 @@ export class InvitationsService {
       eventId,
       userId,
       role,
-      { templateId, holders: valid.map((g) => ({ holderName: g.name, holderEmail: g.email })) },
+      { templateId, holders: valid.map((g) => ({ holderName: g.name, holderEmail: g.email || undefined })) },
       {
         price: 0, metadata: metadata as unknown as Prisma.InputJsonValue, source: 'INVITATION',
-        ...(form?.enabled && { status: TicketStatus.INVITED }),
+        // A paper guest always confirms by scanning the QR: that is when their ticket goes out
+        ...((form?.enabled || paper) && { status: TicketStatus.INVITED }),
       },
     );
 
@@ -142,9 +160,11 @@ export class InvitationsService {
 
     // Emails go out in the background: a large list would otherwise time out the request.
     // Each ticket's metadata.emailStatus tracks delivery, visible in the invitations list.
-    this.deliver(event, tickets, cleanMessage).catch((err) =>
-      this.logger.error(`Invitation delivery crashed for event ${eventId}: ${err?.message}`),
-    );
+    if (!paper) {
+      this.deliver(event, tickets, cleanMessage).catch((err) =>
+        this.logger.error(`Invitation delivery crashed for event ${eventId}: ${err?.message}`),
+      );
+    }
 
     return {
       created: tickets.length,
@@ -155,7 +175,7 @@ export class InvitationsService {
         serialNumber: t.serialNumber,
         holderName: t.holderName,
         holderEmail: t.holderEmail,
-        emailStatus: 'PENDING' as EmailStatus,
+        emailStatus: (paper ? 'NONE' : 'PENDING') as EmailStatus,
       })),
     };
   }
@@ -252,11 +272,12 @@ export class InvitationsService {
     templateId: string,
     file: Express.Multer.File,
     message?: string | null,
+    delivery: DeliveryMode = 'EMAIL',
   ) {
     // Check access before parsing so strangers can't probe the parser
     await this.loadEvent(eventId, userId, role);
-    const guests = await this.parseGuestFile(file);
-    return this.sendInvitations(eventId, userId, role, templateId, guests, message);
+    const guests = await this.parseGuestFile(file, delivery === 'EMAIL');
+    return this.sendInvitations(eventId, userId, role, templateId, guests, message, delivery);
   }
 
   // ─── List / resend ────────────────────────────────────────────────────────
@@ -295,6 +316,7 @@ export class InvitationsService {
         createdAt: t.createdAt,
         template: t.template,
         emailStatus: meta.emailStatus ?? 'PENDING',
+        delivery: meta.delivery ?? 'EMAIL',
         emailSentAt: meta.emailSentAt ?? null,
       };
     });
@@ -325,7 +347,14 @@ export class InvitationsService {
   async getForm(eventId: string, userId: string, role: Role) {
     await this.loadEvent(eventId, userId, role);
     const form = await this.prisma.guestForm.findUnique({ where: { eventId } });
-    return form ?? { eventId, enabled: false, deadline: null, intro: null, askPhone: 'OPTIONAL', fields: [] };
+    if (!form) {
+      return {
+        eventId, enabled: false, deadline: null, intro: null, askPhone: 'OPTIONAL', fields: [],
+        openEnabled: false, openTemplateId: null, openLimit: null, openUrl: null, openCount: 0,
+      };
+    }
+    const { openToken, ...rest } = form;
+    return { ...rest, openUrl: openToken ? this.openLink(openToken) : null, openCount: await this.openSignUps(eventId) };
   }
 
   async saveForm(eventId: string, userId: string, role: Role, dto: SaveGuestFormDto) {
@@ -336,14 +365,106 @@ export class InvitationsService {
     if (deadline && isNaN(deadline.getTime())) throw new BadRequestException('Date limite invalide');
     if (deadline && deadline > event.endDate) throw new BadRequestException("La date limite doit précéder la fin de l'événement");
     const askPhone = ASK_PHONE.includes(dto.askPhone as any) ? dto.askPhone! : 'OPTIONAL';
+    if (dto.openEnabled && !templates.some((t) => t.id === dto.openTemplateId)) {
+      throw new BadRequestException('Choisissez la catégorie des invitations du QR commun');
+    }
+    const current = await this.prisma.guestForm.findUnique({ where: { eventId }, select: { openToken: true } });
     const data = {
       enabled: !!dto.enabled,
       deadline,
       intro: dto.intro?.trim() || null,
       askPhone,
       fields: fields as unknown as Prisma.InputJsonValue,
+      openEnabled: !!dto.openEnabled,
+      openTemplateId: dto.openTemplateId || null,
+      openLimit: dto.openLimit ?? null,
+      // The shared link is made the first time it is turned on, and kept until regenerated
+      ...(dto.openEnabled && !current?.openToken && { openToken: newOpenToken() }),
     };
-    return this.prisma.guestForm.upsert({ where: { eventId }, create: { eventId, ...data }, update: data });
+    await this.prisma.guestForm.upsert({ where: { eventId }, create: { eventId, ...data }, update: data });
+    return this.getForm(eventId, userId, role);
+  }
+
+  /** New shared link: the QR codes printed with the old one stop working */
+  async regenerateOpenLink(eventId: string, userId: string, role: Role) {
+    await this.loadEvent(eventId, userId, role);
+    const form = await this.prisma.guestForm.findUnique({ where: { eventId }, select: { eventId: true } });
+    if (!form) throw new BadRequestException("Activez d'abord le QR commun");
+    await this.prisma.guestForm.update({ where: { eventId }, data: { openToken: newOpenToken() } });
+    return this.getForm(eventId, userId, role);
+  }
+
+  openLink(token: string): string {
+    const base = this.config.get<string>('frontend.publicUrl') || 'https://zaya.live';
+    return `${base}/invitation/ouverte/${token}`;
+  }
+
+  /** Guests who signed up through the shared link and still hold their invitation */
+  async openSignUps(eventId: string, db: Pick<PrismaService, 'ticket'> = this.prisma): Promise<number> {
+    return db.ticket.count({
+      where: { eventId, status: { not: TicketStatus.CANCELLED }, metadata: { path: ['openLink'], equals: true } },
+    });
+  }
+
+  // ─── QR codes to print on paper invitations ───────────────────────────────
+
+  /** One PNG per invitation still to use, named after the guest: placed in the invitation design */
+  async qrZip(eventId: string, userId: string, role: Role): Promise<Buffer> {
+    await this.loadEvent(eventId, userId, role);
+    const tickets = await this.prisma.ticket.findMany({
+      where: {
+        eventId,
+        status: { in: [TicketStatus.INVITED, TicketStatus.VALID] },
+        metadata: { path: ['source'], equals: INVITATION_SOURCE },
+      },
+      orderBy: [{ holderName: 'asc' }, { createdAt: 'asc' }],
+      select: { id: true, holderName: true, template: { select: { name: true } } },
+    });
+    if (!tickets.length) throw new BadRequestException('Aucune invitation à imprimer');
+
+    const archive = archiver('zip', { zlib: { level: 6 } });
+    const out = new PassThrough();
+    const chunks: Buffer[] = [];
+    out.on('data', (c) => chunks.push(c));
+    const done = new Promise<Buffer>((resolve, reject) => {
+      out.on('end', () => resolve(Buffer.concat(chunks)));
+      archive.on('error', reject);
+    });
+    archive.pipe(out);
+    const used = new Set<string>();
+    for (const [i, t] of tickets.entries()) {
+      let name = `${String(i + 1).padStart(3, '0')}-${fileSlug(t.holderName || 'invite')}-${fileSlug(t.template.name)}.png`;
+      if (used.has(name)) name = name.replace(/\.png$/, `-${t.id.slice(0, 6)}.png`);
+      used.add(name);
+      archive.append(await this.qrImage(this.guestLink(t.id)), { name });
+    }
+    await archive.finalize();
+    return done;
+  }
+
+  /** The QR of one guest (to reprint a single invitation) */
+  async guestQr(eventId: string, ticketId: string, userId: string, role: Role) {
+    await this.loadEvent(eventId, userId, role);
+    const ticket = await this.prisma.ticket.findFirst({
+      where: { id: ticketId, eventId, metadata: { path: ['source'], equals: INVITATION_SOURCE } },
+      select: { id: true, holderName: true, status: true },
+    });
+    if (!ticket) throw new NotFoundException('Invitation introuvable');
+    if (ticket.status === TicketStatus.CANCELLED) throw new BadRequestException('Cette invitation a été annulée');
+    return { png: await this.qrImage(this.guestLink(ticket.id)), filename: `qr-${fileSlug(ticket.holderName || 'invite')}.png` };
+  }
+
+  /** The QR of the shared link */
+  async openQr(eventId: string, userId: string, role: Role) {
+    await this.loadEvent(eventId, userId, role);
+    const form = await this.prisma.guestForm.findUnique({ where: { eventId }, select: { openToken: true } });
+    if (!form?.openToken) throw new BadRequestException("Activez d'abord le QR commun");
+    return this.qrImage(this.openLink(form.openToken));
+  }
+
+  /** Large enough to print sharp at 4 cm; quiet zone included */
+  private qrImage(url: string): Promise<Buffer> {
+    return QRCode.toBuffer(url, { type: 'png', width: 800, margin: 2, errorCorrectionLevel: 'M' });
   }
 
   /** Every invitation with its answers, one column per question, plus the totals per choice */
@@ -558,7 +679,7 @@ export class InvitationsService {
   }
 
   /** Reads guests from .xlsx or .csv. Accepts a "Nom" column, or "Prénom" + "Nom". */
-  private async parseGuestFile(file: Express.Multer.File): Promise<Guest[]> {
+  private async parseGuestFile(file: Express.Multer.File, requireEmail = true): Promise<Guest[]> {
     if (!file) throw new BadRequestException('Aucun fichier reçu');
 
     const wb = new ExcelJS.Workbook();
@@ -598,7 +719,7 @@ export class InvitationsService {
         if (cols[field] === undefined && aliases.includes(h)) cols[field] = col;
       }
     });
-    if (cols.email === undefined) {
+    if (cols.email === undefined && requireEmail) {
       throw new BadRequestException('Colonne "Email" introuvable dans la première ligne du fichier');
     }
     if (cols.name === undefined && cols.firstName === undefined && cols.lastName === undefined) {

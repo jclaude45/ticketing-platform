@@ -34,7 +34,8 @@ export class InvitationsController {
   @ApiOperation({ summary: 'Send invitations (free tickets emailed to guests)' })
   send(@Param('eventId') eventId: string, @CurrentUser() user: any, @Body() dto: SendInvitationsDto) {
     return this.invitationsService.sendInvitations(
-      eventId, user.id, user.role, dto.templateId, dto.guests, dto.message,
+      eventId, user.id, user.role, dto.templateId,
+      dto.guests.map((g) => ({ name: g.name, email: g.email ?? '' })), dto.message, dto.delivery,
     );
   }
 
@@ -60,7 +61,7 @@ export class InvitationsController {
     @CurrentUser() user: any,
   ) {
     return this.invitationsService.importInvitations(
-      eventId, user.id, user.role, dto.templateId, file, dto.message,
+      eventId, user.id, user.role, dto.templateId, file, dto.message, dto.delivery,
     );
   }
 
@@ -89,6 +90,41 @@ export class InvitationsController {
   @ApiOperation({ summary: 'Save the confirmation form' })
   saveForm(@Param('eventId') eventId: string, @CurrentUser() user: any, @Body() dto: SaveGuestFormDto) {
     return this.invitationsService.saveForm(eventId, user.id, user.role, dto);
+  }
+
+  @Post('form/open-link/regenerate')
+  @Roles(Role.ORGANIZER, Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'New shared link: QR codes printed with the old one stop working' })
+  regenerateOpenLink(@Param('eventId') eventId: string, @CurrentUser() user: any) {
+    return this.invitationsService.regenerateOpenLink(eventId, user.id, user.role);
+  }
+
+  @Get('form/open-link/qr.png')
+  @Roles(Role.ORGANIZER, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'QR code of the shared link (PNG)' })
+  async openQr(@Param('eventId') eventId: string, @CurrentUser() user: any, @Res() res: Response) {
+    const png = await this.invitationsService.openQr(eventId, user.id, user.role);
+    res.set({ 'Content-Type': 'image/png', 'Content-Disposition': 'attachment; filename="qr-invitation.png"', 'Content-Length': png.length });
+    res.end(png);
+  }
+
+  @Get('qr.zip')
+  @Roles(Role.ORGANIZER, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'QR code of each invitation still to use, one PNG per guest, to print on paper' })
+  async qrZip(@Param('eventId') eventId: string, @CurrentUser() user: any, @Res() res: Response) {
+    const zip = await this.invitationsService.qrZip(eventId, user.id, user.role);
+    res.set({ 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="qr-invitations.zip"', 'Content-Length': zip.length });
+    res.end(zip);
+  }
+
+  @Get(':ticketId/qr.png')
+  @Roles(Role.ORGANIZER, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: "QR code of one guest's invitation (PNG)" })
+  async guestQr(@Param('eventId') eventId: string, @Param('ticketId') ticketId: string, @CurrentUser() user: any, @Res() res: Response) {
+    const { png, filename } = await this.invitationsService.guestQr(eventId, ticketId, user.id, user.role);
+    res.set({ 'Content-Type': 'image/png', 'Content-Disposition': `attachment; filename="${filename}"`, 'Content-Length': png.length });
+    res.end(png);
   }
 
   @Get('responses/export')

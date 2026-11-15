@@ -1,11 +1,13 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Prisma, TicketStatus } from '@prisma/client';
+import { Prisma, Role, TicketStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { tariffLabel } from '../tickets/event-days';
 import { INVITATION_SOURCE, InvitationsService } from './invitations.service';
 import { cleanAnswers, countTaken, fieldsFor, ticketIdFromToken, type FormField } from './guest-form';
-import { GuestAnswerDto } from './dto/guest-form.dto';
+import { GuestAnswerDto, OpenSignUpDto } from './dto/guest-form.dto';
+import { assertMailDomain } from '../common/email/mail-domain';
+import { TicketGenerationService } from '../tickets/ticket-generation.service';
 
 const PHONE_RE = /^\+?[0-9][0-9 .-]{5,18}[0-9]$/;
 
@@ -22,6 +24,7 @@ export class GuestRsvpService {
     private readonly prisma: PrismaService,
     private readonly invitations: InvitationsService,
     private readonly config: ConfigService,
+    private readonly ticketGeneration: TicketGenerationService,
   ) {}
 
   async getPage(token: string) {
@@ -51,6 +54,8 @@ export class GuestRsvpService {
         email: ticket.holderEmail,
         phone: ticket.holderPhone,
         category: tariffLabel(ticket.template.name, ticket.template.validDays),
+        // Paper invitation made without an address: the guest gives it to get the ticket
+        emailEditable: !ticket.holderEmail,
       },
       form: {
         intro: form?.intro ?? null,
@@ -85,8 +90,15 @@ export class GuestRsvpService {
     const askPhone = form?.askPhone ?? 'OPTIONAL';
     const name = dto.name?.trim() || ticket.holderName || '';
     const phone = askPhone === 'HIDDEN' ? ticket.holderPhone : dto.phone?.trim() || null;
+    // Paper invitation made without an address: the ticket goes to the one the guest gives
+    const email = ticket.holderEmail ?? (dto.email?.trim().toLowerCase() || null);
     if (dto.attending) {
       if (!name) throw new BadRequestException('Indiquez votre nom');
+      if (!email) throw new BadRequestException('Indiquez votre adresse e-mail : votre billet y sera envoyé');
+      if (!ticket.holderEmail) {
+        await assertMailDomain(email);
+        await this.assertNotInvited(event.id, email, ticket.id);
+      }
       if (askPhone === 'REQUIRED' && !phone) throw new BadRequestException('Indiquez votre numéro de téléphone');
       if (phone && !PHONE_RE.test(phone)) throw new BadRequestException('Numéro de téléphone invalide');
     }
@@ -115,7 +127,7 @@ export class GuestRsvpService {
         }
         await tx.ticket.update({
           where: { id: ticket.id },
-          data: { status: TicketStatus.VALID, cancelledAt: null, holderName: name, holderPhone: phone },
+          data: { status: TicketStatus.VALID, cancelledAt: null, holderName: name, holderPhone: phone, holderEmail: email },
         });
         await tx.guestResponse.upsert({
           where: { ticketId: ticket.id },
@@ -142,6 +154,132 @@ export class GuestRsvpService {
       );
     }
     return this.getPage(token);
+  }
+
+  // ─── Shared link (one QR for everyone) ──────────────────────────────────────
+
+  async getOpenPage(token: string) {
+    const { event, form } = await this.loadOpen(token);
+    const fields = fieldsFor((form.fields ?? []) as unknown as FormField[], form.openTemplateId!);
+    const [confirmed, signUps, template] = await Promise.all([
+      this.prisma.guestResponse.findMany({ where: { eventId: event.id, status: 'CONFIRMED' }, select: { ticketId: true, answers: true } }),
+      this.invitations.openSignUps(event.id),
+      this.prisma.ticketTemplate.findUnique({ where: { id: form.openTemplateId! }, select: { name: true, validDays: true, availableCount: true } }),
+    ]);
+    const taken = countTaken(fields, confirmed);
+    const left = Math.min(template?.availableCount ?? 0, form.openLimit ? form.openLimit - signUps : Infinity);
+    const appBase = this.config.get<string>('APP_BASE_URL') || '';
+    return {
+      event: {
+        name: event.name, startDate: event.startDate, endDate: event.endDate, timeZone: event.timeZone,
+        venue: event.venue, address: event.address, city: event.city,
+        bannerUrl: event.bannerUrl?.replace(/^https?:\/\/localhost:\d+/, appBase) ?? null,
+        organizer: `${event.organizer.firstName} ${event.organizer.lastName}`.trim(),
+      },
+      category: template ? tariffLabel(template.name, template.validDays) : '',
+      form: {
+        intro: form.intro, askPhone: form.askPhone, deadline: this.deadline(form, event),
+        fields: fields.map((f) => ({
+          ...f,
+          templateIds: undefined,
+          options: f.options?.map((o) => ({ id: o.id, label: o.label, ...(o.limit && { left: Math.max(0, o.limit - (taken[f.id]?.[o.id] ?? 0)) }) })),
+        })),
+      },
+      state: event.status === 'CANCELLED' ? 'CANCELLED'
+        : Date.now() >= this.deadline(form, event).getTime() ? 'CLOSED'
+        : left <= 0 ? 'FULL' : 'OPEN',
+    };
+  }
+
+  /**
+   * A guest signs up through the shared link: a confirmed invitation (ticket e-mailed with the
+   * link to change the answer). One at a time per event, so the limits cannot be overrun.
+   */
+  async openSignUp(token: string, dto: OpenSignUpDto) {
+    const { event, form } = await this.loadOpen(token);
+    return this.oneAtATime(event.id, async () => {
+      const page = await this.getOpenPage(token);
+      if (page.state === 'CLOSED') throw new BadRequestException('Les inscriptions sont closes');
+      if (page.state === 'FULL') throw new BadRequestException("Il n'y a plus de place pour cette invitation");
+      if (page.state !== 'OPEN') throw new BadRequestException("Cette invitation n'est plus disponible");
+
+      const name = dto.name.trim();
+      const email = dto.email.trim().toLowerCase();
+      const phone = form.askPhone === 'HIDDEN' ? null : dto.phone?.trim() || null;
+      if (form.askPhone === 'REQUIRED' && !phone) throw new BadRequestException('Indiquez votre numéro de téléphone');
+      if (phone && !PHONE_RE.test(phone)) throw new BadRequestException('Numéro de téléphone invalide');
+      await assertMailDomain(email);
+      await this.assertNotInvited(event.id, email);
+
+      const fields = fieldsFor((form.fields ?? []) as unknown as FormField[], form.openTemplateId!);
+      const confirmed = await this.prisma.guestResponse.findMany({ where: { eventId: event.id, status: 'CONFIRMED' }, select: { ticketId: true, answers: true } });
+      const answers = cleanAnswers(dto.answers, fields, countTaken(fields, confirmed));
+
+      let created: { id: string };
+      try {
+        const result = await this.ticketGeneration.generateTickets(
+          event.id, event.organizerId, Role.ORGANIZER,
+          { templateId: form.openTemplateId!, holders: [{ holderName: name, holderEmail: email, holderPhone: phone ?? undefined }] },
+          {
+            price: 0, source: 'INVITATION',
+            metadata: {
+              source: INVITATION_SOURCE, invitedBy: 'OPEN_LINK', openLink: true,
+              invitedAt: new Date().toISOString(), message: null, emailStatus: 'PENDING',
+            } as Prisma.InputJsonValue,
+          },
+        );
+        created = result.tickets[0];
+      } catch (err: any) {
+        // Out of seats or of the organizer's print quota: the guest cannot fix it
+        if (err?.status === 402 || /stock|places|quota/i.test(err?.message ?? '')) {
+          throw new BadRequestException("Il n'y a plus de place pour cette invitation");
+        }
+        throw err;
+      }
+      await this.prisma.guestResponse.create({
+        data: { ticketId: created.id, eventId: event.id, status: 'CONFIRMED', answers: answers as Prisma.InputJsonValue },
+      });
+      this.sendTicket(created.id, event.id).catch((e) =>
+        this.logger.error(`Ticket e-mail after open sign-up failed for ${created.id}: ${e?.message}`),
+      );
+      return { ok: true, email };
+    });
+  }
+
+  private async loadOpen(token: string) {
+    const form = token ? await this.prisma.guestForm.findUnique({ where: { openToken: String(token) } }) : null;
+    if (!form || !form.openEnabled || !form.openTemplateId) throw new NotFoundException('Invitation introuvable');
+    const event = await this.prisma.event.findUniqueOrThrow({
+      where: { id: form.eventId },
+      select: {
+        id: true, name: true, status: true, startDate: true, endDate: true, timeZone: true, organizerId: true,
+        venue: true, address: true, city: true, bannerUrl: true,
+        organizer: { select: { firstName: true, lastName: true } },
+      },
+    });
+    return { event, form };
+  }
+
+  /** One invitation per address and event (the guest already invited uses the link they received) */
+  private async assertNotInvited(eventId: string, email: string, exceptTicketId?: string) {
+    const other = await this.prisma.ticket.count({
+      where: {
+        eventId, holderEmail: email, status: { not: TicketStatus.CANCELLED },
+        metadata: { path: ['source'], equals: INVITATION_SOURCE },
+        ...(exceptTicketId && { id: { not: exceptTicketId } }),
+      },
+    });
+    if (other) throw new ConflictException('Cette adresse e-mail a déjà une invitation pour cet événement : utilisez le lien reçu par e-mail');
+  }
+
+  /** Sign-ups of one event run one after the other (one backend process) */
+  private queues = new Map<string, Promise<unknown>>();
+  private oneAtATime<T>(key: string, job: () => Promise<T>): Promise<T> {
+    const run = (this.queues.get(key) ?? Promise.resolve()).catch(() => undefined).then(job);
+    const tail = run.catch(() => undefined);
+    this.queues.set(key, tail);
+    tail.then(() => { if (this.queues.get(key) === tail) this.queues.delete(key); });
+    return run;
   }
 
   private async sendTicket(ticketId: string, eventId: string) {

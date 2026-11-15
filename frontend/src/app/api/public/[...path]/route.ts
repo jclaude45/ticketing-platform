@@ -19,6 +19,8 @@ const ALLOWED: RegExp[] = [
   /^\/public\/payments\/callback$/,
   // A guest's confirmation page: <ticket id>.<signature>
   /^\/public\/invitations\/[\w-]+\.[\w-]+$/,
+  // Shared invitation link: <random token>
+  /^\/public\/invitations\/open\/[\w-]+$/,
 ];
 
 async function proxy(req: NextRequest) {

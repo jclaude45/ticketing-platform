@@ -6,11 +6,12 @@ import { InvitationsController } from './invitations.controller';
 import { InvitationsService } from './invitations.service';
 import { GuestRsvpController } from './guest-rsvp.controller';
 import { GuestRsvpService } from './guest-rsvp.service';
+import { TurnstileService } from '../auth/turnstile.service';
 
 @Module({
   imports: [PrismaModule, TicketsModule, PublicModule],
   controllers: [InvitationsController, GuestRsvpController],
-  providers: [InvitationsService, GuestRsvpService],
+  providers: [InvitationsService, GuestRsvpService, TurnstileService],
   exports: [InvitationsService],
 })
 export class InvitationsModule {}

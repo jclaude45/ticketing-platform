@@ -325,6 +325,14 @@ model GuestForm {
   askPhone  String    @default("OPTIONAL")
   /// Questions: [{ id, type: CHOICE | TEXT | YESNO, label, help?, required, options?: [{ id, label, limit? }], templateIds? }]
   fields    Json      @default("[]")
+  /// Shared link (one QR for everyone, printed on paper invitations): whoever opens it signs up
+  openEnabled    Boolean @default(false)
+  /// Random, changed when the organizer regenerates the link (the old QR stops working)
+  openToken      String? @unique
+  /// Category of the tickets made through the shared link
+  openTemplateId String?
+  /// Most sign-ups through the shared link (null: up to the category's seats)
+  openLimit      Int?
   updatedAt DateTime  @updatedAt
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)

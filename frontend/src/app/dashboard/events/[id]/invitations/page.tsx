@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePrintPayment, isPrintPaymentError } from '@/components/billing/usePrintPayment';
 import {
   ArrowLeft, Mail, Plus, Trash2, Upload, Download, Loader2, Send, FileSpreadsheet,
-  CheckCircle2, AlertTriangle, RotateCw, UserPlus, Clock, XCircle,
+  CheckCircle2, AlertTriangle, RotateCw, UserPlus, Clock, XCircle, QrCode,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient, eventsApi } from '@/lib/api';
@@ -15,7 +15,8 @@ import { GuestFormEditor, type GuestForm } from '@/components/invitations/GuestF
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type EmailStatus = 'PENDING' | 'SENT' | 'FAILED';
+/** NONE: paper invitation (printed QR code, no e-mail) */
+type EmailStatus = 'PENDING' | 'SENT' | 'FAILED' | 'NONE';
 
 interface Invitation {
   id: string;
@@ -29,6 +30,7 @@ interface Invitation {
   template: { id: string; name: string };
   emailStatus: EmailStatus;
   emailSentAt: string | null;
+  delivery: 'EMAIL' | 'PAPER';
   /** The guest's answer on their confirmation page */
   response: { status: 'CONFIRMED' | 'DECLINED'; respondedAt: string; updatedAt: string; answers: { fieldId: string; label: string; value: string }[] } | null;
 }
@@ -54,6 +56,8 @@ export default function InvitationsPage() {
   const queryClient = useQueryClient();
 
   const [mode, setMode] = useState<'manual' | 'import'>('manual');
+  // PAPER: printed with a QR code, the address is optional and nothing is e-mailed
+  const [delivery, setDelivery] = useState<'EMAIL' | 'PAPER'>('EMAIL');
   const [templateId, setTemplateId] = useState('');
   const [message, setMessage] = useState('');
   const [rows, setRows] = useState<GuestRow[]>([{ name: '', email: '' }]);
@@ -85,26 +89,31 @@ export default function InvitationsPage() {
     queryFn: async () => unwrap(await apiClient.get(`/events/${eventId}/invitations/form`)),
   });
 
-  const exportResponses = async () => {
+  const download = async (path: string, filename: string, failure: string) => {
     try {
-      const res = await apiClient.get(`/events/${eventId}/invitations/responses/export`, { responseType: 'blob' });
+      const res = await apiClient.get(`/events/${eventId}/invitations/${path}`, { responseType: 'blob' });
       const url = URL.createObjectURL(res.data as Blob);
-      const a = Object.assign(document.createElement('a'), { href: url, download: 'reponses-invites.xlsx' });
+      const a = Object.assign(document.createElement('a'), { href: url, download: filename });
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch {
-      toast.error("Impossible d'exporter les réponses");
+      toast.error(failure);
     }
   };
+  const exportResponses = () => download('responses/export', 'reponses-invites.xlsx', "Impossible d'exporter les réponses");
 
   const selectedTemplate = templates.find((t: any) => t.id === templateId);
-  const validRows = rows.filter((r) => r.name.trim() && EMAIL_RE.test(r.email.trim()));
-  const invalidRows = rows.filter((r) => (r.name.trim() || r.email.trim()) && !(r.name.trim() && EMAIL_RE.test(r.email.trim())));
+  const paper = delivery === 'PAPER';
+  const rowOk = (r: GuestRow) => !!r.name.trim() && (EMAIL_RE.test(r.email.trim()) || (paper && !r.email.trim()));
+  const validRows = rows.filter(rowOk);
+  const invalidRows = rows.filter((r) => (r.name.trim() || r.email.trim()) && !rowOk(r));
 
   const onSent = (data: SendResult) => {
     setResult(data);
     if (data.created > 0) {
-      toast.success(`${data.created} invitation(s) en cours d'envoi`);
+      toast.success(paper
+        ? `${data.created} invitation(s) papier créée(s) : téléchargez leurs QR pour les imprimer`
+        : `${data.created} invitation(s) en cours d'envoi`);
       setRows([{ name: '', email: '' }]);
       setFile(null);
     } else {
@@ -133,7 +142,8 @@ export default function InvitationsPage() {
       unwrap(await apiClient.post(`/events/${eventId}/invitations`, {
         templateId,
         message: message.trim() || undefined,
-        guests: validRows.map((r) => ({ name: r.name.trim(), email: r.email.trim() })),
+        delivery,
+        guests: validRows.map((r) => ({ name: r.name.trim(), ...(r.email.trim() && { email: r.email.trim() }) })),
       })) as SendResult,
     onSuccess: onSent,
     onError: (err: any) => onError(err, () => sendManual.mutate()),
@@ -144,6 +154,7 @@ export default function InvitationsPage() {
       const form = new FormData();
       form.append('file', file!);
       form.append('templateId', templateId);
+      form.append('delivery', delivery);
       if (message.trim()) form.append('message', message.trim());
       return unwrap(await apiClient.post(`/events/${eventId}/invitations/import`, form, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -237,8 +248,24 @@ export default function InvitationsPage() {
         </div>
       ) : (
         <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 py-5 flex flex-col gap-5">
+          {/* E-mail or paper */}
+          <div className="flex flex-wrap gap-2">
+            {([
+              { key: 'EMAIL', label: 'Envoyer par e-mail', icon: Mail },
+              { key: 'PAPER', label: 'Invitations papier (QR à imprimer)', icon: QrCode },
+            ] as const).map((d) => (
+              <button key={d.key} type="button" onClick={() => { setDelivery(d.key); setResult(null); }}
+                className={cn('inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors',
+                  delivery === d.key ? 'border-indigo-600 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300' : 'border-gray-300 text-gray-600 hover:border-indigo-400 dark:border-gray-700 dark:text-gray-400')}>
+                <d.icon className="h-4 w-4" /> {d.label}
+              </button>
+            ))}
+          </div>
+
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            {guestForm?.enabled
+            {paper
+              ? "Aucun e-mail n'est envoyé : l'adresse est facultative. Téléchargez ensuite les QR (une image par invité) pour les imprimer sur vos invitations. L'invité scanne son QR, confirme sa présence et reçoit son billet ; sa place est réservée en attendant."
+              : guestForm?.enabled
               ? "Chaque invité reçoit par email un lien pour confirmer sa présence. Son billet (QR code) lui est envoyé dès qu'il a confirmé ; sa place est réservée en attendant."
               : "Chaque invité reçoit par email un billet gratuit avec QR code, à présenter à l'entrée."}
           </p>
@@ -320,7 +347,7 @@ export default function InvitationsPage() {
                       <input
                         value={row.email}
                         onChange={(e) => updateRow(i, { email: e.target.value })}
-                        placeholder="email@exemple.com"
+                        placeholder={paper ? 'email (facultatif)' : 'email@exemple.com'}
                         type="email"
                         className={cn(
                           'flex-1 rounded-lg border bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none',
@@ -348,7 +375,7 @@ export default function InvitationsPage() {
                 Ajouter un invité
               </button>
               {invalidRows.length > 0 && (
-                <p className="text-xs text-red-600">Chaque invité doit avoir un nom et un email valide.</p>
+                <p className="text-xs text-red-600">{paper ? 'Chaque invité doit avoir un nom ; l’email, s’il est rempli, doit être valide.' : 'Chaque invité doit avoir un nom et un email valide.'}</p>
               )}
             </div>
           ) : (
@@ -369,7 +396,7 @@ export default function InvitationsPage() {
                 ) : (
                   <>
                     <p className="text-sm font-medium text-gray-900 dark:text-white">Glissez votre fichier ici ou cliquez pour choisir</p>
-                    <p className="text-xs text-gray-500 mt-1">.xlsx ou .csv — colonnes « Nom » et « Email » (500 invités max)</p>
+                    <p className="text-xs text-gray-500 mt-1">.xlsx ou .csv — colonnes « Nom » et « Email »{paper ? ' (email facultatif)' : ''} (500 invités max)</p>
                   </>
                 )}
                 <input
@@ -407,8 +434,8 @@ export default function InvitationsPage() {
             >
               {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               {mode === 'manual'
-                ? `Envoyer ${validRows.length > 0 ? validRows.length : ''} invitation${validRows.length > 1 ? 's' : ''}`
-                : 'Importer et envoyer'}
+                ? `${paper ? 'Créer' : 'Envoyer'} ${validRows.length > 0 ? validRows.length : ''} invitation${validRows.length > 1 ? 's' : ''}${paper ? ' papier' : ''}`
+                : paper ? 'Importer et créer' : 'Importer et envoyer'}
             </button>
           </div>
 
@@ -427,9 +454,16 @@ export default function InvitationsPage() {
               {` · ${usedCount} présent(s)`}
             </span>
             {invitations.length > 0 && (
-              <button type="button" onClick={exportResponses} className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:underline">
-                <Download className="h-3.5 w-3.5" /> Exporter
-              </button>
+              <>
+                <button type="button" onClick={() => download('qr.zip', 'qr-invitations.zip', 'Impossible de télécharger les QR')}
+                  title="Une image QR par invitation à utiliser, à placer sur les invitations papier"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:underline">
+                  <QrCode className="h-3.5 w-3.5" /> QR (ZIP)
+                </button>
+                <button type="button" onClick={exportResponses} className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:underline">
+                  <Download className="h-3.5 w-3.5" /> Exporter
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -465,8 +499,15 @@ export default function InvitationsPage() {
                     <td className="px-5 py-3 text-gray-700 dark:text-gray-300">{inv.template?.name}</td>
                     <td className="px-5 py-3"><EmailBadge status={inv.emailStatus} /></td>
                     <td className="px-5 py-3"><TicketBadge status={inv.status} response={inv.response?.status} /></td>
-                    <td className="px-5 py-3 text-right">
-                      {inv.status !== 'CANCELLED' && inv.emailStatus !== 'PENDING' && (
+                    <td className="px-5 py-3 text-right whitespace-nowrap">
+                      {(inv.status === 'INVITED' || inv.status === 'VALID') && (
+                        <button type="button" title="QR de cette invitation (PNG)"
+                          onClick={() => download(`${inv.id}/qr.png`, `qr-${(inv.holderName ?? 'invite').replace(/[\s/\\:*?"<>|]+/g, '-')}.png`, 'Impossible de télécharger le QR')}
+                          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800">
+                          <QrCode className="h-3.5 w-3.5" /> QR
+                        </button>
+                      )}
+                      {inv.status !== 'CANCELLED' && inv.emailStatus !== 'PENDING' && inv.holderEmail && (
                         <button
                           type="button"
                           onClick={() => resend.mutate(inv.id)}
@@ -526,6 +567,7 @@ function EmailBadge({ status }: { status: EmailStatus }) {
     PENDING: { label: 'En cours', icon: Clock, cls: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400' },
     SENT: { label: 'Envoyé', icon: CheckCircle2, cls: 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400' },
     FAILED: { label: 'Échec', icon: AlertTriangle, cls: 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400' },
+    NONE: { label: 'Papier', icon: QrCode, cls: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300' },
   }[status] ?? { label: status, icon: Clock, cls: 'bg-gray-100 text-gray-600' };
   return (
     <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium', map.cls)}>

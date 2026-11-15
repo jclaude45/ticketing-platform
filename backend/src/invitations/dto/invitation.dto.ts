@@ -8,6 +8,7 @@ import {
   ArrayMaxSize,
   MaxLength,
   ValidateNested,
+  IsIn,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -21,10 +22,15 @@ export class InvitationGuestDto {
   @MaxLength(120)
   name: string;
 
-  @ApiProperty({ example: 'marie@example.com' })
+  @ApiPropertyOptional({ example: 'marie@example.com', description: 'Required for e-mail invitations, optional for paper ones' })
+  @IsOptional()
   @IsEmail()
-  email: string;
+  email?: string;
 }
+
+/** EMAIL: sent by e-mail. PAPER: printed with its QR code (no e-mail; the guest confirms by scanning it) */
+export const DELIVERY_MODES = ['EMAIL', 'PAPER'] as const;
+export type DeliveryMode = (typeof DELIVERY_MODES)[number];
 
 export class SendInvitationsDto {
   @ApiProperty({ description: 'Ticket template (category) used for the invitations' })
@@ -37,6 +43,11 @@ export class SendInvitationsDto {
   @IsString()
   @MaxLength(1000)
   message?: string;
+
+  @ApiPropertyOptional({ enum: DELIVERY_MODES, default: 'EMAIL' })
+  @IsOptional()
+  @IsIn(DELIVERY_MODES)
+  delivery?: DeliveryMode;
 
   @ApiProperty({ type: [InvitationGuestDto] })
   @IsArray()
@@ -59,4 +70,9 @@ export class ImportInvitationsDto {
   @IsString()
   @MaxLength(1000)
   message?: string;
+
+  @ApiPropertyOptional({ enum: DELIVERY_MODES, default: 'EMAIL' })
+  @IsOptional()
+  @IsIn(DELIVERY_MODES)
+  delivery?: DeliveryMode;
 }
