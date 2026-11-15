@@ -30,7 +30,7 @@ export class TicketTemplateService {
     }
 
     // Seats are counted per day of the event (tariffs of different days don't add up)
-    const days = eventDays(event.startDate, event.endDate);
+    const days = eventDays(event.startDate, event.endDate, event.timeZone);
     const validDays = normalizeValidDays(dto.validDays, days);
     const existingTemplates = await this.prisma.ticketTemplate.findMany({
       where: { eventId },
@@ -102,7 +102,7 @@ export class TicketTemplateService {
   ) {
     const template = await this.prisma.ticketTemplate.findUnique({
       where: { id: templateId },
-      include: { event: { select: { organizerId: true, totalCapacity: true, startDate: true, endDate: true } } },
+      include: { event: { select: { organizerId: true, totalCapacity: true, startDate: true, endDate: true, timeZone: true } } },
     });
 
     if (!template) throw new NotFoundException('Template not found');
@@ -111,7 +111,7 @@ export class TicketTemplateService {
       throw new ForbiddenException('Access denied');
     }
 
-    const days = eventDays(template.event.startDate, template.event.endDate);
+    const days = eventDays(template.event.startDate, template.event.endDate, template.event.timeZone);
     const validDays = dto.validDays !== undefined ? normalizeValidDays(dto.validDays, days) : template.validDays;
     const daysChanged = dto.validDays !== undefined && validDays.join() !== template.validDays.join();
 

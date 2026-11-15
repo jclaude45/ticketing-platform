@@ -1,0 +1,10 @@
+# Default gitleaks rules, run by the pre-commit hook
+[extend]
+useDefault = true
+
+[allowlist]
+description = "GeoNames city → time zone tables: city names such as Itapipoca or Capim match the generic API key rule"
+paths = [
+  '''frontend/public/geo/tz/[A-Z]{2}\.json''',
+  '''backend/src/common/geo-timezones\.json''',
+]

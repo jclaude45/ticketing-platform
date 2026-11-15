@@ -1,3 +1,5 @@
 Villes et pays : GeoNames (https://www.geonames.org), licence Creative Commons Attribution 4.0
 (https://creativecommons.org/licenses/by/4.0/). Extrait de cities5000 et countryInfo,
 réduit aux noms de localités par pays, triés par population.
+Fuseaux horaires (geo/tz/<pays>.json) : colonne timezone de cities5000. "d" = fuseau de la ville la plus
+peuplée du pays, "x" = villes dont le fuseau est différent.

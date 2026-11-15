@@ -1,3 +1,4 @@
+import { DEFAULT_TIME_ZONE } from '../common/time-zone';
 import { button, details, emailLayout, emailText, esc, note, p, quote } from '../common/email/layout';
 import { ticketCalendar } from '../common/email/ics';
 import { assertMailDomain } from '../common/email/mail-domain';
@@ -33,9 +34,6 @@ const ZAYA_LOGO_Z_PATH =
   'L298.41 600.361H492.824L249.334 355.788L249.089 355.542L249.234 355.227L298.319 248.291L298.453 248' +
   'H751.755L751.532 248.66Z';
 
-/** Events take place in Kinshasa: their times are shown there, whatever the server's zone */
-const EVENT_TZ = 'Africa/Kinshasa';
-
 /** Free tickets one person can take over 24 hours */
 export const FREE_TICKETS_PER_DAY = 5;
 
@@ -43,7 +41,7 @@ export const FREE_TICKETS_PER_DAY = 5;
 const LIST_SELECT = {
   id: true, name: true, description: true,
   venue: true, city: true, country: true, type: true,
-  startDate: true, endDate: true,
+  startDate: true, endDate: true, timeZone: true,
   bannerUrl: true, totalCapacity: true, feePayer: true,
   organizer: { select: { firstName: true, lastName: true } },
   ticketTemplates: {
@@ -178,7 +176,7 @@ export class PublicService {
       select: {
         id: true, name: true, description: true, performers: true,
         venue: true, address: true, city: true, country: true, type: true,
-        startDate: true, endDate: true,
+        startDate: true, endDate: true, timeZone: true,
         bannerUrl: true, totalCapacity: true, status: true, feePayer: true, showAfterEnd: true,
         organizer: { select: { firstName: true, lastName: true, avatar: true } },
         ticketTemplates: {
@@ -244,7 +242,7 @@ export class PublicService {
       where: { id: eventId },
       select: {
         id: true, name: true, organizerId: true, status: true,
-        startDate: true, endDate: true, city: true, venue: true,
+        startDate: true, endDate: true, timeZone: true, city: true, venue: true,
         address: true, description: true, bannerUrl: true,
         organizer: { select: { firstName: true, lastName: true, email: true } },
       },
@@ -477,6 +475,8 @@ export class PublicService {
     holder: { holderName: string; holderEmail: string; holderPhone?: string | null },
     event: {
       id: string; name: string; startDate: Date; endDate: Date;
+      /** The event's zone: its times are shown there, whatever the server's (UTC) */
+      timeZone?: string;
       city: string; venue: string;
       address?: string | null;
       description?: string | null;
@@ -529,7 +529,8 @@ export class PublicService {
         : bannerUrl.replace(/^https?:\/\/localhost(:\d+)?/, appBase);
     }
 
-    // Date formatting, in the events' time zone (the server runs in UTC)
+    // Date formatting, in the event's time zone (the server runs in UTC)
+    const EVENT_TZ = event.timeZone ?? DEFAULT_TIME_ZONE;
     const startDate = new Date(event.startDate);
     const dateStr = new Intl.DateTimeFormat('fr-FR', {
       weekday: 'long', day: 'numeric', month: 'long', timeZone: EVENT_TZ,
@@ -675,7 +676,7 @@ export class PublicService {
 
   async buildTicketPdf(
     ticket: { ticketId?: string; isInvitation?: boolean; serialNumber: string; templateName: string; price: number; currency: string; qrCode: string | null },
-    event: { name: string; startDate: Date; endDate?: Date | null; city: string; venue: string; address?: string | null },
+    event: { name: string; startDate: Date; endDate?: Date | null; timeZone?: string; city: string; venue: string; address?: string | null },
     holderName: string,
     bannerUrl?: string | null,
     extra?: {
@@ -719,6 +720,7 @@ export class PublicService {
       doc.on('error', reject);
 
       const startDate = new Date(event.startDate);
+      const EVENT_TZ = event.timeZone ?? DEFAULT_TIME_ZONE;
       const fmtDate = (d: Date) => new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: EVENT_TZ }).format(d);
       const fmtTime = (d: Date) => new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: EVENT_TZ }).format(d);
 

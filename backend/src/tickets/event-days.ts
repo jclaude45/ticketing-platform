@@ -1,28 +1,31 @@
 import { BadRequestException } from '@nestjs/common';
+import { DEFAULT_TIME_ZONE, zoneOffsetMs } from '../common/time-zone';
 
 /**
- * Days of an event and validity days of its tariffs. Days are 'YYYY-MM-DD' strings in
- * Kinshasa time (UTC+1, no daylight saving), the local time of the events.
+ * Days of an event and validity days of its tariffs. Days are 'YYYY-MM-DD' strings in the
+ * event's time zone (its city's), the local time of the people at the door.
  */
-export const EVENT_TIMEZONE = 'Africa/Kinshasa';
-const KINSHASA_OFFSET_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** Kinshasa calendar day of an instant */
-export function kinshasaDay(d: Date): string {
-  return new Date(d.getTime() + KINSHASA_OFFSET_MS).toISOString().slice(0, 10);
+/** Calendar day of an instant in a zone */
+export function eventDay(d: Date, tz: string = DEFAULT_TIME_ZONE): string {
+  return new Date(d.getTime() + zoneOffsetMs(d, tz)).toISOString().slice(0, 10);
 }
 
-/** [start, end) of a Kinshasa day, as UTC instants */
-export function kinshasaDayBounds(day: string): { start: Date; end: Date } {
-  const start = new Date(new Date(`${day}T00:00:00Z`).getTime() - KINSHASA_OFFSET_MS);
-  return { start, end: new Date(start.getTime() + DAY_MS) };
+/** [start, end) of a day in a zone, as UTC instants */
+export function dayBounds(day: string, tz: string = DEFAULT_TIME_ZONE): { start: Date; end: Date } {
+  const midnight = (d: string) => {
+    const asUtc = new Date(`${d}T00:00:00Z`).getTime();
+    return new Date(asUtc - zoneOffsetMs(new Date(asUtc - zoneOffsetMs(new Date(asUtc), tz)), tz));
+  };
+  const next = new Date(new Date(`${day}T00:00:00Z`).getTime() + DAY_MS).toISOString().slice(0, 10);
+  return { start: midnight(day), end: midnight(next) };
 }
 
 /** Every day from the event start to its end, inclusive */
-export function eventDays(startDate: Date, endDate: Date | null | undefined): string[] {
-  const first = kinshasaDay(startDate);
-  const last = kinshasaDay(endDate ?? startDate);
+export function eventDays(startDate: Date, endDate: Date | null | undefined, tz: string = DEFAULT_TIME_ZONE): string[] {
+  const first = eventDay(startDate, tz);
+  const last = eventDay(endDate ?? startDate, tz);
   const days: string[] = [];
   for (let t = new Date(`${first}T00:00:00Z`).getTime(); ; t += DAY_MS) {
     const day = new Date(t).toISOString().slice(0, 10);

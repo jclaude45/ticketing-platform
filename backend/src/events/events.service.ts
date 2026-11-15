@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { DEFAULT_TIME_ZONE, isTimeZone } from '../common/time-zone';
 import { RedisService } from '../redis/redis.service';
 import { SubscriptionService } from '../subscription/subscription.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -24,6 +25,13 @@ function cleanPerformers(names?: string[]): string[] {
   return (names ?? [])
     .map(n => n.trim())
     .filter(n => n && !seen.has(n.toLowerCase()) && seen.add(n.toLowerCase()));
+}
+
+/** The zone sent by the form, refused when it is not a real IANA zone */
+function checkedTimeZone(tz: string | undefined): string | null {
+  if (!tz) return null;
+  if (!isTimeZone(tz)) throw new BadRequestException('Fuseau horaire inconnu');
+  return tz;
 }
 
 @Injectable()
@@ -99,6 +107,8 @@ export class EventsService implements OnApplicationBootstrap {
         ...(dto.currency && { currency: dto.currency }),
         ...(dto.feePayer && { feePayer: dto.feePayer }),
         ...(dto.showAfterEnd !== undefined && { showAfterEnd: dto.showAfterEnd }),
+        // Clients that send no zone (the ZAYA Core app) type their times in Kinshasa time
+        timeZone: checkedTimeZone(dto.timeZone) ?? DEFAULT_TIME_ZONE,
         bannerUrl,
         organizerId,
       },
@@ -242,6 +252,7 @@ export class EventsService implements OnApplicationBootstrap {
         ...(dto.currency && { currency: dto.currency }),
         ...(dto.feePayer && { feePayer: dto.feePayer }),
         ...(dto.showAfterEnd !== undefined && { showAfterEnd: dto.showAfterEnd }),
+        ...(dto.timeZone !== undefined && { timeZone: checkedTimeZone(dto.timeZone) ?? DEFAULT_TIME_ZONE }),
         ...(bannerUrl !== undefined && { bannerUrl }),
       },
       include: {

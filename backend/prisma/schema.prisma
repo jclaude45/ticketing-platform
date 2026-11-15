@@ -189,6 +189,8 @@ model Event {
   country          String
   startDate        DateTime
   endDate          DateTime
+  /// IANA zone of the event's city: its times are typed, shown and split into days there
+  timeZone         String      @default("Africa/Kinshasa")
   totalCapacity    Int
   status           EventStatus @default(DRAFT)
   type             EventType   @default(OTHER)

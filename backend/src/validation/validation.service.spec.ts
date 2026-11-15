@@ -64,14 +64,14 @@ describe('ValidationService QR checks', () => {
 // day cannot make a ticket enter outside its dates
 describe('ValidationService passes and offline times', () => {
   process.env.ACCREDITATION_HMAC_SECRET = 'test-secret';
-  const { kinshasaDay } = jest.requireActual('../tickets/event-days');
+  const { eventDay } = jest.requireActual('../tickets/event-days');
   const DAY = 24 * 60 * 60 * 1000;
   // Noon in Kinshasa: 13 hours earlier is yesterday evening, well inside the 24 h window
   const NOON = new Date('2026-11-14T11:00:00Z');
   beforeAll(() => jest.useFakeTimers({ now: NOON, doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'] }));
   afterAll(() => jest.useRealTimers());
-  const today = kinshasaDay(NOON);
-  const yesterday = kinshasaDay(new Date(NOON.getTime() - DAY));
+  const today = eventDay(NOON);
+  const yesterday = eventDay(new Date(NOON.getTime() - DAY));
 
   function setup(validDays: string[], enteredToday: any = null) {
     const ticket = {

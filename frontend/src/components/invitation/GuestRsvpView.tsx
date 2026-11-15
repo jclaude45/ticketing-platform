@@ -14,7 +14,7 @@ type Field = { id: string; type: 'CHOICE' | 'TEXT' | 'YESNO'; label: string; hel
 type Answers = Record<string, string | boolean>;
 
 interface GuestPage {
-  event: { name: string; startDate: string; endDate: string; venue: string; address?: string | null; city: string; bannerUrl?: string | null; organizer: string };
+  event: { name: string; startDate: string; endDate: string; timeZone?: string; venue: string; address?: string | null; city: string; bannerUrl?: string | null; organizer: string };
   guest: { name: string | null; email: string | null; phone: string | null; category: string };
   form: { intro: string | null; askPhone: 'HIDDEN' | 'OPTIONAL' | 'REQUIRED'; deadline: string; fields: Field[] };
   answer: { status: 'CONFIRMED' | 'DECLINED'; answers: Answers; updatedAt: string } | null;
@@ -91,7 +91,7 @@ export function GuestRsvpView({ token }: { token: string }) {
 
   const { event, guest, form, answer, state } = data;
   const open = state === 'OPEN';
-  const deadline = capitalize(formatEventDayTime(form.deadline));
+  const deadline = capitalize(formatEventDayTime(form.deadline, event.timeZone));
   const needPhone = form.askPhone === 'REQUIRED';
   const missing = !name.trim()
     || (needPhone && !phone.trim())
@@ -120,7 +120,7 @@ export function GuestRsvpView({ token }: { token: string }) {
       </p>
       <h1 className="t-title mt-2 break-words text-[32px] lg:text-[40px]">{event.name}</h1>
       <div className="t-lead mt-4 space-y-1.5 text-[#333]">
-        <p className="flex items-center gap-2"><CalendarDays className="h-5 w-5 flex-shrink-0" strokeWidth={1.5} />{capitalize(formatEventDayTime(event.startDate))}</p>
+        <p className="flex items-center gap-2"><CalendarDays className="h-5 w-5 flex-shrink-0" strokeWidth={1.5} />{capitalize(formatEventDayTime(event.startDate, event.timeZone))}</p>
         <p className="flex items-center gap-2"><MapPin className="h-5 w-5 flex-shrink-0" strokeWidth={1.5} />{[event.venue, event.address, event.city].filter(Boolean).join(', ')}</p>
         <p className="flex items-center gap-2"><Ticket className="h-5 w-5 flex-shrink-0" strokeWidth={1.5} />Invitation · {guest.category}</p>
       </div>

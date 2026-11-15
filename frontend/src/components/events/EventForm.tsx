@@ -18,6 +18,8 @@ import { SearchSelect, type SearchOption } from '@/components/common/SearchSelec
 import { CountryFlag } from '@/components/common/CountryFlag';
 import { PerformersInput, splitNames } from './PerformersInput';
 import { useCountries, useCities, countryCodeOf, FREQUENT_COUNTRIES } from '@/hooks/useGeo';
+import { useCityTimeZone } from '@/hooks/useCityTimeZone';
+import { DEFAULT_TIME_ZONE, isoToWall, utcOffsetLabel, wallToIso, zoneCity } from '@/lib/timezone';
 import toast from 'react-hot-toast';
 
 interface TariffInput {
@@ -87,20 +89,6 @@ function SelectField({ value, onChange, children }: { value: string; onChange: (
   );
 }
 
-function toISOString(local: string): string {
-  if (!local) return '';
-  return new Date(local).toISOString();
-}
-
-/** ISO (UTC) → value of a datetime-local field, in the browser's time zone like toISOString reads it back */
-function toLocalDateTime(iso: string): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return '';
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 const COLORS = ['#181818', '#707070', '#db2777', '#dc2626', '#d97706', '#16a34a', '#0891b2', '#374151'];
 
 function newTariff(): TariffInput {
@@ -148,8 +136,9 @@ export function EventForm({ event, isEdit, draft }: EventFormProps) {
           address: event.address ?? '',
           city: event.city,
           country: event.country,
-          startDate: toLocalDateTime(event.startDate),
-          endDate: toLocalDateTime(event.endDate),
+          // As the clock reads in the event's city, not in the browser's zone
+          startDate: isoToWall(event.startDate, (event as any).timeZone ?? DEFAULT_TIME_ZONE),
+          endDate: isoToWall(event.endDate, (event as any).timeZone ?? DEFAULT_TIME_ZONE),
           totalCapacity: event.totalCapacity,
           bannerUrl: event.bannerUrl ?? '',
         }
@@ -250,6 +239,10 @@ export function EventForm({ event, isEdit, draft }: EventFormProps) {
   const cityOptions = useMemo<SearchOption[]>(() => (cities ?? []).map(n => ({ value: n, label: n })), [cities]);
   // The stored country may be a name the list does not know (older events): keep it selectable
   const countrySelectValue = countryCode ? (countries?.find(c => c.code === countryCode)?.name ?? countryValue) : countryValue;
+  // The event's zone: its city's (Lubumbashi UTC+2...), else its country's main one. The times
+  // typed in the form are read in it, whatever the browser's zone
+  const cityTimeZone = useCityTimeZone(countryCode, cityValue);
+  const timeZone: string = cityTimeZone ?? (event as any)?.timeZone ?? DEFAULT_TIME_ZONE;
   const previewName = watch('name');
   const previewStart = watch('startDate');
   const previewVenue = watch('venue');
@@ -298,8 +291,9 @@ export function EventForm({ event, isEdit, draft }: EventFormProps) {
       ...data,
       // "Fally Ipupa, Ferre Gola" → ['Fally Ipupa', 'Ferre Gola'] (an empty list clears them)
       performers: splitNames(data.performers).slice(0, 20),
-      startDate: toISOString(data.startDate),
-      endDate: toISOString(data.endDate),
+      startDate: wallToIso(data.startDate, timeZone),
+      endDate: wallToIso(data.endDate, timeZone),
+      timeZone,
     };
 
     try {
@@ -386,6 +380,10 @@ export function EventForm({ event, isEdit, draft }: EventFormProps) {
                 <input {...register('endDate')} type="datetime-local" className={inputClass} />
               </Field>
             </div>
+            <p className="-mt-2 text-xs text-gray-500">
+              Heure locale de l&apos;événement : <strong>{cityValue || zoneCity(timeZone)}</strong> ({utcOffsetLabel(timeZone, previewStart ? new Date(wallToIso(previewStart, timeZone) || Date.now()) : new Date())}),
+              d&apos;après la ville choisie ci-dessous.
+            </p>
             <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 p-4 dark:border-gray-700">
               <input type="checkbox" {...register('showAfterEnd' as any)} className="mt-0.5 h-4 w-4 flex-shrink-0 accent-black" />
               <span>

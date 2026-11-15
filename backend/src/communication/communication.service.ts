@@ -168,7 +168,7 @@ export class CommunicationService {
       include: {
         recipients: { orderBy: { createdAt: 'desc' }, take: 100 },
         createdBy: { select: { firstName: true, lastName: true } },
-        event: { select: { name: true, startDate: true, venue: true, city: true, bannerUrl: true } },
+        event: { select: { name: true, startDate: true, timeZone: true, venue: true, city: true, bannerUrl: true } },
       },
     });
     if (!c) throw new NotFoundException('Campagne introuvable');
@@ -476,8 +476,8 @@ export class CommunicationService {
         firstName: recipient.firstName || 'Participant',
         lastName: recipient.lastName || '',
         eventName: campaign.event.name,
-        eventDate: startDate.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Africa/Kinshasa' }),
-        eventTime: startDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kinshasa' }),
+        eventDate: startDate.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: campaign.event.timeZone }),
+        eventTime: startDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: campaign.event.timeZone }),
         eventVenue: campaign.event.venue,
         eventCity: campaign.event.city,
         ticketSerial: recipient.ticketId || '',

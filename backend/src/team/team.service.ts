@@ -1,6 +1,7 @@
 import { details, emailLayout, esc, note, p } from '../common/email/layout';
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { dayBounds } from '../tickets/event-days';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { CryptoService } from '../crypto/crypto.service';
@@ -101,7 +102,7 @@ type MemberEmailContext = {
   role: string;
   department: string | null;
   event: {
-    name: string; venue: string; city: string; startDate: Date;
+    name: string; venue: string; city: string; startDate: Date; timeZone: string;
     organizer: { firstName: string; lastName: string; email: string };
   };
 };
@@ -494,7 +495,7 @@ export class TeamService {
         name: true, email: true, role: true, department: true,
         event: {
           select: {
-            name: true, venue: true, city: true, startDate: true,
+            name: true, venue: true, city: true, startDate: true, timeZone: true,
             organizer: { select: { firstName: true, lastName: true, email: true } },
           },
         },
@@ -507,7 +508,7 @@ export class TeamService {
     const firstName = m.name.split(' ')[0] || m.name;
     const organizer = `${m.event.organizer.firstName} ${m.event.organizer.lastName}`.trim();
     const date = new Intl.DateTimeFormat('fr-FR', {
-      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kinshasa',
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: m.event.timeZone,
     }).format(new Date(m.event.startDate));
 
     return emailLayout({
@@ -544,7 +545,10 @@ export class TeamService {
     // Compact badges carry the code, former JSON badges the id.
     const acc = await this.prisma.accreditation.findUnique({
       where: result.payload.code ? { code: result.payload.code } : { id: result.payload.id },
-      include: { teamMember: { select: { name: true, role: true, photoUrl: true } } },
+      include: {
+        teamMember: { select: { name: true, role: true, photoUrl: true } },
+        event: { select: { timeZone: true } },
+      },
     });
     if (!acc || acc.eventId !== eventId) {
       return { valid: false, reason: 'Accreditation not found for this event' };
@@ -556,14 +560,17 @@ export class TeamService {
     // Dates picked in the dashboard are whole days (stored at 00:00 UTC): a badge "valid
     // until 11/10" must still open the doors on the 11th, so it ends at the end of that day
     const isWholeDay = (d: Date) => d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0;
+    // …in the event's zone: from its midnight to the end of that day there
+    const tz = acc.event.timeZone;
+    const dayOf = (d: Date) => d.toISOString().slice(0, 10);
     const until = acc.validUntil && isWholeDay(acc.validUntil)
-      ? new Date(acc.validUntil.getTime() + 24 * 60 * 60 * 1000 - 1)
+      ? new Date(dayBounds(dayOf(acc.validUntil), tz).end.getTime() - 1)
       : acc.validUntil;
-    // …and starts at midnight in Kinshasa (UTC+1), not at 01:00
     const from = acc.validFrom && isWholeDay(acc.validFrom)
-      ? new Date(acc.validFrom.getTime() - 60 * 60 * 1000)
+      ? dayBounds(dayOf(acc.validFrom), tz).start
       : acc.validFrom;
-    const day = (d: Date) => d.toLocaleDateString('fr-FR', { timeZone: 'Africa/Kinshasa' });
+    // Whole days are dates, not instants: shown as stored; other times in the event's zone
+    const day = (d: Date) => d.toLocaleDateString('fr-FR', { timeZone: isWholeDay(d) ? 'UTC' : tz });
     // French messages with the date: the scanner app shows unknown reasons as they are
     if (until && until < now) {
       return { valid: false, reason: `Ce badge a expiré le ${day(acc.validUntil!)}.` };

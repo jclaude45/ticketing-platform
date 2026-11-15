@@ -174,7 +174,7 @@ export class InvitationsService {
       where: { id: eventId },
       select: {
         id: true, name: true, organizerId: true, status: true,
-        startDate: true, endDate: true, city: true, venue: true,
+        startDate: true, endDate: true, timeZone: true, city: true, venue: true,
         address: true, description: true, bannerUrl: true,
         organizer: { select: { firstName: true, lastName: true, email: true } },
       },
@@ -348,7 +348,7 @@ export class InvitationsService {
 
   /** Every invitation with its answers, one column per question, plus the totals per choice */
   async exportResponses(eventId: string, userId: string, role: Role): Promise<Buffer> {
-    await this.loadEvent(eventId, userId, role);
+    const event = await this.loadEvent(eventId, userId, role);
     const fields = await this.formFields(eventId);
     const tickets = await this.prisma.ticket.findMany({
       where: { eventId, metadata: { path: ['source'], equals: INVITATION_SOURCE } },
@@ -375,7 +375,7 @@ export class InvitationsService {
       ws.addRow([
         t.holderName ?? '', t.holderEmail ?? '', t.holderPhone ?? '', t.template.name,
         this.responseLabel(t.status, r?.status),
-        r ? r.updatedAt.toLocaleString('fr-FR', { timeZone: 'Africa/Kinshasa' }) : '',
+        r ? r.updatedAt.toLocaleString('fr-FR', { timeZone: event.timeZone }) : '',
         t.checkedInAt ? 'Oui' : '',
         ...fields.map((f) => (r?.status === 'CONFIRMED' ? answerLabel(f, answers[f.id]) : '')),
       ]);
@@ -441,7 +441,7 @@ export class InvitationsService {
       where: { id: eventId },
       select: {
         id: true, name: true, organizerId: true, status: true,
-        startDate: true, endDate: true, city: true, venue: true,
+        startDate: true, endDate: true, timeZone: true, city: true, venue: true,
         address: true, description: true, bannerUrl: true,
         organizer: { select: { firstName: true, lastName: true, email: true } },
       },
@@ -459,7 +459,7 @@ export class InvitationsService {
       where: { id: eventId },
       select: {
         id: true, name: true, organizerId: true, status: true,
-        startDate: true, endDate: true, city: true, venue: true,
+        startDate: true, endDate: true, timeZone: true, city: true, venue: true,
         address: true, description: true, bannerUrl: true,
         organizer: { select: { firstName: true, lastName: true, email: true } },
       },

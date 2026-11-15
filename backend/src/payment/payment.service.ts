@@ -50,7 +50,7 @@ export class PaymentService {
   async initiatePayment(eventId: string, dto: InitiatePaymentDto, ip?: string) {
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
-      select: { id: true, name: true, organizerId: true, status: true, startDate: true, endDate: true, city: true, venue: true, feePayer: true },
+      select: { id: true, name: true, organizerId: true, status: true, startDate: true, endDate: true, timeZone: true, city: true, venue: true, feePayer: true },
     });
     if (!event) throw new NotFoundException('Événement introuvable');
     if (event.status !== 'PUBLISHED') throw new BadRequestException('Cet événement n\'accepte plus d\'inscriptions');
@@ -261,7 +261,7 @@ export class PaymentService {
     const event = await this.prisma.event.findUnique({
       where: { id: payment.eventId },
       select: {
-        name: true, startDate: true, endDate: true, city: true, venue: true, address: true, bannerUrl: true,
+        name: true, startDate: true, endDate: true, timeZone: true, city: true, venue: true, address: true, bannerUrl: true,
         organizer: { select: { firstName: true, lastName: true, email: true } },
       },
     });
@@ -317,7 +317,7 @@ export class PaymentService {
     // What the success page needs to show the tickets (the reference itself is the secret)
     const event = await this.prisma.event.findUnique({
       where: { id: found.eventId },
-      select: { name: true, startDate: true, venue: true, city: true },
+      select: { name: true, startDate: true, timeZone: true, venue: true, city: true },
     });
     return { ...result, holderName: found.holderName, holderEmail: found.holderEmail, holderPhone: found.holderPhone, event };
   }
@@ -459,7 +459,7 @@ export class PaymentService {
       where: { id: payment.eventId },
       select: {
         id: true, name: true, organizerId: true,
-        startDate: true, endDate: true, city: true, venue: true,
+        startDate: true, endDate: true, timeZone: true, city: true, venue: true,
         address: true, description: true, bannerUrl: true, feePayer: true,
         organizer: { select: { firstName: true, lastName: true, email: true } },
       },

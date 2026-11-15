@@ -9,15 +9,17 @@ import { RedisService } from '../redis/redis.service';
 import { NotificationPrefs, notificationPrefs } from './notification-prefs';
 import { PushService } from './push.service';
 import { NotificationsService } from './notifications.service';
+import { DEFAULT_TIME_ZONE } from '../common/time-zone';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 
 const QUARTER_MS = 15 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const timeFr = (d: Date) =>
-  d.toLocaleString('fr-FR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kinshasa' });
-const dayFr = (d: Date) =>
-  d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Africa/Kinshasa' });
+// Times of an event in its zone; the others (digests over several events) in Kinshasa time
+const timeFr = (d: Date, tz = DEFAULT_TIME_ZONE) =>
+  d.toLocaleString('fr-FR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: tz });
+const dayFr = (d: Date, tz = DEFAULT_TIME_ZONE) =>
+  d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: tz });
 
 const SCAN_LABELS: Record<ScanResult, string> = {
   VALID: 'Entrées validées',
@@ -278,7 +280,7 @@ export class OrganizerAlertsService {
     const events = await this.prisma.event.findMany({
       where: { status: 'PUBLISHED', endDate: { gt: now }, ticketTemplates: { some: { quantity: { gt: 0 } } } },
       select: {
-        id: true, name: true, startDate: true,
+        id: true, name: true, startDate: true, timeZone: true,
         ticketTemplates: { select: { quantity: true, availableCount: true } },
         organizer: { select: { id: true, email: true, firstName: true, isActive: true, notificationPrefs: true } },
       },
@@ -307,7 +309,7 @@ export class OrganizerAlertsService {
         ],
         rows: [
           ['Événement', ev.name],
-          ['Date', dayFr(ev.startDate)],
+          ['Date', dayFr(ev.startDate, ev.timeZone)],
           ['Billets', `${total} sur ${total}`],
         ],
         outro: 'Pour vendre davantage, augmentez la quantité d’un tarif ou ajoutez-en un nouveau.',
@@ -347,7 +349,7 @@ export class OrganizerAlertsService {
           where: { organizerId: o.id, status: 'PUBLISHED', startDate: { gt: now } },
           orderBy: { startDate: 'asc' },
           take: 5,
-          select: { name: true, startDate: true, ticketTemplates: { select: { quantity: true, availableCount: true } } },
+          select: { name: true, startDate: true, timeZone: true, ticketTemplates: { select: { quantity: true, availableCount: true } } },
         }),
       ]);
       const sold = issued.find((g) => g.source === 'ONLINE')?._count ?? 0;
@@ -369,7 +371,7 @@ export class OrganizerAlertsService {
       const coming: [string, string][] = upcoming.map((ev) => {
         const total = ev.ticketTemplates.reduce((n, t) => n + t.quantity, 0);
         const left = ev.ticketTemplates.reduce((n, t) => n + Math.max(t.availableCount, 0), 0);
-        return [`${ev.name} — ${dayFr(ev.startDate)}`, total ? `${total - left} / ${total} billets` : '—'];
+        return [`${ev.name} — ${dayFr(ev.startDate, ev.timeZone)}`, total ? `${total - left} / ${total} billets` : '—'];
       });
 
       const subject = 'Votre semaine sur ZAYA';

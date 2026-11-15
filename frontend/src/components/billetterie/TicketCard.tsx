@@ -22,6 +22,8 @@ export interface TicketData {
   qrTag?: string | null;
   /** Start of the event (ISO) */
   eventStart?: string;
+  /** The event's zone: its date and time are printed there */
+  eventTimeZone?: string;
   eventVenue?: string;
   eventCity?: string;
   ticketIndex?: number;
@@ -34,11 +36,10 @@ export const ticketQrContent = (ticketId: string, serialNumber: string, tag?: st
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-/** "Samedi 20 déc. 2026" and "15:30", in Kinshasa time */
-function when(iso?: string) {
+/** "Samedi 20 déc. 2026" and "15:30", in the event's time */
+function when(iso?: string, tz = 'Africa/Kinshasa') {
   if (!iso) return { date: '—', time: '—' };
   const d = new Date(iso);
-  const tz = 'Africa/Kinshasa';
   return {
     date: capitalize(d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric', timeZone: tz })),
     time: d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: tz }),
@@ -58,7 +59,7 @@ const RULE = { borderBottom: '1px solid #c9c9c9', paddingBottom: 12, marginBotto
  * show at the entrance. Inline styles only, so the PDF export (html2canvas) matches it.
  */
 export function TicketVisual({ data }: { data: TicketData }) {
-  const { date, time } = when(data.eventStart);
+  const { date, time } = when(data.eventStart, data.eventTimeZone);
   const place = [data.eventVenue, data.eventCity].filter(Boolean).join(', ');
 
   return (

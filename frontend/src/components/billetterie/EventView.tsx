@@ -13,6 +13,7 @@ import { ZayaLogo } from '@/components/site/ZayaLogo';
 import { StoreButtons } from '@/components/site/StoreButtons';
 import { EVENT_TYPE_LABELS } from '@/components/site/site-config';
 import { capitalize, formatEventDayTime, fromPriceLabel } from '@/components/site/format';
+import { DEFAULT_TIME_ZONE, utcOffsetLabel, zoneCity } from '@/lib/timezone';
 
 export interface PublicEvent {
   id: string;
@@ -27,6 +28,8 @@ export interface PublicEvent {
   type?: string;
   startDate: string;
   endDate: string;
+  /** The event's zone (its city's): its times are shown there */
+  timeZone?: string;
   bannerUrl?: string;
   totalCapacity: number;
   minPrice: number | null;
@@ -182,7 +185,13 @@ export function EventView({ id, initialEvent }: { id: string; initialEvent?: Pub
             {/* Smaller than a section title: the page already shows the poster and many headings */}
             <h1 className="t-title break-words text-[30px] sm:text-[36px] lg:text-[40px]">{event.name}</h1>
             {organizerName && <p className="t-fact mt-3">{organizerName}</p>}
-            <p className="t-fact mt-1">{capitalize(formatEventDayTime(event.startDate))}</p>
+            <p className="t-fact mt-1">
+              {capitalize(formatEventDayTime(event.startDate, event.timeZone))}
+              {/* Outside Kinshasa time, say which one the hour is in */}
+              {event.timeZone && event.timeZone !== DEFAULT_TIME_ZONE && (
+                <span className="text-[#777]"> · heure de {zoneCity(event.timeZone)} ({utcOffsetLabel(event.timeZone, new Date(event.startDate))})</span>
+              )}
+            </p>
             {ended && (
               <p className="mt-3 inline-block rounded-full bg-black px-3 py-1 text-xs font-bold uppercase text-white">Événement terminé</p>
             )}

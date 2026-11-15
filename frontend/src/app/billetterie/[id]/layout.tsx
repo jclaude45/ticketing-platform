@@ -15,6 +15,7 @@ interface SeoEvent {
   city: string;
   country: string;
   startDate: string;
+  timeZone?: string;
   endDate: string;
   bannerUrl?: string | null;
   minPrice: number | null;
@@ -23,11 +24,11 @@ interface SeoEvent {
   organizer?: { firstName: string; lastName: string } | null;
 }
 
-/** "Samedi 10 oct. 2026 à 18:00", at Kinshasa time (the server runs in UTC) */
-function kinshasaDateTime(iso: string) {
+/** "Samedi 10 oct. 2026 à 18:00", in the event's time (the server runs in UTC) */
+function eventDateTime(iso: string, tz = 'Africa/Kinshasa') {
   const d = new Date(iso);
-  const day = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Africa/Kinshasa' });
-  const time = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kinshasa' });
+  const day = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric', timeZone: tz });
+  const time = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: tz });
   return `${day.charAt(0).toUpperCase()}${day.slice(1)} à ${time}`;
 }
 
@@ -45,7 +46,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const event = await getEvent(id);
   if (!event) return { title: 'Événement introuvable', robots: { index: false } };
 
-  const when = kinshasaDateTime(event.startDate);
+  const when = eventDateTime(event.startDate, event.timeZone);
   const where = [event.venue, event.city].filter(Boolean).join(', ');
   const kind = EVENT_TYPE_LABELS[event.type ?? 'OTHER'] ?? 'Événement';
   const withWho = event.performers?.length ? ` Avec ${event.performers.join(', ')}.` : '';

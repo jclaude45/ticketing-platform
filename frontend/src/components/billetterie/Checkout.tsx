@@ -29,6 +29,8 @@ export interface CheckoutTemplate {
 export interface CheckoutEvent {
   id: string; name: string; venue: string; city: string; country: string;
   startDate: string; bannerUrl?: string; ticketTemplates: CheckoutTemplate[];
+  /** The event's zone: its time is shown there */
+  timeZone?: string;
   /** BUYER: ticket prices already include ZAYA's service fee */
   feePayer?: 'ORGANIZER' | 'BUYER';
 }
@@ -355,7 +357,7 @@ export function Checkout({
         </div>
         <div className="min-w-0">
           <p className="line-clamp-2 text-[22px] leading-tight sm:text-[25px]">{event.name}</p>
-          <p className="text-[15px]">{capitalize(formatEventDayTime(event.startDate))}</p>
+          <p className="text-[15px]">{capitalize(formatEventDayTime(event.startDate, event.timeZone))}</p>
           <p className="mt-1 truncate text-[17px]">{event.venue}</p>
         </div>
       </div>
@@ -568,7 +570,7 @@ export function Checkout({
                   tickets={result.tickets.map((t, i): TicketData => ({
                     serialNumber: t.serialNumber, holderName: result.holderName, holderEmail: result.holderEmail,
                     eventName: result.eventName, templateName: t.templateName, price: t.price, currency: t.currency,
-                    ticketId: t.ticketId, qrCode: t.qrCode, qrTag: t.qrTag, eventStart: event.startDate,
+                    ticketId: t.ticketId, qrCode: t.qrCode, qrTag: t.qrTag, eventStart: event.startDate, eventTimeZone: event.timeZone,
                     eventVenue: event.venue, eventCity: event.city, ticketIndex: i + 1, totalTickets: result.tickets.length,
                   }))}
                 />
@@ -581,7 +583,7 @@ export function Checkout({
                   <TicketVisual data={{
                     serialNumber: t.serialNumber, holderName: result.holderName, holderEmail: result.holderEmail,
                     eventName: result.eventName, templateName: t.templateName, price: t.price, currency: t.currency,
-                    ticketId: t.ticketId, qrCode: t.qrCode, qrTag: t.qrTag, eventStart: event.startDate,
+                    ticketId: t.ticketId, qrCode: t.qrCode, qrTag: t.qrTag, eventStart: event.startDate, eventTimeZone: event.timeZone,
                     eventVenue: event.venue, eventCity: event.city, ticketIndex: i + 1, totalTickets: result.tickets.length,
                   }} />
                 </div>

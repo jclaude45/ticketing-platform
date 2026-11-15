@@ -7,7 +7,7 @@ import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { ScanTicketDto, OfflineScanDto } from './dto/scan-ticket.dto';
 import { ScanResult, TicketStatus, Role } from '@prisma/client';
 import { logTicketAction } from '../audit/ticket-history';
-import { formatDaysFr, kinshasaDay, kinshasaDayBounds } from '../tickets/event-days';
+import { dayBounds, eventDay, formatDaysFr } from '../tickets/event-days';
 
 /**
  * QR codes now carry the server's signed `t` field; a wrong one is always refused. From
@@ -127,7 +127,7 @@ export class ValidationService {
       where: { id: ticketId, serialNumber, eventId },
       include: {
         event: {
-          select: { id: true, name: true, status: true, endDate: true, organizerId: true },
+          select: { id: true, name: true, status: true, endDate: true, organizerId: true, timeZone: true },
         },
         template: { select: { name: true, color: true, validDays: true } },
       },
@@ -225,7 +225,8 @@ export class ValidationService {
     const now = scannedAt ?? new Date();
 
     // Wrong day for this tariff (French message, shown as is by the scanner app)
-    const today = kinshasaDay(now);
+    // The day at the venue (the event's zone)
+    const today = eventDay(now, ticket.event.timeZone);
     if (validDays.length > 0 && !validDays.includes(today)) {
       const past = today > validDays[validDays.length - 1];
       const scanRecord = await this.recordScan(controllerId, ticket.id, ScanResult.EXPIRED, dto, ipAddress);
@@ -249,7 +250,7 @@ export class ValidationService {
     // entry are made under a lock on the ticket: two doors scanning the same pass at the same
     // moment (or two phones syncing) cannot both let it in.
     if (isPass) {
-      const { start, end } = kinshasaDayBounds(today);
+      const { start, end } = dayBounds(today, ticket.event.timeZone);
       const entryAt = scannedAt ?? new Date();
       const entry = await this.prisma.$transaction(async (tx) => {
         await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${ticket.id}, 0))`;

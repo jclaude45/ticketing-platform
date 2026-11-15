@@ -11,6 +11,7 @@ interface AssignedEvent {
   name: string;
   status: string;
   startDate: string;
+  timeZone?: string;
   endDate: string | null;
   venue: string;
   city: string;
@@ -56,7 +57,7 @@ export default function ControleHomePage() {
             <div className="min-w-0 flex-1">
               <p className="truncate font-semibold text-gray-900">{ev.name}</p>
               <p className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500">
-                <Calendar className="h-3.5 w-3.5" /> {formatEventDate(ev.startDate)}
+                <Calendar className="h-3.5 w-3.5" /> {formatEventDate(ev.startDate, ev.timeZone)}
               </p>
               <p className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500 truncate">
                 <MapPin className="h-3.5 w-3.5 flex-shrink-0" /> {ev.venue}, {ev.city}

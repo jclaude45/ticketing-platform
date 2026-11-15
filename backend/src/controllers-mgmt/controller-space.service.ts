@@ -16,6 +16,7 @@ const EVENT_FIELDS = {
   status: true,
   startDate: true,
   endDate: true,
+  timeZone: true,
   venue: true,
   address: true,
   city: true,

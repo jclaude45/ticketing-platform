@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { DEFAULT_TIME_ZONE } from '../common/time-zone';
 import { PrismaService } from '../prisma/prisma.service';
 import { QrcodeService } from '../qrcode/qrcode.service';
 import { SubscriptionService } from '../subscription/subscription.service';
@@ -130,6 +131,7 @@ export class TicketExportService {
             country: true,
             startDate: true,
             endDate: true,
+            timeZone: true,
             bannerUrl: true,
             organizerId: true,
           },
@@ -187,7 +189,7 @@ export class TicketExportService {
         serialNumber: true,
         holderName: true,
         status: true,
-        event: { select: { name: true, venue: true, city: true, startDate: true } },
+        event: { select: { name: true, venue: true, city: true, startDate: true, timeZone: true } },
         template: { select: { name: true, color: true, price: true, currency: true } },
       },
       orderBy: [{ templateId: 'asc' }, { serialNumber: 'asc' }],
@@ -220,7 +222,7 @@ export class TicketExportService {
         doc.fontSize(10).text(`Serial: ${ticket.serialNumber}`, 40, 88);
 
         doc.fillColor('#000000').fontSize(10).font('Helvetica');
-        const startDate = new Date(ticket.event.startDate).toLocaleDateString('fr-FR', { timeZone: 'Africa/Kinshasa' });
+        const startDate = new Date(ticket.event.startDate).toLocaleDateString('fr-FR', { timeZone: ticket.event.timeZone });
         doc.text(`Date: ${startDate}`, 40, 140);
         doc.text(`Lieu: ${ticket.event.venue}, ${ticket.event.city}`, 40, 156);
         if (ticket.holderName) doc.text(`Titulaire: ${ticket.holderName}`, 40, 172);
@@ -338,6 +340,7 @@ export class TicketExportService {
             city: true,
             country: true,
             startDate: true,
+            timeZone: true,
             organizerId: true,
           },
         },
@@ -574,7 +577,7 @@ export class TicketExportService {
     // Date / venue
     const startDate = ticket.event?.startDate ? new Date(ticket.event.startDate) : null;
     const dateStr   = startDate
-      ? startDate.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Africa/Kinshasa' })
+      ? startDate.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', timeZone: ticket.event?.timeZone ?? DEFAULT_TIME_ZONE })
       : '—';
     const venue = [ticket.event?.venue, ticket.event?.city].filter(Boolean).join(', ');
     const price = ticket.template

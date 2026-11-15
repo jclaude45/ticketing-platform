@@ -4,6 +4,6 @@
   "sourceRoot": "src",
   "compilerOptions": {
     "deleteOutDir": true,
-    "assets": ["**/*.hbs", "**/*.html", "**/*.svg"]
+    "assets": ["**/*.hbs", "**/*.html", "**/*.svg", "common/geo-timezones.json"]
   }
 }

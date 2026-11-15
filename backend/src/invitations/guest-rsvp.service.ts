@@ -39,6 +39,7 @@ export class GuestRsvpService {
         name: event.name,
         startDate: event.startDate,
         endDate: event.endDate,
+        timeZone: event.timeZone,
         venue: event.venue,
         address: event.address,
         city: event.city,
@@ -176,7 +177,7 @@ export class GuestRsvpService {
       this.prisma.event.findUniqueOrThrow({
         where: { id: ticket.eventId },
         select: {
-          id: true, name: true, status: true, startDate: true, endDate: true,
+          id: true, name: true, status: true, startDate: true, endDate: true, timeZone: true,
           venue: true, address: true, city: true, bannerUrl: true,
           organizer: { select: { firstName: true, lastName: true } },
         },

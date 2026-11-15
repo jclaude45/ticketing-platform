@@ -1,5 +1,6 @@
 'use client';
 
+import { capitalize, formatEventDayTime } from '@/components/site/format';
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -181,7 +182,7 @@ export default function TicketDetailPage() {
                   <div>
                     <p className="text-xs text-gray-400">Date</p>
                     <p className="text-sm font-medium text-gray-800">
-                      {format(new Date(ticket.event.startDate), "d MMMM yyyy 'à' HH:mm", { locale: fr })}
+                      {capitalize(formatEventDayTime(ticket.event.startDate, ticket.event.timeZone))}
                     </p>
                   </div>
                 </div>

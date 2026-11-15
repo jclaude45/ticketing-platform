@@ -1,10 +1,9 @@
 'use client';
 
+import { capitalize, formatEventDayTime } from '@/components/site/format';
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
 import { analyticsApi, eventsApi } from '@/lib/api';
 import { StatsCard } from '@/components/analytics/StatsCard';
 import { ScanChart } from '@/components/analytics/ScanChart';
@@ -59,7 +58,7 @@ export default function EventAnalyticsPage() {
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Analytique de l'événement</h1>
           {event?.startDate && (
             <p className="text-sm text-gray-500 mt-0.5">
-              {format(new Date(event.startDate), "EEEE d MMMM yyyy 'à' HH:mm", { locale: fr })}
+              {capitalize(formatEventDayTime(event.startDate, event.timeZone))}
               {event.venue && ` · ${event.venue}`}
             </p>
           )}

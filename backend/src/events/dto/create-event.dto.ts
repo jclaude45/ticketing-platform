@@ -94,6 +94,15 @@ export class CreateEventDto {
   @IsIn(['ORGANIZER', 'BUYER'])
   feePayer?: 'ORGANIZER' | 'BUYER';
 
+  @ApiPropertyOptional({
+    example: 'Africa/Lubumbashi',
+    description: "IANA zone of the event's city; startDate and endDate are instants (UTC). Default: Africa/Kinshasa",
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  timeZone?: string;
+
   @ApiPropertyOptional({ default: true, description: 'Keep the event on the public site (marked as ended) once it is over' })
   @IsOptional()
   @IsBoolean()

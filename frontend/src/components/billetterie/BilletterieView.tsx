@@ -15,6 +15,8 @@ export interface PublicEvent {
   id: string; name: string; description?: string;
   venue: string; city: string; country: string; type?: string;
   startDate: string; endDate: string; bannerUrl?: string;
+  /** The event's zone (its city's): its dates are shown there */
+  timeZone?: string;
   totalCapacity: number; minPrice: number | null; soldOut: boolean;
   /** Already over: kept on the site by its organizer, tickets no longer sold */
   ended?: boolean;
@@ -98,7 +100,7 @@ function HeroCarousel({ events }: { events: PublicEvent[] }) {
                   {e.name}
                 </h1>
                 <div className="t-fact mt-5 space-y-1 font-light text-[#111]">
-                  <p>{capitalize(formatEventDay(e.startDate))}</p>
+                  <p>{capitalize(formatEventDay(e.startDate, e.timeZone))}</p>
                   <p>{e.city}, {e.venue}</p>
                   <p>{fromPriceLabel(e)}</p>
                 </div>
@@ -150,7 +152,7 @@ function EventCard({ event, rank }: { event: PublicEvent; rank?: number }) {
       </div>
       <h3 className="t-card mt-3 truncate text-black">{event.name}</h3>
       <div className="mt-1.5 space-y-1 text-[15px] text-[#8a8a8a] lg:text-base">
-        <p>{formatEventDay(event.startDate)}</p>
+        <p>{formatEventDay(event.startDate, event.timeZone)}</p>
         <p className="truncate">{event.venue}</p>
         <p>{event.ended ? 'Événement terminé' : fromPriceLabel(event)}</p>
       </div>

@@ -6,6 +6,7 @@ import { ArrowDown, ArrowUp, ChevronDown, ClipboardList, Loader2, Plus, Save, Tr
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { DEFAULT_TIME_ZONE, isoToWall, wallToIso, zoneCity } from '@/lib/timezone';
 
 export type FieldType = 'CHOICE' | 'TEXT' | 'YESNO';
 export interface FormOption { id: string; label: string; limit?: number | null }
@@ -33,20 +34,14 @@ function opt(label: string, limit?: number): FormOption { return { id: newId(), 
 
 const input = 'w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:border-indigo-500 focus:outline-none';
 
-/** ISO → value of a datetime-local field, in the browser's time zone */
-function toLocalInput(iso: string | null) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 /**
  * The confirmation form of an event's invitations: when on, each guest gets a link to confirm
  * (and answer these questions) before receiving their ticket.
  */
-export function GuestFormEditor({ eventId, form, templates }: {
+export function GuestFormEditor({ eventId, form, templates, timeZone = DEFAULT_TIME_ZONE }: {
   eventId: string; form: GuestForm | undefined; templates: { id: string; name: string }[];
+  /** The event's zone: the deadline is typed in its time */
+  timeZone?: string;
 }) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<GuestForm | null>(null);
@@ -122,9 +117,11 @@ export function GuestFormEditor({ eventId, form, templates }: {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="block">
               <span className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Date limite de réponse</span>
-              <input type="datetime-local" value={toLocalInput(draft.deadline)}
-                onChange={(e) => update({ deadline: e.target.value ? new Date(e.target.value).toISOString() : null })} className={input} />
-              <span className="mt-1 block text-xs text-gray-500">Vide : jusqu&apos;au début de l&apos;événement. Avant cette date, l&apos;invité peut modifier ou décliner.</span>
+              <input type="datetime-local" value={isoToWall(draft.deadline, timeZone)}
+                onChange={(e) => update({ deadline: e.target.value ? wallToIso(e.target.value, timeZone) || null : null })} className={input} />
+              <span className="mt-1 block text-xs text-gray-500">
+                Heure de {zoneCity(timeZone)}. Vide : jusqu&apos;au début de l&apos;événement. Avant cette date, l&apos;invité peut modifier ou décliner.
+              </span>
             </label>
             <label className="block">
               <span className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Téléphone de l&apos;invité</span>

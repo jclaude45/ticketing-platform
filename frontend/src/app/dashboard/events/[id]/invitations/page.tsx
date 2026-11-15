@@ -226,7 +226,7 @@ export default function InvitationsPage() {
       </div>
 
       {!isCancelled && (
-        <GuestFormEditor eventId={eventId} form={guestForm} templates={templates.map((t: any) => ({ id: t.id, name: t.name }))} />
+        <GuestFormEditor eventId={eventId} form={guestForm} timeZone={event?.timeZone} templates={templates.map((t: any) => ({ id: t.id, name: t.name }))} />
       )}
 
       {isCancelled ? (

@@ -17,6 +17,7 @@ interface EventDetail {
   id: string;
   name: string;
   startDate: string;
+  timeZone?: string;
   venue: string;
   address: string | null;
   city: string;
@@ -166,7 +167,7 @@ export default function ControleEventPage() {
       <div>
         <h1 className="text-xl font-bold text-gray-900">{event.name}</h1>
         <p className="mt-1 flex items-center gap-1.5 text-sm text-gray-500">
-          <Calendar className="h-4 w-4" /> {formatEventDate(event.startDate)}
+          <Calendar className="h-4 w-4" /> {formatEventDate(event.startDate, event.timeZone)}
         </p>
         <p className="mt-0.5 flex items-center gap-1.5 text-sm text-gray-500">
           <MapPin className="h-4 w-4" /> {[event.venue, event.address, event.city].filter(Boolean).join(', ')}
