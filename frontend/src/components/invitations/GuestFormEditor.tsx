@@ -41,8 +41,10 @@ const input = 'w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-
  * The confirmation form of an event's invitations: when on, each guest gets a link to confirm
  * (and answer these questions) before receiving their ticket.
  */
-export function GuestFormEditor({ eventId, form, templates, timeZone = DEFAULT_TIME_ZONE }: {
-  eventId: string; form: GuestForm | undefined; templates: { id: string; name: string }[];
+export function GuestFormEditor({ eventId, form, templates, timeZone = DEFAULT_TIME_ZONE, capacityAvailable = 0 }: {
+  eventId: string; form: GuestForm | undefined; templates: { id: string; name: string; capacityPool?: boolean }[];
+  /** Seats of the capacity left by the tariffs, offered to the shared QR */
+  capacityAvailable?: number;
   /** The event's zone: the deadline is typed in its time */
   timeZone?: string;
 }) {
@@ -226,7 +228,7 @@ export function GuestFormEditor({ eventId, form, templates, timeZone = DEFAULT_T
         </div>
       )}
 
-      <SharedLink eventId={eventId} draft={draft} update={update} templates={templates} saved={form} dirty={dirty} />
+      <SharedLink eventId={eventId} draft={draft} update={update} templates={templates} saved={form} dirty={dirty} capacityAvailable={capacityAvailable} />
 
       {dirty && (
         <div className="mt-5 flex items-center justify-end gap-3">
@@ -245,10 +247,13 @@ export function GuestFormEditor({ eventId, form, templates, timeZone = DEFAULT_T
 }
 
 /** The same QR for every paper invitation: whoever scans it signs up (up to a number of places) */
-function SharedLink({ eventId, draft, update, templates, saved, dirty }: {
+function SharedLink({ eventId, draft, update, templates, saved, dirty, capacityAvailable }: {
   eventId: string; draft: GuestForm; update: (p: Partial<GuestForm>) => void;
-  templates: { id: string; name: string }[]; saved: GuestForm | undefined; dirty: boolean;
+  templates: { id: string; name: string; capacityPool?: boolean }[]; saved: GuestForm | undefined; dirty: boolean;
+  capacityAvailable: number;
 }) {
+  // The capacity left by the tariffs: its hidden category once made, CAPACITY before that
+  const pool = templates.find((t) => t.capacityPool);
   const queryClient = useQueryClient();
   const regenerate = useMutation({
     mutationFn: async () => apiClient.post(`/events/${eventId}/invitations/form/open-link/regenerate`),
@@ -289,7 +294,8 @@ function SharedLink({ eventId, draft, update, templates, saved, dirty }: {
             <span className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Catégorie des invitations *</span>
             <select value={draft.openTemplateId ?? ''} onChange={(e) => update({ openTemplateId: e.target.value || null })} className={input}>
               <option value="">Choisir…</option>
-              {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              <option value={pool?.id ?? 'CAPACITY'}>Capacité d&apos;accueil — {capacityAvailable} place(s) hors tarifs</option>
+              {templates.filter((t) => !t.capacityPool).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           </label>
           <label className="block">

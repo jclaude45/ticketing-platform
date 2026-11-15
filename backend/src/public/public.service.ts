@@ -44,7 +44,9 @@ const LIST_SELECT = {
   startDate: true, endDate: true, timeZone: true,
   bannerUrl: true, totalCapacity: true, feePayer: true,
   organizer: { select: { firstName: true, lastName: true } },
+  // Tariffs only: the invitation seats taken from the capacity are never sold
   ticketTemplates: {
+    where: { capacityPool: false },
     select: { id: true, name: true, price: true, currency: true, availableCount: true, validDays: true },
     orderBy: { price: 'asc' as const },
   },
@@ -180,6 +182,7 @@ export class PublicService {
         bannerUrl: true, totalCapacity: true, status: true, feePayer: true, showAfterEnd: true,
         organizer: { select: { firstName: true, lastName: true, avatar: true } },
         ticketTemplates: {
+          where: { capacityPool: false },
           select: {
             id: true, name: true, description: true,
             price: true, currency: true,
@@ -260,7 +263,7 @@ export class PublicService {
       throw new BadRequestException('Chaque catégorie de billet ne doit apparaître qu\'une fois');
     }
     const templates = await this.prisma.ticketTemplate.findMany({
-      where: { id: { in: templateIds }, eventId },
+      where: { id: { in: templateIds }, eventId, capacityPool: false },
       select: { id: true, name: true, price: true, currency: true, availableCount: true },
     });
 

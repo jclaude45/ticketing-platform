@@ -77,7 +77,8 @@ export class PaymentService {
     }
     const templates = templateIds.length
       ? await this.prisma.ticketTemplate.findMany({
-          where: { id: { in: templateIds }, eventId },
+          // Tariffs only: the invitation seats taken from the capacity are never sold
+          where: { id: { in: templateIds }, eventId, capacityPool: false },
           select: { id: true, name: true, price: true, currency: true, availableCount: true },
         })
       : [];

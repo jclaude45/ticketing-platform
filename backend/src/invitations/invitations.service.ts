@@ -18,6 +18,7 @@ import { TicketGenerationService } from '../tickets/ticket-generation.service';
 import { PublicService } from '../public/public.service';
 import { MAX_GUESTS_PER_BATCH, type DeliveryMode } from './dto/invitation.dto';
 import { tariffLabel } from '../tickets/event-days';
+import { CAPACITY_POOL, capacityLeft, invitationTemplateId, syncCapacityPool } from '../tickets/capacity-pool';
 import { ASK_PHONE, answerLabel, cleanFields, guestToken, type Answers, type FormField } from './guest-form';
 import { SaveGuestFormDto } from './dto/guest-form.dto';
 
@@ -84,6 +85,8 @@ export class InvitationsService {
   ) {
     const event = await this.loadEvent(eventId, userId, role);
     const cleanMessage = message?.trim() || null;
+    // A tariff, or the seats of the capacity left by the tariffs
+    templateId = await invitationTemplateId(this.prisma, eventId, templateId);
     // Paper invitations are printed with their QR code: the address is optional, nothing is sent
     const paper = delivery === 'PAPER';
 
@@ -359,6 +362,10 @@ export class InvitationsService {
 
   async saveForm(eventId: string, userId: string, role: Role, dto: SaveGuestFormDto) {
     const event = await this.loadEvent(eventId, userId, role);
+    // The shared QR may draw on the capacity left by the tariffs
+    if (dto.openEnabled && dto.openTemplateId === CAPACITY_POOL) {
+      dto.openTemplateId = (await syncCapacityPool(this.prisma, eventId, true))!.id;
+    }
     const templates = await this.prisma.ticketTemplate.findMany({ where: { eventId }, select: { id: true } });
     const fields = cleanFields(dto.fields ?? [], templates.map((t) => t.id));
     const deadline = dto.deadline ? new Date(dto.deadline) : null;
@@ -383,6 +390,13 @@ export class InvitationsService {
     };
     await this.prisma.guestForm.upsert({ where: { eventId }, create: { eventId, ...data }, update: data });
     return this.getForm(eventId, userId, role);
+  }
+
+  /** Seats of the capacity left by the tariffs, for invitations */
+  async capacityForInvitations(eventId: string, userId: string, role: Role) {
+    await this.loadEvent(eventId, userId, role);
+    const pool = await syncCapacityPool(this.prisma, eventId);
+    return { available: pool ? pool.available : await capacityLeft(this.prisma, eventId), templateId: pool?.id ?? null };
   }
 
   /** New shared link: the QR codes printed with the old one stop working */

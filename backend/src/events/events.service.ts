@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { syncCapacityPool } from '../tickets/capacity-pool';
 import { DEFAULT_TIME_ZONE, isTimeZone } from '../common/time-zone';
 import { RedisService } from '../redis/redis.service';
 import { SubscriptionService } from '../subscription/subscription.service';
@@ -264,6 +265,11 @@ export class EventsService implements OnApplicationBootstrap {
       },
     });
 
+    // New capacity or dates: the invitation seats beyond the tariffs follow
+    if (dto.totalCapacity || dto.startDate || dto.endDate || dto.timeZone !== undefined) {
+      await syncCapacityPool(this.prisma, id);
+    }
+
     await this.redisService.cacheDelete(`event:${id}`);
     await this.redisService.cacheDeletePattern(`events:${event.organizerId}:*`);
     return updated;
@@ -272,7 +278,8 @@ export class EventsService implements OnApplicationBootstrap {
   async publish(id: string, organizerId: string, organizerRole: Role) {
     const event = await this.prisma.event.findUnique({
       where: { id },
-      include: { _count: { select: { ticketTemplates: true } } },
+      // Only tariffs count: the invitation seats are not sold
+      include: { _count: { select: { ticketTemplates: { where: { capacityPool: false } } } } },
     });
     if (!event) throw new NotFoundException('Event not found');
 
@@ -397,7 +404,8 @@ export class EventsService implements OnApplicationBootstrap {
   async duplicate(id: string, organizerId: string, organizerRole: Role) {
     const event = await this.prisma.event.findUnique({
       where: { id },
-      include: { ticketTemplates: true },
+      // Tariffs only: the copy gets its own invitation seats when it needs them
+      include: { ticketTemplates: { where: { capacityPool: false } } },
     });
     if (!event) throw new NotFoundException('Event not found');
 
@@ -417,6 +425,7 @@ export class EventsService implements OnApplicationBootstrap {
         country: event.country,
         startDate: event.startDate,
         endDate: event.endDate,
+        timeZone: event.timeZone,
         totalCapacity: event.totalCapacity,
         status: EventStatus.DRAFT,
         bannerUrl: event.bannerUrl,

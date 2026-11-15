@@ -78,6 +78,13 @@ export class InvitationsController {
     res.end(buffer);
   }
 
+  @Get('capacity')
+  @Roles(Role.ORGANIZER, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: "Seats of the event's capacity left by its tariffs, for invitations" })
+  capacity(@Param('eventId') eventId: string, @CurrentUser() user: any) {
+    return this.invitationsService.capacityForInvitations(eventId, user.id, user.role);
+  }
+
   @Get('form')
   @Roles(Role.ORGANIZER, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: "The event's confirmation form (questions asked to guests)" })

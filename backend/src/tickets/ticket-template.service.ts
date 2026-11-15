@@ -10,6 +10,7 @@ import { RedisService } from '../redis/redis.service';
 import { CreateTicketTemplateDto } from './dto/create-ticket-template.dto';
 import { Role } from '@prisma/client';
 import { assertCapacityPerDay, eventDays, normalizeValidDays } from './event-days';
+import { poolIssued, syncCapacityPool } from './capacity-pool';
 
 @Injectable()
 export class TicketTemplateService {
@@ -32,11 +33,13 @@ export class TicketTemplateService {
     // Seats are counted per day of the event (tariffs of different days don't add up)
     const days = eventDays(event.startDate, event.endDate, event.timeZone);
     const validDays = normalizeValidDays(dto.validDays, days);
+    // Invitations already issued on the capacity keep their seats (every day)
     const existingTemplates = await this.prisma.ticketTemplate.findMany({
-      where: { eventId },
+      where: { eventId, capacityPool: false },
       select: { quantity: true, validDays: true },
     });
-    assertCapacityPerDay([...existingTemplates, { quantity: dto.quantity, validDays }], days, event.totalCapacity);
+    const invited = { quantity: await poolIssued(this.prisma, eventId), validDays: [] };
+    assertCapacityPerDay([...existingTemplates, invited, { quantity: dto.quantity, validDays }], days, event.totalCapacity);
 
     const template = await this.prisma.ticketTemplate.create({
       data: {
@@ -55,6 +58,7 @@ export class TicketTemplateService {
       },
     });
 
+    await syncCapacityPool(this.prisma, eventId);
     await this.redisService.cacheDelete(`event:${eventId}`);
     return template;
   }
@@ -110,6 +114,9 @@ export class TicketTemplateService {
     if (organizerRole !== Role.ADMIN && organizerRole !== Role.SUPER_ADMIN && template.event.organizerId !== organizerId) {
       throw new ForbiddenException('Access denied');
     }
+    if (template.capacityPool) {
+      throw new BadRequestException("Les places d'invitation suivent la capacité de l'événement : modifiez la capacité ou vos tarifs");
+    }
 
     const days = eventDays(template.event.startDate, template.event.endDate, template.event.timeZone);
     const validDays = dto.validDays !== undefined ? normalizeValidDays(dto.validDays, days) : template.validDays;
@@ -118,10 +125,11 @@ export class TicketTemplateService {
     // Check capacity (per day) if the quantity or the days change
     if ((dto.quantity && dto.quantity !== template.quantity) || daysChanged) {
       const others = await this.prisma.ticketTemplate.findMany({
-        where: { eventId: template.eventId, NOT: { id: templateId } },
+        where: { eventId: template.eventId, capacityPool: false, NOT: { id: templateId } },
         select: { quantity: true, validDays: true },
       });
-      assertCapacityPerDay([...others, { quantity: dto.quantity || template.quantity, validDays }], days, template.event.totalCapacity);
+      const invited = { quantity: await poolIssued(this.prisma, template.eventId), validDays: [] };
+      assertCapacityPerDay([...others, invited, { quantity: dto.quantity || template.quantity, validDays }], days, template.event.totalCapacity);
     }
 
     // Phones keep an offline list of tickets refreshed by date of change: touch the
@@ -141,7 +149,7 @@ export class TicketTemplateService {
       });
     }
 
-    return this.prisma.ticketTemplate.update({
+    const updated = await this.prisma.ticketTemplate.update({
       where: { id: templateId },
       data: {
         ...(dto.name && { name: dto.name }),
@@ -156,6 +164,8 @@ export class TicketTemplateService {
         ...(dto.validDays !== undefined && { validDays }),
       },
     });
+    await syncCapacityPool(this.prisma, template.eventId);
+    return updated;
   }
 
   async delete(templateId: string, organizerId: string, organizerRole: Role) {
@@ -173,6 +183,9 @@ export class TicketTemplateService {
       throw new ForbiddenException('Access denied');
     }
 
+    if (template.capacityPool) {
+      throw new BadRequestException("Les places d'invitation suivent la capacité de l'événement");
+    }
     if (template._count.tickets > 0) {
       throw new BadRequestException(
         'Ce tarif a déjà des billets : il ne peut pas être supprimé.',
@@ -188,6 +201,7 @@ export class TicketTemplateService {
     }
 
     await this.prisma.ticketTemplate.delete({ where: { id: templateId } });
+    await syncCapacityPool(this.prisma, template.eventId);
     return { message: 'Template deleted successfully' };
   }
 }

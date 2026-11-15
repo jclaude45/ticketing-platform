@@ -278,10 +278,11 @@ export class OrganizerAlertsService {
   /** Published events whose every tariff is sold out: one e-mail per event */
   async soldOutEvents(now = new Date()) {
     const events = await this.prisma.event.findMany({
-      where: { status: 'PUBLISHED', endDate: { gt: now }, ticketTemplates: { some: { quantity: { gt: 0 } } } },
+      where: { status: 'PUBLISHED', endDate: { gt: now }, ticketTemplates: { some: { quantity: { gt: 0 }, capacityPool: false } } },
       select: {
         id: true, name: true, startDate: true, timeZone: true,
-        ticketTemplates: { select: { quantity: true, availableCount: true } },
+        // Sold out = the tariffs sold out (the invitation seats are not on sale)
+        ticketTemplates: { where: { capacityPool: false }, select: { quantity: true, availableCount: true } },
         organizer: { select: { id: true, email: true, firstName: true, isActive: true, notificationPrefs: true } },
       },
     });
@@ -349,7 +350,7 @@ export class OrganizerAlertsService {
           where: { organizerId: o.id, status: 'PUBLISHED', startDate: { gt: now } },
           orderBy: { startDate: 'asc' },
           take: 5,
-          select: { name: true, startDate: true, timeZone: true, ticketTemplates: { select: { quantity: true, availableCount: true } } },
+          select: { name: true, startDate: true, timeZone: true, ticketTemplates: { where: { capacityPool: false }, select: { quantity: true, availableCount: true } } },
         }),
       ]);
       const sold = issued.find((g) => g.source === 'ONLINE')?._count ?? 0;

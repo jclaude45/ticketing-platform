@@ -46,6 +46,8 @@ interface SendResult {
 interface GuestRow { name: string; email: string }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** Invite on the event's capacity left by the tariffs rather than on a tariff */
+const CAPACITY = 'CAPACITY';
 const unwrap = (res: any) => res?.data?.data ?? res?.data;
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -102,7 +104,15 @@ export default function InvitationsPage() {
   };
   const exportResponses = () => download('responses/export', 'reponses-invites.xlsx', "Impossible d'exporter les réponses");
 
-  const selectedTemplate = templates.find((t: any) => t.id === templateId);
+  // Seats of the capacity left by the tariffs: invitations can draw on them instead of a tariff
+  const { data: capacity } = useQuery<{ available: number; templateId: string | null }>({
+    queryKey: ['invitation-capacity', eventId],
+    queryFn: async () => unwrap(await apiClient.get(`/events/${eventId}/invitations/capacity`)),
+  });
+  const tariffs = templates.filter((t: any) => !t.capacityPool);
+  const selectedTemplate = templateId === CAPACITY
+    ? { availableCount: capacity?.available ?? 0 }
+    : templates.find((t: any) => t.id === templateId);
   const paper = delivery === 'PAPER';
   const rowOk = (r: GuestRow) => !!r.name.trim() && (EMAIL_RE.test(r.email.trim()) || (paper && !r.email.trim()));
   const validRows = rows.filter(rowOk);
@@ -121,6 +131,7 @@ export default function InvitationsPage() {
     }
     queryClient.invalidateQueries({ queryKey: ['invitations', eventId] });
     queryClient.invalidateQueries({ queryKey: ['ticket-templates', eventId] });
+    queryClient.invalidateQueries({ queryKey: ['invitation-capacity', eventId] });
     queryClient.invalidateQueries({ queryKey: ['tickets', eventId], refetchType: 'all' });
     queryClient.invalidateQueries({ queryKey: ['event', eventId], refetchType: 'all' });
   };
@@ -237,7 +248,8 @@ export default function InvitationsPage() {
       </div>
 
       {!isCancelled && (
-        <GuestFormEditor eventId={eventId} form={guestForm} timeZone={event?.timeZone} templates={templates.map((t: any) => ({ id: t.id, name: t.name }))} />
+        <GuestFormEditor eventId={eventId} form={guestForm} timeZone={event?.timeZone} capacityAvailable={capacity?.available ?? 0}
+          templates={templates.map((t: any) => ({ id: t.id, name: t.capacityPool ? "Capacité d'accueil" : t.name, capacityPool: !!t.capacityPool }))} />
       )}
 
       {isCancelled ? (
@@ -278,19 +290,25 @@ export default function InvitationsPage() {
               onChange={(e) => setTemplateId(e.target.value)}
               className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
             >
-              <option value="">Choisir une catégorie…</option>
-              {templates.map((t: any) => (
-                <option key={t.id} value={t.id} disabled={t.availableCount <= 0}>
-                  {t.name} — {t.availableCount} place(s) disponible(s)
-                </option>
-              ))}
+              <option value="">Choisir…</option>
+              <option value={CAPACITY} disabled={!capacity?.available}>
+                Capacité d&apos;accueil de l&apos;événement — {capacity?.available ?? 0} place(s) hors tarifs
+              </option>
+              {tariffs.length > 0 && (
+                <optgroup label="Tarifs">
+                  {tariffs.map((t: any) => (
+                    <option key={t.id} value={t.id} disabled={t.availableCount <= 0}>
+                      {t.name} — {t.availableCount} place(s) disponible(s)
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
-            {templates.length === 0 && (
-              <p className="mt-1.5 text-xs text-amber-600">
-                Aucune catégorie : créez d&apos;abord un type de billet pour cet événement.
-              </p>
-            )}
-            <p className="mt-1.5 text-xs text-gray-500">Une invitation utilise une place de cette catégorie.</p>
+            <p className="mt-1.5 text-xs text-gray-500">
+              {templateId === CAPACITY
+                ? "Les invitations prennent les places de la capacité d'accueil que vos tarifs n'utilisent pas. Elles ne sont jamais mises en vente."
+                : 'Une invitation utilise une place de ce tarif.'}
+            </p>
           </div>
 
           {/* Message */}

@@ -102,7 +102,8 @@ export function EventForm({ event, isEdit, draft }: EventFormProps) {
   const [saving, setSaving] = useState(false);
 
   const [tariffs, setTariffs] = useState<TariffInput[]>(() => {
-    const tpls = (event as any)?.ticketTemplates as any[] | undefined;
+    // Tariffs only: the invitation seats taken from the capacity are managed automatically
+    const tpls = ((event as any)?.ticketTemplates as any[] | undefined)?.filter((t: any) => !t.capacityPool);
     if (tpls && tpls.length > 0) {
       return tpls.map((t: any) => ({
         _key: t.id,
