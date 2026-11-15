@@ -487,9 +487,19 @@ export class PublicService {
     bannerUrl?: string | null,
     reference?: string | null,
     organizer?: { firstName: string; lastName: string; email?: string } | null,
-    invitation?: { message?: string | null } | null,
+    invitation?: {
+      message?: string | null;
+      /** The guest's confirmation page */
+      link?: string | null;
+      /** Sent as a link: the ticket comes once the guest has confirmed */
+      awaitingReply?: boolean;
+      deadline?: Date | null;
+      /** The guest's answers, recalled in the ticket e-mail */
+      answers?: [string, string][];
+    } | null,
   ): Promise<boolean> {
     if (!this.mailer) return false;
+    const awaitingReply = !!invitation?.awaitingReply;
 
     const from        = this.config.get<string>('email.from') || this.config.get<string>('email.user');
     const frontendUrl = this.config.get<string>('frontend.publicUrl') || 'https://zaya.live';
@@ -555,7 +565,7 @@ export class PublicService {
     attachments.push({ filename: 'evenement.ics', content: icsContent, contentType: 'text/calendar; method=PUBLISH; charset=UTF-8' });
     if (bannerAttachment) attachments.push(bannerAttachment);
 
-    for (const t of tickets) {
+    for (const t of awaitingReply ? [] : tickets) {
       try {
         const pdfBuf = await this.buildTicketPdf({ ...t, isInvitation: !!invitation }, event, holder.holderName, bannerUrl, {
           holderEmail: holder.holderEmail,
@@ -576,6 +586,18 @@ export class PublicService {
     const ticketsUrl = reference ? `${frontendUrl}/billetterie/payment/success?reference=${reference}` : null;
     const where = [event.venue, event.city, event.address].filter(Boolean).map(v => esc(v)).join(' · ');
     const linkStyle = 'color:#111111;font-weight:bold;';
+    const deadlineStr = invitation?.deadline
+      ? new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: EVENT_TZ }).format(invitation.deadline)
+      : null;
+    const answers = invitation?.answers?.filter(([, v]) => v) ?? [];
+    const ticketPart = awaitingReply
+      ? p(`Confirmez votre présence${deadlineStr ? ` avant le <strong>${esc(deadlineStr)}</strong>` : ''} : votre billet vous sera envoyé dès votre réponse.`) +
+        button('Répondre à l’invitation', invitation!.link!) +
+        p(`Ou copiez ce lien : <a href="${esc(invitation!.link!)}" style="${linkStyle}">${esc(invitation!.link!)}</a>`, { small: true })
+      : (answers.length ? details(answers.map(([k, v]) => [esc(k), esc(v)] as [string, string])) : '') +
+        p(`${tickets.length === 1 ? 'Votre billet est joint' : 'Vos billets sont joints'} à cet e-mail en PDF. Présentez le QR code à l’entrée, sur votre téléphone ou imprimé.`) +
+        (ticketsUrl ? button(tickets.length > 1 ? 'Voir mes billets' : 'Voir mon billet', ticketsUrl) : '') +
+        (invitation?.link ? button('Modifier ma réponse', invitation.link) : '');
     const body =
       (invitation
         ? p(`${organizerName ? `<strong>${esc(organizerName)}</strong> vous invite` : 'Vous êtes invité(e)'} à cet événement.`) +
@@ -588,8 +610,7 @@ export class PublicService {
         ...(!invitation && total > 0 ? [['Total payé', esc(`${total.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} ${currency}`)] as [string, string]] : []),
         [invitation ? 'Invité(e)' : 'Titulaire', esc(holder.holderName)],
       ]) +
-      p(`${tickets.length === 1 ? 'Votre billet est joint' : 'Vos billets sont joints'} à cet e-mail en PDF. Présentez le QR code à l’entrée, sur votre téléphone ou imprimé.`) +
-      (ticketsUrl ? button(tickets.length > 1 ? 'Voir mes billets' : 'Voir mon billet', ticketsUrl) : '') +
+      ticketPart +
       p(`Ajouter à mon agenda : <a href="${esc(googleCalUrl)}" style="${linkStyle}">Google</a> · <a href="${esc(outlookCalUrl)}" style="${linkStyle}">Outlook</a> · Apple (fichier .ics joint)`, { small: true }) +
       (organizerName
         ? note(`Organisé par ${esc(organizerName)}${organizerEmail ? ` — ${esc(organizerEmail)}` : ''}. Pour toute question sur l’événement, contactez l’organisateur.`)
@@ -598,11 +619,13 @@ export class PublicService {
     await this.mailer.sendMail({
       from,
       to: holder.holderEmail,
-      subject: invitation ? `Invitation — ${event.name}` : `${event.name} — votre billet`,
+      subject: invitation
+        ? (invitation.link && !awaitingReply ? `Invitation confirmée — ${event.name}` : `Invitation — ${event.name}`)
+        : `${event.name} — votre billet`,
       attachments,
       html: emailLayout({
         preheader: `${dateStr} · ${event.venue}, ${event.city}`,
-        eyebrow: invitation ? 'Invitation' : 'Billet confirmé',
+        eyebrow: invitation ? (invitation.link && !awaitingReply ? 'Invitation confirmée' : 'Invitation') : 'Billet confirmé',
         title: event.name,
         banner: bannerSrc ? { src: bannerSrc, alt: event.name } : undefined,
         body,
@@ -614,8 +637,11 @@ export class PublicService {
         invitation ? `${organizerName || 'Un organisateur'} vous invite à cet événement.` : `Bonjour ${holder.holderName}, votre commande est confirmée.`,
         `Date : ${dateStr} à ${timeStr}`,
         `Lieu : ${[event.venue, event.city, event.address].filter(Boolean).join(', ')}`,
-        `${tickets.length > 1 ? 'Vos billets sont joints' : 'Votre billet est joint'} en PDF : présentez le QR code à l’entrée.`,
+        awaitingReply
+          ? `Confirmez votre présence${deadlineStr ? ` avant le ${deadlineStr}` : ''} : ${invitation!.link}`
+          : `${tickets.length > 1 ? 'Vos billets sont joints' : 'Votre billet est joint'} en PDF : présentez le QR code à l’entrée.`,
         ...(ticketsUrl ? [ticketsUrl] : []),
+        ...(invitation?.link && !awaitingReply ? [`Modifier ma réponse : ${invitation.link}`] : []),
       ]),
     });
     return true;

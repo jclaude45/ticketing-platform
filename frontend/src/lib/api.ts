@@ -834,6 +834,11 @@ export const publicApi = {
     publicClient.get('/public/events/highlights'),
   getEvent: (id: string) =>
     publicClient.get(`/public/events/${id}`),
+  /** A guest's invitation page (the token comes from the link in the e-mail) */
+  getInvitation: (token: string) =>
+    publicClient.get(`/public/invitations/${encodeURIComponent(token)}`),
+  answerInvitation: (token: string, body: { attending: boolean; name?: string; phone?: string; answers?: Record<string, string | boolean> }) =>
+    publicClient.post(`/public/invitations/${encodeURIComponent(token)}`, body),
   /** Event shop: products on sale, delivery options */
   getShop: (id: string) =>
     publicClient.get(`/public/events/${id}/shop`),

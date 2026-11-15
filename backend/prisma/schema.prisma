@@ -52,6 +52,8 @@ enum TicketStatus {
   USED
   CANCELLED
   FRAUDULENT
+  /// Invitation sent as a link, waiting for the guest's confirmation: holds its seat, never scannable
+  INVITED
 }
 
 enum EventStatus {
@@ -219,6 +221,8 @@ model Event {
   /// Once over, the event stays on the public site (marked as ended) unless the organizer turns this off
   showAfterEnd     Boolean  @default(true)
   payouts          Payout[]
+  guestForm        GuestForm?
+  guestResponses   GuestResponse[]
 }
 
 model TeamMember {
@@ -304,6 +308,41 @@ model Ticket {
   event           Event          @relation(fields: [eventId], references: [id])
   template        TicketTemplate @relation(fields: [templateId], references: [id])
   scanValidations ScanValidation[]
+  guestResponse   GuestResponse?
+}
+
+/// Confirmation form of an event's invitations. When enabled, an invitation is sent as a link:
+/// the guest confirms (or declines) on zaya.live and receives the ticket only once confirmed.
+model GuestForm {
+  eventId   String    @id
+  enabled   Boolean   @default(false)
+  /// Last moment to answer or change one's answer (null: until the event starts)
+  deadline  DateTime?
+  intro     String?
+  /// HIDDEN, OPTIONAL or REQUIRED
+  askPhone  String    @default("OPTIONAL")
+  /// Questions: [{ id, type: CHOICE | TEXT | YESNO, label, help?, required, options?: [{ id, label, limit? }], templateIds? }]
+  fields    Json      @default("[]")
+  updatedAt DateTime  @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+/// A guest's answer to the confirmation form (none yet: the invitation is still waiting)
+model GuestResponse {
+  ticketId    String   @id
+  eventId     String
+  /// CONFIRMED or DECLINED
+  status      String
+  /// { fieldId: optionId | text | boolean }
+  answers     Json     @default("{}")
+  respondedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  event  Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, status])
 }
 
 model Controller {

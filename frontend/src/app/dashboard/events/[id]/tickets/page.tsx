@@ -34,7 +34,7 @@ import { PrintButton } from '@/components/tickets/PrintButton';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type TicketStatus = 'VALID' | 'USED' | 'CANCELLED' | 'PENDING' | 'FRAUDULENT';
+type TicketStatus = 'VALID' | 'USED' | 'CANCELLED' | 'PENDING' | 'FRAUDULENT' | 'INVITED';
 
 interface TicketRow {
   id: string;
@@ -94,6 +94,12 @@ const STATUS_CONFIG: Record<
     label: 'Frauduleux',
     icon: <AlertTriangle className="h-3.5 w-3.5" />,
     chip: 'bg-rose-50 text-rose-800 ring-1 ring-rose-300',
+  },
+  // Invitation waiting for the guest's confirmation: not usable at the entrance yet
+  INVITED: {
+    label: 'Invité, sans réponse',
+    icon: <Clock className="h-3.5 w-3.5" />,
+    chip: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200',
   },
 };
 

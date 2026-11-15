@@ -16,7 +16,7 @@ import { apiClient } from '@/lib/api';
 import { PrintButton } from '@/components/tickets/PrintButton';
 import toast from 'react-hot-toast';
 
-type TicketStatus = 'VALID' | 'USED' | 'CANCELLED' | 'PENDING' | 'FRAUDULENT';
+type TicketStatus = 'VALID' | 'USED' | 'CANCELLED' | 'PENDING' | 'FRAUDULENT' | 'INVITED';
 
 const STATUS_CONFIG: Record<TicketStatus, { label: string; icon: React.ReactNode; chip: string }> = {
   VALID:      { label: 'Valide',      icon: <CheckCircle2 className="h-4 w-4" />, chip: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' },
@@ -24,6 +24,7 @@ const STATUS_CONFIG: Record<TicketStatus, { label: string; icon: React.ReactNode
   CANCELLED:  { label: 'Annulé',      icon: <XCircle className="h-4 w-4" />,      chip: 'bg-red-50 text-red-700 ring-1 ring-red-200' },
   PENDING:    { label: 'En attente',  icon: <Clock className="h-4 w-4" />,        chip: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200' },
   FRAUDULENT: { label: 'Frauduleux',  icon: <AlertTriangle className="h-4 w-4" />, chip: 'bg-rose-50 text-rose-800 ring-1 ring-rose-300' },
+  INVITED:    { label: 'Invité, sans réponse', icon: <Clock className="h-4 w-4" />, chip: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200' },
 };
 
 export default function TicketDetailPage() {

@@ -7,7 +7,7 @@ const PUBLIC_HOST = 'zaya.live';
 // Routes belonging to each subdomain
 const APP_PREFIXES = ['/dashboard', '/auth', '/join'];
 // The public site lives on zaya.live only: one address per page for search engines
-const PUBLIC_PREFIXES = ['/billetterie', '/services', '/tarifs', '/cgu', '/cgv', '/politique-de-confidentialite'];
+const PUBLIC_PREFIXES = ['/billetterie', '/invitation/', '/services', '/tarifs', '/cgu', '/cgv', '/politique-de-confidentialite'];
 
 export function middleware(request: NextRequest) {
   const host = request.headers.get('host') ?? '';

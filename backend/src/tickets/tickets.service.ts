@@ -214,7 +214,7 @@ export class TicketsService {
 
   async countValidTickets(eventId: string): Promise<number> {
     return this.prisma.ticket.count({
-      where: { eventId, status: { not: 'CANCELLED' } },
+      where: { eventId, status: { notIn: ['CANCELLED', 'INVITED'] } },
     });
   }
 }

@@ -17,6 +17,8 @@ const ALLOWED: RegExp[] = [
   /^\/public\/payments\/[\w-]+\/status$/,
   /^\/public\/payments\/[\w-]+\/tickets\/[\w-]+\/pdf$/,
   /^\/public\/payments\/callback$/,
+  // A guest's confirmation page: <ticket id>.<signature>
+  /^\/public\/invitations\/[\w-]+\.[\w-]+$/,
 ];
 
 async function proxy(req: NextRequest) {

@@ -11,6 +11,7 @@ import {
 import toast from 'react-hot-toast';
 import { apiClient, eventsApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { GuestFormEditor, type GuestForm } from '@/components/invitations/GuestFormEditor';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -21,12 +22,15 @@ interface Invitation {
   serialNumber: string;
   holderName: string | null;
   holderEmail: string | null;
-  status: 'PENDING' | 'VALID' | 'USED' | 'CANCELLED' | 'FRAUDULENT';
+  holderPhone: string | null;
+  status: 'PENDING' | 'VALID' | 'USED' | 'CANCELLED' | 'FRAUDULENT' | 'INVITED';
   checkedInAt: string | null;
   createdAt: string;
   template: { id: string; name: string };
   emailStatus: EmailStatus;
   emailSentAt: string | null;
+  /** The guest's answer on their confirmation page */
+  response: { status: 'CONFIRMED' | 'DECLINED'; respondedAt: string; updatedAt: string; answers: { fieldId: string; label: string; value: string }[] } | null;
 }
 
 interface GuestIssue { row?: number; name: string; email: string; reason: string }
@@ -75,6 +79,23 @@ export default function InvitationsPage() {
     refetchInterval: (query) =>
       (query.state.data ?? []).some((i) => i.emailStatus === 'PENDING') ? 4000 : false,
   });
+
+  const { data: guestForm } = useQuery<GuestForm>({
+    queryKey: ['guest-form', eventId],
+    queryFn: async () => unwrap(await apiClient.get(`/events/${eventId}/invitations/form`)),
+  });
+
+  const exportResponses = async () => {
+    try {
+      const res = await apiClient.get(`/events/${eventId}/invitations/responses/export`, { responseType: 'blob' });
+      const url = URL.createObjectURL(res.data as Blob);
+      const a = Object.assign(document.createElement('a'), { href: url, download: 'reponses-invites.xlsx' });
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Impossible d'exporter les réponses");
+    }
+  };
 
   const selectedTemplate = templates.find((t: any) => t.id === templateId);
   const validRows = rows.filter((r) => r.name.trim() && EMAIL_RE.test(r.email.trim()));
@@ -135,8 +156,9 @@ export default function InvitationsPage() {
   const resend = useMutation({
     mutationFn: async (ticketId: string) =>
       apiClient.post(`/events/${eventId}/invitations/${ticketId}/resend`),
-    onSuccess: () => {
-      toast.success('Invitation renvoyée');
+    onSuccess: (_, ticketId) => {
+      const inv = invitations.find((i) => i.id === ticketId);
+      toast.success(inv?.status === 'INVITED' ? 'Lien de confirmation renvoyé' : 'Invitation renvoyée');
       queryClient.invalidateQueries({ queryKey: ['invitations', eventId] });
     },
     onError: (err: any) => onError(err),
@@ -176,6 +198,10 @@ export default function InvitationsPage() {
 
   const sentCount = invitations.filter((i) => i.status !== 'CANCELLED').length;
   const usedCount = invitations.filter((i) => i.status === 'USED').length;
+  const waitingCount = invitations.filter((i) => i.status === 'INVITED').length;
+  const confirmedCount = invitations.filter((i) => i.response?.status === 'CONFIRMED' && i.status !== 'CANCELLED').length;
+  const declinedCount = invitations.filter((i) => i.response?.status === 'DECLINED').length;
+  const asksConfirmation = !!guestForm?.enabled || waitingCount > 0 || confirmedCount + declinedCount > 0;
 
   return (
     <div className="flex flex-col gap-6 p-6 max-w-4xl mx-auto">
@@ -199,6 +225,10 @@ export default function InvitationsPage() {
         </div>
       </div>
 
+      {!isCancelled && (
+        <GuestFormEditor eventId={eventId} form={guestForm} templates={templates.map((t: any) => ({ id: t.id, name: t.name }))} />
+      )}
+
       {isCancelled ? (
         <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 py-8 text-center">
           <XCircle className="mx-auto h-10 w-10 text-gray-400 mb-3" />
@@ -208,7 +238,9 @@ export default function InvitationsPage() {
       ) : (
         <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 py-5 flex flex-col gap-5">
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Chaque invité reçoit par email un billet gratuit avec QR code, à présenter à l&apos;entrée.
+            {guestForm?.enabled
+              ? "Chaque invité reçoit par email un lien pour confirmer sa présence. Son billet (QR code) lui est envoyé dès qu'il a confirmé ; sa place est réservée en attendant."
+              : "Chaque invité reçoit par email un billet gratuit avec QR code, à présenter à l'entrée."}
           </p>
 
           {/* Category */}
@@ -388,8 +420,20 @@ export default function InvitationsPage() {
       <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
         <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-800 px-5 py-3">
           <h2 className="font-semibold text-gray-900 dark:text-white">Invitations envoyées</h2>
-          <span className="text-xs text-gray-500">{sentCount} invité(s) · {usedCount} présent(s)</span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-500">
+              {sentCount} invité(s)
+              {asksConfirmation && ` · ${confirmedCount} confirmé(s) · ${waitingCount} en attente · ${declinedCount} décliné(s)`}
+              {` · ${usedCount} présent(s)`}
+            </span>
+            {invitations.length > 0 && (
+              <button type="button" onClick={exportResponses} className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:underline">
+                <Download className="h-3.5 w-3.5" /> Exporter
+              </button>
+            )}
+          </div>
         </div>
+        {guestForm && <ChoiceTotals form={guestForm} invitations={invitations} />}
         {listLoading ? (
           <div className="flex justify-center p-8"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
         ) : invitations.length === 0 ? (
@@ -402,7 +446,7 @@ export default function InvitationsPage() {
                   <th className="px-5 py-2 font-medium">Invité</th>
                   <th className="px-5 py-2 font-medium">Catégorie</th>
                   <th className="px-5 py-2 font-medium">Email</th>
-                  <th className="px-5 py-2 font-medium">Billet</th>
+                  <th className="px-5 py-2 font-medium">{asksConfirmation ? 'Réponse' : 'Billet'}</th>
                   <th className="px-5 py-2" />
                 </tr>
               </thead>
@@ -411,11 +455,16 @@ export default function InvitationsPage() {
                   <tr key={inv.id}>
                     <td className="px-5 py-3">
                       <p className="font-medium text-gray-900 dark:text-white">{inv.holderName}</p>
-                      <p className="text-xs text-gray-500">{inv.holderEmail}</p>
+                      <p className="text-xs text-gray-500">{inv.holderEmail}{inv.holderPhone ? ` · ${inv.holderPhone}` : ''}</p>
+                      {inv.response?.status === 'CONFIRMED' && inv.response.answers.length > 0 && (
+                        <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                          {inv.response.answers.map((a) => `${a.label} : ${a.value}`).join(' · ')}
+                        </p>
+                      )}
                     </td>
                     <td className="px-5 py-3 text-gray-700 dark:text-gray-300">{inv.template?.name}</td>
                     <td className="px-5 py-3"><EmailBadge status={inv.emailStatus} /></td>
-                    <td className="px-5 py-3"><TicketBadge status={inv.status} /></td>
+                    <td className="px-5 py-3"><TicketBadge status={inv.status} response={inv.response?.status} /></td>
                     <td className="px-5 py-3 text-right">
                       {inv.status !== 'CANCELLED' && inv.emailStatus !== 'PENDING' && (
                         <button
@@ -427,7 +476,7 @@ export default function InvitationsPage() {
                           {resend.isPending && resend.variables === inv.id
                             ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             : <RotateCw className="h-3.5 w-3.5" />}
-                          Renvoyer
+                          {inv.status === 'INVITED' ? 'Renvoyer le lien' : 'Renvoyer'}
                         </button>
                       )}
                     </td>
@@ -486,8 +535,40 @@ function EmailBadge({ status }: { status: EmailStatus }) {
   );
 }
 
-function TicketBadge({ status }: { status: Invitation['status'] }) {
+/** How many confirmed guests took each option of the choice questions, against its places */
+function ChoiceTotals({ form, invitations }: { form: GuestForm; invitations: Invitation[] }) {
+  const choices = (form.fields ?? []).filter((f) => f.type === 'CHOICE');
+  if (!choices.length) return null;
+  const confirmed = invitations.filter((i) => i.response?.status === 'CONFIRMED' && i.status !== 'CANCELLED');
+  return (
+    <div className="flex flex-col gap-3 border-b border-gray-200 px-5 py-4 dark:border-gray-800">
+      {choices.map((f) => (
+        <div key={f.id} className="text-sm">
+          <p className="font-medium text-gray-900 dark:text-white">{f.label}</p>
+          <div className="mt-1.5 flex flex-wrap gap-2">
+            {f.options!.map((o) => {
+              const n = confirmed.filter((i) => i.response!.answers.some((a) => a.fieldId === f.id && a.value === o.label)).length;
+              const full = !!o.limit && n >= o.limit;
+              return (
+                <span key={o.id} className={cn('rounded-full px-2.5 py-0.5 text-xs', full ? 'bg-amber-50 text-amber-800 dark:bg-amber-900/20' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300')}>
+                  {o.label} : <strong>{n}</strong>{o.limit ? ` / ${o.limit}` : ''}{full ? ' · complet' : ''}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TicketBadge({ status, response }: { status: Invitation['status']; response?: 'CONFIRMED' | 'DECLINED' }) {
+  if (response === 'DECLINED') return <span className="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">Décliné</span>;
+  if (status === 'VALID' && response === 'CONFIRMED') {
+    return <span className="inline-flex rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-400">Confirmé</span>;
+  }
   const map: Record<string, { label: string; cls: string }> = {
+    INVITED: { label: 'En attente de réponse', cls: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400' },
     VALID: { label: 'Valide', cls: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-400' },
     PENDING: { label: 'En attente', cls: 'bg-gray-100 text-gray-600' },
     USED: { label: 'Présent(e)', cls: 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400' },

@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Body, Param, Res,
+  Controller, Get, Post, Put, Body, Param, Res,
   UseGuards, UseInterceptors, UploadedFile, HttpCode, HttpStatus,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -13,6 +13,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { InvitationsService } from './invitations.service';
 import { SendInvitationsDto, ImportInvitationsDto } from './dto/invitation.dto';
+import { SaveGuestFormDto } from './dto/guest-form.dto';
 
 @ApiTags('Invitations')
 @ApiBearerAuth('JWT-auth')
@@ -71,6 +72,33 @@ export class InvitationsController {
     res.set({
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': 'attachment; filename="modele-invites.xlsx"',
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
+  @Get('form')
+  @Roles(Role.ORGANIZER, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: "The event's confirmation form (questions asked to guests)" })
+  getForm(@Param('eventId') eventId: string, @CurrentUser() user: any) {
+    return this.invitationsService.getForm(eventId, user.id, user.role);
+  }
+
+  @Put('form')
+  @Roles(Role.ORGANIZER, Role.ADMIN)
+  @ApiOperation({ summary: 'Save the confirmation form' })
+  saveForm(@Param('eventId') eventId: string, @CurrentUser() user: any, @Body() dto: SaveGuestFormDto) {
+    return this.invitationsService.saveForm(eventId, user.id, user.role, dto);
+  }
+
+  @Get('responses/export')
+  @Roles(Role.ORGANIZER, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: "Guests' answers as an Excel file, with the totals per choice" })
+  async exportResponses(@Param('eventId') eventId: string, @CurrentUser() user: any, @Res() res: Response) {
+    const buffer = await this.invitationsService.exportResponses(eventId, user.id, user.role);
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': 'attachment; filename="reponses-invites.xlsx"',
       'Content-Length': buffer.length,
     });
     res.end(buffer);

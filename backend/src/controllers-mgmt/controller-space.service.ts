@@ -88,7 +88,8 @@ export class ControllerSpaceService {
 
     const generatedAt = new Date();
     const tickets = await this.prisma.ticket.findMany({
-      where: { eventId, ...(sinceDate && { updatedAt: { gt: sinceDate } }) },
+      // An invitation waiting for its guest's answer cannot enter: the phone never gets it
+      where: { eventId, status: { not: TicketStatus.INVITED }, ...(sinceDate && { updatedAt: { gt: sinceDate } }) },
       select: {
         id: true, serialNumber: true, holderName: true, status: true, checkedInAt: true,
         template: { select: { name: true, validDays: true } },

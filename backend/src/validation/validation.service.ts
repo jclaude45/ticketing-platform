@@ -203,6 +203,15 @@ export class ValidationService {
       };
     }
 
+    if (ticket.status === TicketStatus.INVITED) {
+      const scanRecord = await this.recordScan(controllerId, ticket.id, ScanResult.INVALID, dto, ipAddress);
+      return {
+        result: ScanResult.INVALID,
+        message: 'Invitation not confirmed by the guest yet',
+        scanId: scanRecord.id,
+      };
+    }
+
     if (ticket.status !== TicketStatus.VALID && ticket.status !== TicketStatus.PENDING && !(isPass && ticket.status === TicketStatus.USED)) {
       const scanRecord = await this.recordScan(controllerId, ticket.id, ScanResult.INVALID, dto, ipAddress);
       return {

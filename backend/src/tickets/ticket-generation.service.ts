@@ -39,6 +39,8 @@ export class TicketGenerationService {
       source?: TicketSource;
       /** The seats were already taken from the tariff (paid order holding them since checkout) */
       stockHeld?: boolean;
+      /** INVITED: invitation waiting for the guest's confirmation (default: VALID) */
+      status?: TicketStatus;
     },
   ) {
     // Validate event
@@ -162,7 +164,7 @@ export class TicketGenerationService {
           holderName: holderName || null,
           holderEmail: holderEmail || null,
           holderPhone: holderPhone || null,
-          status: TicketStatus.VALID,
+          status: options?.status ?? TicketStatus.VALID,
           price: options?.price ?? template.price,
           currency: template.currency,
           purchasedAt,
@@ -241,8 +243,8 @@ export class TicketGenerationService {
       data: { status: TicketStatus.CANCELLED, cancelledAt: new Date() },
     });
 
-    // Restore available count if cancelling a valid ticket
-    if (ticket.status === 'VALID' || ticket.status === 'PENDING') {
+    // Restore available count if cancelling a valid ticket (or an invitation still waiting)
+    if (ticket.status === 'VALID' || ticket.status === 'PENDING' || ticket.status === 'INVITED') {
       await this.prisma.ticketTemplate.update({
         where: { id: ticket.templateId },
         data: { availableCount: { increment: 1 } },

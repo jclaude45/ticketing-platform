@@ -270,7 +270,7 @@ export class TicketExportService {
 
   async generateEventTicketsZip(eventId: string): Promise<Buffer> {
     const tickets = await this.prisma.ticket.findMany({
-      where: { eventId, status: { not: 'CANCELLED' } },
+      where: { eventId, status: { notIn: ['CANCELLED', 'INVITED'] } },
       select: { id: true },
     });
 
@@ -280,7 +280,7 @@ export class TicketExportService {
 
   async generateBulkEventTicketsPDF(eventId: string): Promise<Buffer> {
     const tickets = await this.prisma.ticket.findMany({
-      where: { eventId, status: { not: 'CANCELLED' } },
+      where: { eventId, status: { notIn: ['CANCELLED', 'INVITED'] } },
       select: { id: true },
     });
     return this.generateBulkTicketsPDF(tickets.map((t) => t.id));
@@ -306,7 +306,7 @@ export class TicketExportService {
     let ids = ticketIds;
     if (!ids || ids.length === 0) {
       const rows = await this.prisma.ticket.findMany({
-        where: { eventId, status: { not: 'CANCELLED' } },
+        where: { eventId, status: { notIn: ['CANCELLED', 'INVITED'] } },
         select: { id: true },
         // Group by template first so all tickets of the same tariff are consecutive in the PDF.
         orderBy: [{ templateId: 'asc' }, { serialNumber: 'asc' }],
@@ -832,7 +832,7 @@ export class TicketExportService {
   async generateBatchedExportZip(eventId: string, batchSize = 200): Promise<{ buffer: Buffer; totalTickets: number; batches: number }> {
     // Fetch all valid ticket IDs ordered consistently
     const rows = await this.prisma.ticket.findMany({
-      where: { eventId, status: { not: 'CANCELLED' } },
+      where: { eventId, status: { notIn: ['CANCELLED', 'INVITED'] } },
       select: { id: true },
       orderBy: [{ templateId: 'asc' }, { serialNumber: 'asc' }],
     });

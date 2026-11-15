@@ -9,11 +9,14 @@ import { Prisma, Role, TicketStatus } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import { loadXlsx } from '../common/spreadsheet-guard';
 import { Readable } from 'stream';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { TicketGenerationService } from '../tickets/ticket-generation.service';
 import { PublicService } from '../public/public.service';
 import { MAX_GUESTS_PER_BATCH } from './dto/invitation.dto';
 import { tariffLabel } from '../tickets/event-days';
+import { ASK_PHONE, answerLabel, cleanFields, guestToken, type Answers, type FormField } from './guest-form';
+import { SaveGuestFormDto } from './dto/guest-form.dto';
 
 /** Invitation tickets are regular tickets tagged with metadata.source = INVITATION. */
 export const INVITATION_SOURCE = 'INVITATION';
@@ -52,6 +55,7 @@ export class InvitationsService {
     private readonly prisma: PrismaService,
     private readonly ticketGeneration: TicketGenerationService,
     private readonly publicService: PublicService,
+    private readonly config: ConfigService,
   ) {}
 
   // ─── Send ─────────────────────────────────────────────────────────────────
@@ -114,18 +118,24 @@ export class InvitationsService {
       emailStatus: 'PENDING',
     };
 
+    // Confirmation form on: the guest gets a link and the ticket only once they confirm.
+    // The seat is held meanwhile; declining gives it back.
+    const form = await this.prisma.guestForm.findUnique({ where: { eventId }, select: { enabled: true } });
     const result = await this.ticketGeneration.generateTickets(
       eventId,
       userId,
       role,
       { templateId, holders: valid.map((g) => ({ holderName: g.name, holderEmail: g.email })) },
-      { price: 0, metadata: metadata as unknown as Prisma.InputJsonValue, source: 'INVITATION' },
+      {
+        price: 0, metadata: metadata as unknown as Prisma.InputJsonValue, source: 'INVITATION',
+        ...(form?.enabled && { status: TicketStatus.INVITED }),
+      },
     );
 
     const tickets = await this.prisma.ticket.findMany({
       where: { id: { in: result.tickets.map((t) => t.id) } },
       select: {
-        id: true, serialNumber: true, holderName: true, holderEmail: true, qrCode: true,
+        id: true, serialNumber: true, holderName: true, holderEmail: true, qrCode: true, status: true,
         metadata: true, template: { select: { name: true, currency: true, validDays: true } },
       },
     });
@@ -220,7 +230,7 @@ export class InvitationsService {
     const tickets = await this.prisma.ticket.findMany({
       where: { id: { in: result.tickets.map((t) => t.id) } },
       select: {
-        id: true, serialNumber: true, holderName: true, holderEmail: true, qrCode: true,
+        id: true, serialNumber: true, holderName: true, holderEmail: true, qrCode: true, status: true,
         metadata: true, template: { select: { name: true, currency: true, validDays: true } },
       },
     });
@@ -257,15 +267,25 @@ export class InvitationsService {
       where: { eventId, metadata: { path: ['source'], equals: INVITATION_SOURCE } },
       orderBy: { createdAt: 'desc' },
       select: {
-        id: true, serialNumber: true, holderName: true, holderEmail: true, status: true,
+        id: true, serialNumber: true, holderName: true, holderEmail: true, holderPhone: true, status: true,
         checkedInAt: true, createdAt: true, metadata: true,
         template: { select: { id: true, name: true } },
+        guestResponse: { select: { status: true, answers: true, respondedAt: true, updatedAt: true } },
       },
     });
+    const fields = await this.formFields(eventId);
 
     return tickets.map((t) => {
       const meta = (t.metadata ?? {}) as Partial<InvitationMetadata>;
+      const r = t.guestResponse;
       return {
+        holderPhone: t.holderPhone,
+        response: r && {
+          status: r.status,
+          respondedAt: r.respondedAt,
+          updatedAt: r.updatedAt,
+          answers: this.labelAnswers(fields, r.answers as Answers),
+        },
         id: t.id,
         serialNumber: t.serialNumber,
         holderName: t.holderName,
@@ -289,6 +309,7 @@ export class InvitationsService {
         metadata: true, template: { select: { name: true, currency: true, validDays: true } },
       },
     });
+    // A guest still to answer gets the link again; a confirmed one, their ticket
     if (!ticket) throw new NotFoundException('Invitation introuvable');
     if (ticket.status === TicketStatus.CANCELLED) throw new BadRequestException('Cette invitation a été annulée');
     if (!ticket.holderEmail) throw new BadRequestException("Cette invitation n'a pas d'adresse email");
@@ -297,6 +318,105 @@ export class InvitationsService {
     const status = await this.deliverOne(event, ticket, meta.message ?? null);
     if (status !== 'SENT') throw new BadRequestException("L'email n'a pas pu être envoyé. Réessayez plus tard.");
     return { emailStatus: status };
+  }
+
+  // ─── Confirmation form ────────────────────────────────────────────────────
+
+  async getForm(eventId: string, userId: string, role: Role) {
+    await this.loadEvent(eventId, userId, role);
+    const form = await this.prisma.guestForm.findUnique({ where: { eventId } });
+    return form ?? { eventId, enabled: false, deadline: null, intro: null, askPhone: 'OPTIONAL', fields: [] };
+  }
+
+  async saveForm(eventId: string, userId: string, role: Role, dto: SaveGuestFormDto) {
+    const event = await this.loadEvent(eventId, userId, role);
+    const templates = await this.prisma.ticketTemplate.findMany({ where: { eventId }, select: { id: true } });
+    const fields = cleanFields(dto.fields ?? [], templates.map((t) => t.id));
+    const deadline = dto.deadline ? new Date(dto.deadline) : null;
+    if (deadline && isNaN(deadline.getTime())) throw new BadRequestException('Date limite invalide');
+    if (deadline && deadline > event.endDate) throw new BadRequestException("La date limite doit précéder la fin de l'événement");
+    const askPhone = ASK_PHONE.includes(dto.askPhone as any) ? dto.askPhone! : 'OPTIONAL';
+    const data = {
+      enabled: !!dto.enabled,
+      deadline,
+      intro: dto.intro?.trim() || null,
+      askPhone,
+      fields: fields as unknown as Prisma.InputJsonValue,
+    };
+    return this.prisma.guestForm.upsert({ where: { eventId }, create: { eventId, ...data }, update: data });
+  }
+
+  /** Every invitation with its answers, one column per question, plus the totals per choice */
+  async exportResponses(eventId: string, userId: string, role: Role): Promise<Buffer> {
+    await this.loadEvent(eventId, userId, role);
+    const fields = await this.formFields(eventId);
+    const tickets = await this.prisma.ticket.findMany({
+      where: { eventId, metadata: { path: ['source'], equals: INVITATION_SOURCE } },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        holderName: true, holderEmail: true, holderPhone: true, status: true, checkedInAt: true,
+        template: { select: { name: true } },
+        guestResponse: { select: { status: true, answers: true, updatedAt: true } },
+      },
+    });
+
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Réponses');
+    ws.columns = [
+      { header: 'Nom', width: 28 }, { header: 'Email', width: 32 }, { header: 'Téléphone', width: 16 },
+      { header: 'Catégorie', width: 18 }, { header: 'Réponse', width: 14 }, { header: 'Répondu le', width: 18 },
+      { header: 'Entré(e)', width: 10 },
+      ...fields.map((f) => ({ header: f.label, width: Math.min(40, Math.max(14, f.label.length + 2)) })),
+    ];
+    ws.getRow(1).font = { bold: true };
+    for (const t of tickets) {
+      const r = t.guestResponse;
+      const answers = (r?.answers ?? {}) as Answers;
+      ws.addRow([
+        t.holderName ?? '', t.holderEmail ?? '', t.holderPhone ?? '', t.template.name,
+        this.responseLabel(t.status, r?.status),
+        r ? r.updatedAt.toLocaleString('fr-FR', { timeZone: 'Africa/Kinshasa' }) : '',
+        t.checkedInAt ? 'Oui' : '',
+        ...fields.map((f) => (r?.status === 'CONFIRMED' ? answerLabel(f, answers[f.id]) : '')),
+      ]);
+    }
+
+    // Totals: how many confirmed guests chose each option, against its places
+    const choices = fields.filter((f) => f.type === 'CHOICE' || f.type === 'YESNO');
+    if (choices.length) {
+      const totals = wb.addWorksheet('Totaux');
+      totals.columns = [{ header: 'Question', width: 32 }, { header: 'Choix', width: 28 }, { header: 'Confirmés', width: 12 }, { header: 'Places', width: 10 }];
+      totals.getRow(1).font = { bold: true };
+      const confirmed = tickets.filter((t) => t.guestResponse?.status === 'CONFIRMED').map((t) => t.guestResponse!.answers as Answers);
+      for (const f of choices) {
+        const options = f.type === 'YESNO'
+          ? [{ id: true as string | boolean, label: 'Oui', limit: null }, { id: false as string | boolean, label: 'Non', limit: null }]
+          : f.options!.map((o) => ({ id: o.id as string | boolean, label: o.label, limit: o.limit ?? null }));
+        for (const o of options) {
+          totals.addRow([f.label, o.label, confirmed.filter((a) => a[f.id] === o.id).length, o.limit ?? '']);
+        }
+      }
+    }
+    return Buffer.from(await wb.xlsx.writeBuffer());
+  }
+
+  private async formFields(eventId: string): Promise<FormField[]> {
+    const form = await this.prisma.guestForm.findUnique({ where: { eventId }, select: { fields: true } });
+    return (form?.fields ?? []) as unknown as FormField[];
+  }
+
+  private labelAnswers(fields: FormField[], answers: Answers | null) {
+    return fields
+      .filter((f) => answers?.[f.id] !== undefined)
+      .map((f) => ({ fieldId: f.id, label: f.label, value: answerLabel(f, answers![f.id]) }));
+  }
+
+  private responseLabel(ticketStatus: TicketStatus, response?: string) {
+    if (response === 'DECLINED') return 'Décliné';
+    if (ticketStatus === TicketStatus.CANCELLED) return 'Annulée';
+    if (response === 'CONFIRMED') return 'Confirmé';
+    if (ticketStatus === TicketStatus.INVITED) return 'En attente';
+    return 'Billet envoyé';
   }
 
   // ─── Excel template ───────────────────────────────────────────────────────
@@ -333,6 +453,27 @@ export class InvitationsService {
     return event;
   }
 
+  /** The event as the invitation e-mails show it (no access check: for the guest's own page) */
+  async eventForMail(eventId: string) {
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        id: true, name: true, organizerId: true, status: true,
+        startDate: true, endDate: true, city: true, venue: true,
+        address: true, description: true, bannerUrl: true,
+        organizer: { select: { firstName: true, lastName: true, email: true } },
+      },
+    });
+    if (!event) throw new NotFoundException('Événement introuvable');
+    return event;
+  }
+
+  /** The guest's confirmation page */
+  guestLink(ticketId: string): string {
+    const base = this.config.get<string>('frontend.publicUrl') || 'https://zaya.live';
+    return `${base}/invitation/${guestToken(ticketId)}`;
+  }
+
   private async deliver(
     event: Awaited<ReturnType<InvitationsService['loadEvent']>>,
     tickets: Parameters<InvitationsService['deliverOne']>[1][],
@@ -345,17 +486,29 @@ export class InvitationsService {
     this.logger.log(`Invitations for event ${event.id}: ${sent}/${tickets.length} emails sent`);
   }
 
-  private async deliverOne(
+  /**
+   * One invitation e-mail. A ticket still INVITED gets the link to its confirmation page; a
+   * confirmed one gets its ticket, with the guest's answers and the link to change them.
+   */
+  async deliverOne(
     event: Awaited<ReturnType<InvitationsService['loadEvent']>>,
     ticket: {
       id: string; serialNumber: string; holderName: string | null; holderEmail: string | null;
-      qrCode: string | null; metadata: Prisma.JsonValue;
+      qrCode: string | null; metadata: Prisma.JsonValue; status?: TicketStatus;
       template: { name: string; currency: string; validDays?: string[] };
     },
     message: string | null,
   ): Promise<EmailStatus> {
     let status: EmailStatus = 'FAILED';
     try {
+      const awaitingReply = ticket.status === TicketStatus.INVITED;
+      const [form, response] = await Promise.all([
+        this.prisma.guestForm.findUnique({ where: { eventId: event.id }, select: { deadline: true, fields: true } }),
+        awaitingReply ? null : this.prisma.guestResponse.findUnique({ where: { ticketId: ticket.id }, select: { answers: true } }),
+      ]);
+      const fields = (form?.fields ?? []) as unknown as FormField[];
+      // The link only where the guest has a page to go to: waiting, or already answered
+      const withLink = awaitingReply || !!response;
       const sent = await this.publicService.sendConfirmationEmail(
         { holderName: ticket.holderName ?? '', holderEmail: ticket.holderEmail! },
         event,
@@ -372,7 +525,17 @@ export class InvitationsService {
         event.bannerUrl,
         null,
         event.organizer,
-        { message },
+        {
+          message,
+          ...(withLink && {
+            link: this.guestLink(ticket.id),
+            awaitingReply,
+            deadline: form?.deadline ?? null,
+            answers: response
+              ? this.labelAnswers(fields, response.answers as Answers).map((a) => [a.label, a.value] as [string, string])
+              : [],
+          }),
+        },
       );
       status = sent ? 'SENT' : 'FAILED';
       if (!sent) this.logger.warn('Invitation email skipped: mailer not configured');
