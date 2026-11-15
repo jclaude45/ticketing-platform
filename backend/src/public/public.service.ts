@@ -33,6 +33,9 @@ const ZAYA_LOGO_Z_PATH =
   'L298.41 600.361H492.824L249.334 355.788L249.089 355.542L249.234 355.227L298.319 248.291L298.453 248' +
   'H751.755L751.532 248.66Z';
 
+/** Events take place in Kinshasa: their times are shown there, whatever the server's zone */
+const EVENT_TZ = 'Africa/Kinshasa';
+
 /** Free tickets one person can take over 24 hours */
 export const FREE_TICKETS_PER_DAY = 5;
 
@@ -516,13 +519,13 @@ export class PublicService {
         : bannerUrl.replace(/^https?:\/\/localhost(:\d+)?/, appBase);
     }
 
-    // Date formatting
+    // Date formatting, in the events' time zone (the server runs in UTC)
     const startDate = new Date(event.startDate);
     const dateStr = new Intl.DateTimeFormat('fr-FR', {
-      weekday: 'long', day: 'numeric', month: 'long',
+      weekday: 'long', day: 'numeric', month: 'long', timeZone: EVENT_TZ,
     }).format(startDate);
     const timeStr = new Intl.DateTimeFormat('fr-FR', {
-      hour: '2-digit', minute: '2-digit',
+      hour: '2-digit', minute: '2-digit', timeZone: EVENT_TZ,
     }).format(startDate);
 
     // Calendar links
@@ -690,8 +693,8 @@ export class PublicService {
       doc.on('error', reject);
 
       const startDate = new Date(event.startDate);
-      const fmtDate = (d: Date) => new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(d);
-      const fmtTime = (d: Date) => new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' }).format(d);
+      const fmtDate = (d: Date) => new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: EVENT_TZ }).format(d);
+      const fmtTime = (d: Date) => new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: EVENT_TZ }).format(d);
 
       // ── Logo (same mark as frontend/public/zaya-logo.svg, 1000×1000 viewBox) ──
       const LOGO = 40;

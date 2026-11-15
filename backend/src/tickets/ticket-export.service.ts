@@ -220,7 +220,7 @@ export class TicketExportService {
         doc.fontSize(10).text(`Serial: ${ticket.serialNumber}`, 40, 88);
 
         doc.fillColor('#000000').fontSize(10).font('Helvetica');
-        const startDate = new Date(ticket.event.startDate).toLocaleDateString('fr-FR');
+        const startDate = new Date(ticket.event.startDate).toLocaleDateString('fr-FR', { timeZone: 'Africa/Kinshasa' });
         doc.text(`Date: ${startDate}`, 40, 140);
         doc.text(`Lieu: ${ticket.event.venue}, ${ticket.event.city}`, 40, 156);
         if (ticket.holderName) doc.text(`Titulaire: ${ticket.holderName}`, 40, 172);
@@ -574,7 +574,7 @@ export class TicketExportService {
     // Date / venue
     const startDate = ticket.event?.startDate ? new Date(ticket.event.startDate) : null;
     const dateStr   = startDate
-      ? startDate.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
+      ? startDate.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Africa/Kinshasa' })
       : '—';
     const venue = [ticket.event?.venue, ticket.event?.city].filter(Boolean).join(', ');
     const price = ticket.template

@@ -507,7 +507,7 @@ export class TeamService {
     const firstName = m.name.split(' ')[0] || m.name;
     const organizer = `${m.event.organizer.firstName} ${m.event.organizer.lastName}`.trim();
     const date = new Intl.DateTimeFormat('fr-FR', {
-      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kinshasa',
     }).format(new Date(m.event.startDate));
 
     return emailLayout({
