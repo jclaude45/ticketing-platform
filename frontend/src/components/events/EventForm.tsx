@@ -92,9 +92,13 @@ function toISOString(local: string): string {
   return new Date(local).toISOString();
 }
 
+/** ISO (UTC) → value of a datetime-local field, in the browser's time zone like toISOString reads it back */
 function toLocalDateTime(iso: string): string {
   if (!iso) return '';
-  return iso.slice(0, 16);
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 const COLORS = ['#181818', '#707070', '#db2777', '#dc2626', '#d97706', '#16a34a', '#0891b2', '#374151'];
