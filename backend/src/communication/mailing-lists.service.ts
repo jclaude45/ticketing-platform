@@ -3,6 +3,7 @@ import { CampaignStatus, TicketStatus } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../prisma/prisma.service';
 import { loadCsv, loadXlsx } from '../common/spreadsheet-guard';
+import { readPeople } from '../common/contact-sheet';
 import { readUnsubscribeToken } from './unsubscribe';
 
 /** Where a contact comes from: a purchase or sign-up, an invitation, a ticket issued by hand */
@@ -30,14 +31,6 @@ const MAX_IMPORT = 20000;
 const MAX_MEMBERS = 50000;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-/** The address inside a cell ("Marie <marie@x.com>", "mailto:…", spaces around it) */
-const emailIn = (v: string) => /[^\s<>"';,:]+@[^\s<>"';,:]+\.[^\s<>"';,:]+/.exec(v)?.[0] ?? null;
-/** What a cell shows, or the address behind a mailto link */
-const cellText = (cell: ExcelJS.Cell) => {
-  const v = cell.value as any;
-  if (v && typeof v === 'object' && typeof v.hyperlink === 'string' && /^mailto:/i.test(v.hyperlink)) return v.hyperlink.slice(7);
-  return String(cell.text ?? '');
-};
 const splitName = (name: string | null) => {
   const parts = (name || '').trim().split(/\s+/).filter(Boolean);
   return { firstName: parts[0] || 'Participant', lastName: parts.slice(1).join(' ') };
@@ -206,59 +199,7 @@ export class MailingListsService {
         if (err instanceof BadRequestException) throw err;
         throw new BadRequestException('Fichier invalide ou corrompu');
       }
-      const normalize = (v: string) => v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-        .replace(/[*:._()\u00a0-]/g, ' ').trim().replace(/\s+/g, ' ');
-      // Header words, matched inside the title ("Adresse e-mail du contact", "Tél. portable"…)
-      const HEADERS: Record<'fullName' | 'firstName' | 'lastName' | 'name' | 'phone', RegExp> = {
-        fullName: /\b(nom et prenom|prenom et nom|nom prenom|prenom nom|nom complet|full ?name)\b/,
-        firstName: /\b(prenom|first ?name|given name)\b/,
-        lastName: /\b(nom de famille|last ?name|surname|family name)\b/,
-        name: /\b(nom|name|participant|contact|invite|client|personne)\b/,
-        phone: /\b(tel|telephone|phone|mobile|portable|gsm|numero|whatsapp|cell)\b/,
-      };
-
-      // The e-mail column is found by what it holds, on whichever sheet and row the list starts:
-      // titles above the table, odd header names or a cover sheet no longer get in the way
-      let best: { ws: ExcelJS.Worksheet; col: number; count: number; firstRow: number } | null = null;
-      for (const ws of wb.worksheets) {
-        const counts = new Map<number, { count: number; firstRow: number }>();
-        ws.eachRow({ includeEmpty: false }, (row, n) => {
-          if (n > 500) return;
-          row.eachCell({ includeEmpty: false }, (cell, col) => {
-            if (!emailIn(cellText(cell))) return;
-            const c = counts.get(col) ?? { count: 0, firstRow: n };
-            c.count++;
-            counts.set(col, c);
-          });
-        });
-        counts.forEach((c, col) => { if (!best || c.count > best.count) best = { ws, col, ...c }; });
-      }
-      if (!best) throw new BadRequestException('Aucune adresse e-mail trouvée dans le fichier');
-      const { ws, col: emailCol, firstRow } = best as { ws: ExcelJS.Worksheet; col: number; firstRow: number };
-
-      // Header: the nearest non-empty row above the first address, if any
-      const cols: Partial<Record<'name' | 'firstName' | 'lastName' | 'phone', number>> = {};
-      for (let h = firstRow - 1; h >= Math.max(1, firstRow - 5); h--) {
-        const row = ws.getRow(h);
-        if (!row.cellCount) continue;
-        row.eachCell({ includeEmpty: false }, (cell, col) => {
-          if (col === emailCol) return;
-          const t = normalize(cellText(cell));
-          // "Nom et prénom" is the full name, not the first name
-          for (const f of ['fullName', 'firstName', 'lastName', 'phone', 'name'] as const) {
-            const key = f === 'fullName' ? 'name' : f;
-            if (cols[key] === undefined && HEADERS[f].test(t)) { cols[key] = col; break; }
-          }
-        });
-        break;
-      }
-
-      ws.eachRow({ includeEmpty: false }, (row, n) => {
-        if (n < firstRow) return;
-        const t = (c?: number) => (c ? cellText(row.getCell(c)).trim() : '');
-        const raw = t(emailCol);
-        push(emailIn(raw) ?? raw, t(cols.name), t(cols.phone), cols.firstName ? t(cols.firstName) : undefined, cols.firstName ? t(cols.lastName) || t(cols.name) : undefined);
-      });
+      for (const p of readPeople(wb, true)) push(p.email, p.name, p.phone, p.firstName || undefined, p.firstName ? p.lastName : undefined);
     } else if (text?.trim()) {
       for (const line of text.split(/\r?\n/)) {
         if (!line.trim()) continue;

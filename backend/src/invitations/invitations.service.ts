@@ -8,6 +8,7 @@ import {
 import { Prisma, Role, TicketStatus } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import { loadCsv, loadXlsx } from '../common/spreadsheet-guard';
+import { readPeople } from '../common/contact-sheet';
 import { PassThrough } from 'stream';
 import { randomBytes } from 'crypto';
 import * as archiver from 'archiver';
@@ -692,7 +693,7 @@ export class InvitationsService {
     return status;
   }
 
-  /** Reads guests from .xlsx or .csv. Accepts a "Nom" column, or "Prénom" + "Nom". */
+  /** Reads guests from .xlsx or .csv (see readPeople for the layouts understood) */
   private async parseGuestFile(file: Express.Multer.File, requireEmail = true): Promise<Guest[]> {
     if (!file) throw new BadRequestException('Aucun fichier reçu');
 
@@ -711,44 +712,8 @@ export class InvitationsService {
       throw new BadRequestException('Fichier invalide ou corrompu');
     }
 
-    const ws = wb.worksheets[0];
-    if (!ws) throw new BadRequestException('Le fichier est vide');
-
-    const normalize = (v: string) =>
-      v.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\*/g, '').trim().replace(/\s+/g, ' ');
-    const ALIASES = {
-      name: [
-        'nom', 'name', 'nom complet', 'full name', 'invite', 'participant', 'prenom nom',
-        'nom et prenom', 'prenom et nom', "nom de l'invite", 'nom de l’invite', 'nom invite',
-      ],
-      firstName: ['prenom', 'first name', 'firstname'],
-      lastName: ['nom de famille', 'last name', 'lastname'],
-      email: ['email', 'e-mail', 'mail', 'courriel', 'adresse email', 'adresse e-mail'],
-    };
-
-    const cols: Partial<Record<keyof typeof ALIASES, number>> = {};
-    ws.getRow(1).eachCell({ includeEmpty: false }, (cell, col) => {
-      const h = normalize(cell.text ?? '');
-      for (const [field, aliases] of Object.entries(ALIASES) as [keyof typeof ALIASES, string[]][]) {
-        if (cols[field] === undefined && aliases.includes(h)) cols[field] = col;
-      }
-    });
-    if (cols.email === undefined && requireEmail) {
-      throw new BadRequestException('Colonne "Email" introuvable dans la première ligne du fichier');
-    }
-    if (cols.name === undefined && cols.firstName === undefined && cols.lastName === undefined) {
-      throw new BadRequestException('Colonne "Nom" introuvable dans la première ligne du fichier');
-    }
-
-    const guests: Guest[] = [];
-    ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-      if (rowNumber === 1) return;
-      const text = (col?: number) => (col ? (row.getCell(col).text ?? '').trim() : '');
-      const name = [text(cols.firstName), text(cols.name) || text(cols.lastName)].filter(Boolean).join(' ');
-      const email = text(cols.email);
-      if (!name && !email) return; // blank line
-      guests.push({ name, email, row: rowNumber });
-    });
+    // Found by content: titles above the table or headers worded differently no longer block it
+    const guests: Guest[] = readPeople(wb, requireEmail).map((p) => ({ name: p.name, email: p.email, row: p.row }));
 
     if (!guests.length) throw new BadRequestException('Aucun invité trouvé dans le fichier');
     if (guests.length > MAX_GUESTS_PER_BATCH) {
