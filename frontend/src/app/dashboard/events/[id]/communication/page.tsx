@@ -178,6 +178,9 @@ export default function CommunicationPage() {
     onSuccess: (res) => {
       const d = (res.data as any).data;
       toast.success(`Envoi lancé — ${d.recipientCount} destinataires`);
+      if (d.held > 0) {
+        toast(`${d.held} adresse(s) importée(s) attendront : ${d.importedAllowance} au plus aujourd’hui pour les adresses importées. Cliquez sur « Reprendre » demain ; la limite augmente avec les envois réussis.`, { duration: 10000 });
+      }
       queryClient.invalidateQueries({ queryKey: ['campaigns', eventId] });
       queryClient.invalidateQueries({ queryKey: ['comm-stats', eventId] });
     },

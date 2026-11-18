@@ -23,6 +23,15 @@ export default () => ({
     user: process.env.EMAIL_USER,
     password: process.env.EMAIL_PASSWORD,
     from: process.env.EMAIL_FROM || 'noreply@ticketing.com',
+    /** Separate stream for campaigns (Mailtrap "Bulk"): marketing never weighs on tickets' delivery */
+    bulk: {
+      host: process.env.BULK_EMAIL_HOST,
+      port: parseInt(process.env.BULK_EMAIL_PORT, 10) || 587,
+      user: process.env.BULK_EMAIL_USER,
+      password: process.env.BULK_EMAIL_PASSWORD,
+    },
+    /** Secret part of the URL Mailtrap posts bounces and complaints to */
+    webhookSecret: process.env.MAILTRAP_WEBHOOK_SECRET,
   },
   aws: {
     region: process.env.AWS_REGION || 'us-east-1',

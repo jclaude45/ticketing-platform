@@ -678,7 +678,24 @@ model CampaignRecipient {
   status      RecipientStatus @default(PENDING)
   sentAt      DateTime?
   error       String?
+  /// Imported by the organizer (not from their tickets): capped per day until they prove valid
+  imported    Boolean         @default(false)
+  /// What the mail provider reported afterwards: bounce, soft bounce, spam, unsubscribe
+  feedback    String?
+  feedbackAt  DateTime?
   createdAt   DateTime        @default(now())
+
+  @@index([email])
+}
+
+/// Address no campaign may reach again: it bounced, was rejected or its owner reported spam
+model EmailSuppression {
+  id        String   @id @default(uuid())
+  /// Lowercase
+  email     String   @unique
+  /// bounce, spam, reject, unsubscribe (as reported by the mail provider)
+  reason    String
+  createdAt DateTime @default(now())
 }
 
 model Notification {

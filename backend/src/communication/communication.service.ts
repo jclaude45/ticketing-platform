@@ -30,6 +30,10 @@ const FREE_RECIPIENTS_PER_DAY = 300;
 const isQuotaError = (err: any) =>
   /sending limit|quota|rate limit|too many (messages|emails|requests)|limit exceeded/i.test(String(err?.message ?? err));
 
+/** Imported addresses reachable per 24 hours: to start, and at most */
+const IMPORTED_DAILY_START = 200;
+const IMPORTED_DAILY_MAX = 5000;
+
 /** Messages sent at the same time (as many SMTP connections in the pool) */
 const SEND_CONCURRENCY = 5;
 
@@ -65,6 +69,22 @@ export class CommunicationService {
       pool: true,
       maxConnections: SEND_CONCURRENCY,
     });
+    // Campaigns go through their own stream when one is set: a campaign's bounces or spam
+    // complaints then never get the tickets' and login codes' stream suspended
+    const bulk = config.get<{ host?: string; port: number; user?: string; password?: string }>('email.bulk');
+    if (bulk?.host) {
+      this.mailerTransport = nodemailer.createTransport({
+        host: bulk.host,
+        port: bulk.port,
+        secure: false,
+        auth: { user: bulk.user, pass: bulk.password },
+        pool: true,
+        maxConnections: SEND_CONCURRENCY,
+      });
+      this.logger.log('Campagnes : flux d’envoi dédié (bulk)');
+    } else {
+      this.logger.warn('Campagnes : pas de flux dédié (BULK_EMAIL_HOST vide), envoi par le SMTP des e-mails de la plateforme');
+    }
     this.emailFrom = config.get('email.from') || 'noreply@ticketing.com';
 
     const sid = config.get<string>('twilio.accountSid');
@@ -321,8 +341,13 @@ export class CommunicationService {
       this.logger.error(`Erreur envoi campagne ${campaignId}: ${err.message}`)
     );
 
-    // A resumed send only goes to those not reached yet
-    return { message: 'Envoi lancé', recipientCount: recipients.filter(r => r.status !== RecipientStatus.SENT).length };
+    // A resumed send only goes to those not reached yet; imported addresses beyond today's
+    // allowance wait for a later "Reprendre"
+    const pending = recipients.filter(r => r.status !== RecipientStatus.SENT);
+    const allowance = await this.importedAllowance(campaign.event.organizerId);
+    const importedPending = pending.filter(r => r.imported).length;
+    const held = Math.max(0, importedPending - allowance);
+    return { message: 'Envoi lancé', recipientCount: pending.length - held, held, importedAllowance: allowance };
   }
 
   async getCampaignStats(campaignId: string, userId: string, role: Role) {
@@ -508,10 +533,12 @@ export class CommunicationService {
   // ─── PRIVATE HELPERS ──────────────────────────────────────────
 
   /** Plan limits of a send: communication allowed, and the free plan's caps */
-  private async assertSendAllowed(campaign: { id: string; eventId: string; event: { organizerId: string } }, recipients: { status: RecipientStatus }[]) {
+  private async assertSendAllowed(campaign: { id: string; eventId: string; event: { organizerId: string } }, recipients: { status: RecipientStatus; imported: boolean }[]) {
     const organizerId = campaign.event.organizerId;
     const { plan } = await this.subscriptions.getEffectivePlan(organizerId);
     if (!plan.allowCommunication) throw new ForbiddenException('Votre forfait ne comprend pas les campagnes.');
+    const problem = await this.reputationProblem(organizerId);
+    if (problem) throw new ForbiddenException(problem);
     if (plan.code !== 'FREE') return;
 
     const SENT_STATUSES = [CampaignStatus.SENDING, CampaignStatus.SENT, CampaignStatus.PARTIALLY_SENT];
@@ -525,12 +552,26 @@ export class CommunicationService {
     const sentToday = await this.prisma.campaignRecipient.count({
       where: { status: RecipientStatus.SENT, sentAt: { gte: since }, campaign: { event: { organizerId } } },
     });
-    const toSend = recipients.filter((r) => r.status !== RecipientStatus.SENT).length;
+    // What actually leaves now: imported addresses beyond today's allowance wait
+    const pending = recipients.filter((r) => r.status !== RecipientStatus.SENT);
+    const imported = pending.filter((r) => r.imported).length;
+    const toSend = pending.length - imported + Math.min(imported, await this.importedAllowance(organizerId));
     if (sentToday + toSend > FREE_RECIPIENTS_PER_DAY) {
       throw new ForbiddenException(`Le forfait gratuit permet ${FREE_RECIPIENTS_PER_DAY} envois par 24 heures (déjà ${sentToday}, cette campagne : ${toSend}). Réessayez plus tard ou passez à un forfait payant.`);
     }
   }
 
+
+  /** Those of these addresses that no campaign may reach (bounced, rejected, reported spam) */
+  private async suppressedAmong(emails: string[]): Promise<Set<string>> {
+    const lower = Array.from(new Set(emails.map(e => e.trim().toLowerCase())));
+    const found = new Set<string>();
+    for (let i = 0; i < lower.length; i += 5000) {
+      (await this.prisma.emailSuppression.findMany({ where: { email: { in: lower.slice(i, i + 5000) } }, select: { email: true } }))
+        .forEach(r => found.add(r.email));
+    }
+    return found;
+  }
 
   /** The campaign's list, or every ticket holder of its event; fixed at the first send */
   private async buildRecipients(campaign: { id: string; eventId: string; listId: string | null; event: { organizerId: string } }) {
@@ -545,13 +586,17 @@ export class CommunicationService {
     const gone = new Set((await this.prisma.emailUnsubscribe.findMany({
       where: { organizerId: campaign.event.organizerId }, select: { email: true },
     })).map(u => u.email));
-    const wanted = (email: string | null) => !!email && !gone.has(email.trim().toLowerCase());
+    // and addresses that bounced or reported spam, whoever sent to them
+    const suppressed = await this.suppressedAmong(campaign.listId
+      ? (await this.prisma.mailingListMember.findMany({ where: { listId: campaign.listId }, select: { email: true } })).map(m => m.email)
+      : (await this.prisma.ticket.findMany({ where: { eventId, holderEmail: { not: null } }, select: { holderEmail: true } })).map(t => t.holderEmail!));
+    const wanted = (email: string | null) => !!email && !gone.has(email.trim().toLowerCase()) && !suppressed.has(email.trim().toLowerCase());
 
     if (campaign.listId) {
       const members = (await this.prisma.mailingListMember.findMany({ where: { listId: campaign.listId } })).filter(m => wanted(m.email));
       if (members.length === 0) return [];
       await this.prisma.campaignRecipient.createMany({
-        data: members.map(m => ({ campaignId, email: m.email, phone: m.phone, firstName: m.firstName, lastName: m.lastName })),
+        data: members.map(m => ({ campaignId, email: m.email, phone: m.phone, firstName: m.firstName, lastName: m.lastName, imported: m.imported })),
       });
       return this.prisma.campaignRecipient.findMany({ where: { campaignId } });
     }
@@ -586,14 +631,36 @@ export class CommunicationService {
    * (restart, deploy) is picked up again by the cron from where it stopped.
    */
   private async dispatchCampaign(campaign: any, recipients: any[]) {
-    const queue = recipients.filter(r => r.status !== RecipientStatus.SENT);
+    const organizerId: string = campaign.event.organizerId;
+    let queue = recipients.filter(r => r.status !== RecipientStatus.SENT);
+
+    // Bounced or reported since the list was built (a resumed send): left out for good
+    const suppressed = await this.suppressedAmong(queue.filter(r => r.email).map(r => r.email));
+    const excluded = queue.filter(r => r.email && suppressed.has(r.email.trim().toLowerCase()));
+    if (excluded.length) {
+      await this.prisma.campaignRecipient.updateMany({
+        where: { id: { in: excluded.map(r => r.id) } },
+        data: { status: RecipientStatus.FAILED, error: 'Adresse exclue : rebond ou signalement de spam' },
+      });
+      queue = queue.filter(r => !excluded.includes(r));
+    }
+
+    // Imported addresses: today's allowance first, ticket holders always
+    const allowance = await this.importedAllowance(organizerId);
+    const imported = queue.filter(r => r.imported);
+    queue = [...queue.filter(r => !r.imported), ...imported.slice(0, allowance)];
+
     let done = 0;
-    // The mail provider's quota is reached: every next message would be refused too
+    // The mail provider's quota is reached, or too many bounces and complaints come back:
+    // every next message would be refused too, or hurt the sender's standing
     let quota: string | null = null;
     const worker = async () => {
       for (let r = queue.shift(); r && !quota; r = queue.shift()) {
         quota = await this.sendToRecipient(campaign, r);
-        if (++done % 20 === 0) await this.saveProgress(campaign.id);
+        if (++done % 20 === 0) {
+          await this.saveProgress(campaign.id);
+          quota ??= await this.reputationProblem(organizerId);
+        }
       }
     };
     await Promise.all(Array.from({ length: Math.min(SEND_CONCURRENCY, queue.length) }, worker));
@@ -654,6 +721,38 @@ export class CommunicationService {
       this.logger.warn(`Échec envoi campagne ${campaign.id}: ${err.message}`);
     }
     return null;
+  }
+
+  /**
+   * Imported addresses an organizer may reach in the next send: 200 a day to start, plus as
+   * many as their imported addresses reached in the last 30 days without bounce or complaint
+   * (a list that proves real opens the way for more). A bought or made-up list cannot get far.
+   */
+  private async importedAllowance(organizerId: string): Promise<number> {
+    const day = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const month = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const base = { imported: true, status: RecipientStatus.SENT, campaign: { event: { organizerId } } };
+    const [today, proven] = await Promise.all([
+      this.prisma.campaignRecipient.count({ where: { ...base, sentAt: { gte: day } } }),
+      this.prisma.campaignRecipient.count({ where: { ...base, sentAt: { gte: month, lt: day }, feedback: null } }),
+    ]);
+    return Math.max(0, Math.min(IMPORTED_DAILY_MAX, IMPORTED_DAILY_START + proven) - today);
+  }
+
+  /**
+   * Bounces and spam reports on the organizer's last 24 hours of campaigns: past 5 % (with at
+   * least 10), their campaigns stop until it falls back. That is what got ZAYA's sending
+   * suspended once, for every organizer's tickets.
+   */
+  private async reputationProblem(organizerId: string): Promise<string | null> {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const scope = { sentAt: { gte: since }, campaign: { event: { organizerId } } };
+    const [sent, bad] = await Promise.all([
+      this.prisma.campaignRecipient.count({ where: { ...scope, status: RecipientStatus.SENT } }),
+      this.prisma.campaignRecipient.count({ where: { ...scope, feedback: { in: ['bounce', 'spam', 'reject'] } } }),
+    ]);
+    if (bad < 10 || bad < sent * 0.05) return null;
+    return `Trop d’adresses en erreur ou de signalements de spam sur vos envois des dernières 24 heures (${bad} sur ${sent}). Vos campagnes sont suspendues en attendant : retirez les adresses douteuses de vos listes.`;
   }
 
   /** Counts from the recipients themselves (a resumed send adds to the first one) */

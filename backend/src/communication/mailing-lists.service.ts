@@ -22,6 +22,8 @@ export interface Contact {
   categories: string[];
   origins: ('PURCHASE' | 'INVITATION' | 'ISSUED')[];
   unsubscribed: boolean;
+  /** Bounced or reported spam: no campaign reaches it */
+  bounced: boolean;
 }
 
 /** A person read from an imported file or a pasted list */
@@ -64,7 +66,7 @@ export class MailingListsService {
       if (!EMAIL_RE.test(email)) continue;
       let c = byEmail.get(email);
       if (!c) {
-        c = { email, ...splitName(t.holderName), phone: null, events: [], categories: [], origins: [], unsubscribed: false };
+        c = { email, ...splitName(t.holderName), phone: null, events: [], categories: [], origins: [], unsubscribed: false, bounced: false };
         byEmail.set(email, c);
       } else if (t.holderName?.trim()) {
         // The latest name given wins
@@ -77,7 +79,8 @@ export class MailingListsService {
       if (!c.origins.includes(origin)) c.origins.push(origin);
     }
     const gone = await this.unsubscribed(organizerId);
-    byEmail.forEach((c) => { c.unsubscribed = gone.has(c.email); });
+    const bad = await this.suppressed(Array.from(byEmail.keys()));
+    byEmail.forEach((c) => { c.unsubscribed = gone.has(c.email); c.bounced = bad.has(c.email); });
     return [...byEmail.values()].sort((a, b) => `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`, 'fr'));
   }
 
@@ -100,7 +103,19 @@ export class MailingListsService {
     });
     if (!list) throw new NotFoundException('Liste introuvable');
     const gone = await this.unsubscribed(organizerId);
-    return { ...list, members: list.members.map((m) => ({ ...m, unsubscribed: gone.has(m.email.toLowerCase()) })) };
+    const bad = await this.suppressed(list.members.map((m) => m.email));
+    return { ...list, members: list.members.map((m) => ({ ...m, unsubscribed: gone.has(m.email.toLowerCase()), bounced: bad.has(m.email.toLowerCase()) })) };
+  }
+
+  /** Those of these addresses that bounced, were rejected or reported spam (lowercase) */
+  async suppressed(emails: string[]): Promise<Set<string>> {
+    const lower = Array.from(new Set(emails.map((e) => e.trim().toLowerCase())));
+    const found = new Set<string>();
+    for (let i = 0; i < lower.length; i += 5000) {
+      (await this.prisma.emailSuppression.findMany({ where: { email: { in: lower.slice(i, i + 5000) } }, select: { email: true } }))
+        .forEach((r) => found.add(r.email));
+    }
+    return found;
   }
 
   /** Addresses that used the unsubscribe link of one of the organizer's campaigns (lowercase) */
@@ -152,7 +167,8 @@ export class MailingListsService {
       });
     }
     const gone = await this.unsubscribed(organizerId);
-    const kept = [...clean.values()].filter((r) => !gone.has(r.email));
+    const bad = await this.suppressed([...clean.keys()]);
+    const kept = [...clean.values()].filter((r) => !gone.has(r.email) && !bad.has(r.email));
     const already = await this.prisma.mailingListMember.count({ where: { listId: id } });
     if (already + kept.length > MAX_MEMBERS) {
       throw new BadRequestException(`Une liste compte au plus ${MAX_MEMBERS} personnes.`);
@@ -162,7 +178,7 @@ export class MailingListsService {
       skipDuplicates: true,
     });
     await this.prisma.mailingList.update({ where: { id }, data: { updatedAt: new Date() } });
-    return { added: count, unsubscribed: clean.size - kept.length };
+    return { added: count, unsubscribed: [...clean.keys()].filter((e) => gone.has(e)).length, bounced: [...clean.keys()].filter((e) => bad.has(e)).length };
   }
 
   /**

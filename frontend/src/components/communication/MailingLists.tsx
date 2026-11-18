@@ -18,10 +18,11 @@ export interface Contact {
   categories: string[];
   origins: Origin[];
   unsubscribed?: boolean;
+  bounced?: boolean;
 }
 
 interface ImportRow { email: string; firstName: string; lastName: string; phone: string | null }
-interface ListMember extends ImportRow { imported: boolean; unsubscribed: boolean }
+interface ListMember extends ImportRow { imported: boolean; unsubscribed: boolean; bounced: boolean }
 
 export interface MailingList {
   id: string;
@@ -161,9 +162,9 @@ function ListEditorModal({ list, onClose, onSaved }: { list: MailingList | null;
   // Contacts, then the list's imported members, then what was just read
   const rows = useMemo(() => {
     const byEmail = new Map(contacts.map((c) => [c.email, c] as [string, Contact]));
-    const asContact = (r: ImportRow, unsubscribed = false): Contact =>
-      ({ ...r, events: [], categories: [], origins: ['IMPORTED'], unsubscribed });
-    current?.members.forEach((m) => { if (!byEmail.has(m.email)) byEmail.set(m.email, asContact(m, m.unsubscribed)); });
+    const asContact = (r: ImportRow, unsubscribed = false, bounced = false): Contact =>
+      ({ ...r, events: [], categories: [], origins: ['IMPORTED'], unsubscribed, bounced });
+    current?.members.forEach((m) => { if (!byEmail.has(m.email)) byEmail.set(m.email, asContact(m, m.unsubscribed, m.bounced)); });
     pending.forEach((r) => { if (!byEmail.has(r.email)) byEmail.set(r.email, asContact(r)); });
     return Array.from(byEmail.values());
   }, [contacts, current, pending]);
@@ -205,8 +206,9 @@ function ListEditorModal({ list, onClose, onSaved }: { list: MailingList | null;
         if (removed.length) await communicationApi.removeListMembers(id, removed);
       }
       if (imports.length) {
-        const res = unwrap(await communicationApi.importListMembers(id, imports, true)) as { added: number; unsubscribed: number };
+        const res = unwrap(await communicationApi.importListMembers(id, imports, true)) as { added: number; unsubscribed: number; bounced: number };
         if (res.unsubscribed) toast(`${res.unsubscribed} adresse(s) écartée(s) : ces personnes se sont désinscrites de vos e-mails.`);
+        if (res.bounced) toast(`${res.bounced} adresse(s) écartée(s) : elles n’existent pas ou ont signalé des e-mails comme spam.`);
       }
       toast.success(list ? 'Liste enregistrée' : 'Liste créée');
       onSaved();
@@ -300,6 +302,7 @@ function ListEditorModal({ list, onClose, onSaved }: { list: MailingList | null;
                     <td className="py-2 pr-3 text-gray-900 dark:text-white">{`${c.firstName} ${c.lastName}`.trim()}</td>
                     <td className="py-2 pr-3 text-gray-600 dark:text-gray-400 break-all">
                       {c.email}
+                      {c.bounced && <span className="ml-2 rounded-full bg-red-50 px-2 py-0.5 text-[11px] text-red-600 dark:bg-red-900/30 dark:text-red-400" title="Adresse en erreur ou plainte pour spam : ne recevra aucune campagne">adresse en erreur</span>}
                       {c.unsubscribed && <span className="ml-2 rounded-full bg-red-50 px-2 py-0.5 text-[11px] text-red-600 dark:bg-red-900/30 dark:text-red-400" title="Ne recevra pas vos campagnes">désinscrit</span>}
                     </td>
                     <td className="py-2 text-xs text-gray-500 hidden md:table-cell">{c.events.length ? c.events.map((e) => e.name).join(', ') : 'Importé'}</td>

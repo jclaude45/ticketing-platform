@@ -3,12 +3,13 @@ import { CommunicationService } from './communication.service';
 import { CommunicationController } from './communication.controller';
 import { MailingListsService } from './mailing-lists.service';
 import { UnsubscribeController } from './unsubscribe.controller';
+import { MailtrapWebhookController } from './mailtrap-webhook.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SubscriptionModule } from '../subscription/subscription.module';
 
 @Module({
   imports: [PrismaModule, SubscriptionModule],
-  controllers: [CommunicationController, UnsubscribeController],
+  controllers: [CommunicationController, UnsubscribeController, MailtrapWebhookController],
   providers: [CommunicationService, MailingListsService],
   exports: [CommunicationService],
 })

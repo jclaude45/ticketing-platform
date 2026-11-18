@@ -82,6 +82,13 @@ services:
       EMAIL_USER: ${EMAIL_USER}
       EMAIL_PASSWORD: ${EMAIL_PASSWORD}
       EMAIL_FROM: ${EMAIL_FROM}
+      # Campaigns' own SMTP stream (Mailtrap "Bulk"); empty = they use the one above
+      BULK_EMAIL_HOST: ${BULK_EMAIL_HOST:-}
+      BULK_EMAIL_PORT: ${BULK_EMAIL_PORT:-587}
+      BULK_EMAIL_USER: ${BULK_EMAIL_USER:-}
+      BULK_EMAIL_PASSWORD: ${BULK_EMAIL_PASSWORD:-}
+      # Mailtrap webhook (bounces, spam complaints): https://app.zaya.live/api/v1/webhooks/mailtrap/<secret>
+      MAILTRAP_WEBHOOK_SECRET: ${MAILTRAP_WEBHOOK_SECRET:-}
       # Receives the « Parle-nous » messages and quote requests of zaya.live
       CONTACT_EMAIL: ${CONTACT_EMAIL:-}
       # Organizer app push notifications (Firebase service account JSON, base64); empty = no push
