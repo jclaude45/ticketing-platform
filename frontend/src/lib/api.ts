@@ -801,6 +801,28 @@ export const communicationApi = {
   getCampaignStats: (id: string) =>
     apiClient.get(`/communication/campaigns/${id}/stats`),
 
+  // A design sent to oneself before the real send
+  sendTest: (data: { eventId: string; subject?: string; body: string; to?: string }) =>
+    apiClient.post<ApiResponse<{ to: string }>>('/communication/test', data),
+
+  // Mailing lists, made of people already on the organizer's tickets
+  getContacts: () =>
+    apiClient.get('/communication/contacts'),
+  getLists: () =>
+    apiClient.get('/communication/lists'),
+  getList: (id: string) =>
+    apiClient.get(`/communication/lists/${id}`),
+  createList: (data: { name: string; emails: string[] }) =>
+    apiClient.post('/communication/lists', data),
+  renameList: (id: string, name: string) =>
+    apiClient.put(`/communication/lists/${id}`, { name }),
+  addListMembers: (id: string, emails: string[]) =>
+    apiClient.post(`/communication/lists/${id}/members`, { emails }),
+  removeListMembers: (id: string, emails: string[]) =>
+    apiClient.post(`/communication/lists/${id}/members/remove`, { emails }),
+  deleteList: (id: string) =>
+    apiClient.delete(`/communication/lists/${id}`),
+
   // Pictures put in campaigns and templates (resized server-side, returned as a public URL)
   uploadImage: (formData: FormData) =>
     apiClient.post<ApiResponse<{ url: string }>>('/communication/images', formData, {

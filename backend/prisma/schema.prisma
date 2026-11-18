@@ -129,6 +129,7 @@ model User {
   taskAssignments    TaskAssignee[]
   notificationTemplates NotificationTemplate[] @relation("UserTemplates")
   notificationCampaigns NotificationCampaign[] @relation("UserCampaigns")
+  mailingLists          MailingList[]
   notifications         Notification[]
   accountCollaborators  AccountMember[] @relation("AccountOwner")
   accountMemberships    AccountMember[] @relation("AccountMemberships")
@@ -614,9 +615,40 @@ model NotificationCampaign {
   totalFailed Int                 @default(0)
   createdById String
   createdBy   User                @relation("UserCampaigns", fields: [createdById], references: [id])
+  /// Who receives it: this list, or (none) every ticket holder of the event
+  listId      String?
+  list        MailingList?        @relation(fields: [listId], references: [id], onDelete: SetNull)
   recipients  CampaignRecipient[]
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
+}
+
+/// Mailing list of an organizer: people taken from their own events (buyers, guests), for campaigns
+model MailingList {
+  id          String              @id @default(uuid())
+  name        String
+  organizerId String
+  organizer   User                @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  members     MailingListMember[]
+  campaigns   NotificationCampaign[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([organizerId])
+}
+
+/// A copy of the contact (the ticket it came from may be cancelled or deleted later)
+model MailingListMember {
+  id        String      @id @default(uuid())
+  listId    String
+  list      MailingList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  email     String
+  firstName String
+  lastName  String
+  phone     String?
+  createdAt DateTime    @default(now())
+
+  @@unique([listId, email])
 }
 
 model CampaignRecipient {

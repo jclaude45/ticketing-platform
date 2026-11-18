@@ -195,6 +195,7 @@ export class CommunicationService {
       include: {
         _count: { select: { recipients: true } },
         createdBy: { select: { firstName: true, lastName: true } },
+        list: { select: { id: true, name: true, _count: { select: { members: true } } } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -220,11 +221,16 @@ export class CommunicationService {
     if (role !== Role.ADMIN && role !== Role.SUPER_ADMIN && event.organizerId !== userId) {
       throw new ForbiddenException('Accès refusé');
     }
+    if (dto.listId) {
+      const list = await this.prisma.mailingList.findFirst({ where: { id: dto.listId, organizerId: event.organizerId }, select: { id: true } });
+      if (!list) throw new BadRequestException('Liste de diffusion introuvable');
+    }
 
     return this.prisma.notificationCampaign.create({
       data: {
         name: dto.name,
         eventId,
+        listId: dto.listId || null,
         channel: dto.channel,
         type: dto.type || CampaignType.CUSTOM,
         subject: dto.subject,
@@ -279,8 +285,10 @@ export class CommunicationService {
       throw new BadRequestException('Envoi déjà en cours');
     }
 
-    // Build recipients from ticket holders
-    const recipients = await this.buildRecipients(campaign.eventId, campaignId);
+    const recipients = await this.buildRecipients(campaign);
+    if (recipients.length === 0) {
+      throw new BadRequestException(campaign.listId ? 'La liste de diffusion est vide.' : 'Aucun participant avec une adresse e-mail pour cet événement.');
+    }
     await this.assertSendAllowed(campaign, recipients);
 
     await this.prisma.notificationCampaign.update({
@@ -324,6 +332,36 @@ export class CommunicationService {
         : 0,
       campaign: { id: c.id, name: c.name, status: c.status, sentAt: c.sentAt },
     };
+  }
+
+  // ─── TEST E-MAIL ──────────────────────────────────────────────
+
+  /**
+   * A design as a guest will get it, sent to the organizer before the real send. The variables
+   * are filled with the event's details and the organizer's own name. It goes to their account
+   * address unless they give another one (a colleague, another mail app to check the rendering).
+   */
+  async sendTest(userId: string, role: Role, dto: { eventId: string; subject?: string; body: string; to?: string }) {
+    await this.assertEventAccess(dto.eventId, userId, role);
+    const [event, user] = await Promise.all([
+      this.prisma.event.findUniqueOrThrow({
+        where: { id: dto.eventId },
+        select: { name: true, startDate: true, timeZone: true, venue: true, city: true, bannerUrl: true },
+      }),
+      this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true, firstName: true, lastName: true } }),
+    ]);
+    const to = dto.to?.trim() || user.email;
+    const { body, subject } = this.render(
+      { channel: NotificationChannel.EMAIL, subject: dto.subject, body: dto.body, event },
+      { firstName: user.firstName, lastName: user.lastName, ticketId: 'TEST-0000' },
+    );
+    try {
+      await this.sendEmail(to, `[TEST] ${subject || event.name}`, body);
+    } catch (err) {
+      this.logger.warn(`Échec du mail test : ${err.message}`);
+      throw new BadRequestException('Le mail test n’a pas pu partir. Réessayez dans un instant.');
+    }
+    return { to };
   }
 
   // ─── EVENT OVERVIEW ───────────────────────────────────────────
@@ -407,11 +445,11 @@ export class CommunicationService {
     return { created, message: created.length ? `${created.length} rappel(s) programmé(s)` : 'Rappels déjà configurés' };
   }
 
-  // ─── CRON: daily at 08:00 ─────────────────────────────────────
+  // ─── CRON: every 5 minutes ────────────────────────────────────
 
-  @Cron('0 8 * * *')
+  /** Campaigns leave at the time chosen (within 5 minutes), not the next morning at 8 */
+  @Cron(CronExpression.EVERY_5_MINUTES)
   async processScheduledCampaigns() {
-    this.logger.log('Traitement des campagnes planifiées...');
     const now = new Date();
 
     const due = await this.prisma.notificationCampaign.findMany({
@@ -422,11 +460,17 @@ export class CommunicationService {
       include: { event: true },
     });
 
-    this.logger.log(`${due.length} campagne(s) à envoyer`);
+    if (due.length) this.logger.log(`${due.length} campagne(s) à envoyer`);
 
     for (const campaign of due) {
+      // Taken by this run only (another instance, or a manual send, may have started it)
+      const { count } = await this.prisma.notificationCampaign.updateMany({
+        where: { id: campaign.id, status: CampaignStatus.SCHEDULED },
+        data: { status: CampaignStatus.SENDING },
+      });
+      if (count === 0) continue;
       try {
-        const recipients = await this.buildRecipients(campaign.eventId, campaign.id);
+        const recipients = await this.buildRecipients(campaign);
         await this.assertSendAllowed(campaign, recipients);
         await this.dispatchCampaign(campaign, recipients);
       } catch (err) {
@@ -466,10 +510,22 @@ export class CommunicationService {
   }
 
 
-  private async buildRecipients(eventId: string, campaignId: string) {
+  /** The campaign's list, or every ticket holder of its event; fixed at the first send */
+  private async buildRecipients(campaign: { id: string; eventId: string; listId: string | null }) {
+    const campaignId = campaign.id;
+    const eventId = campaign.eventId;
     // Check if recipients already created
     const existing = await this.prisma.campaignRecipient.count({ where: { campaignId } });
     if (existing > 0) {
+      return this.prisma.campaignRecipient.findMany({ where: { campaignId } });
+    }
+
+    if (campaign.listId) {
+      const members = await this.prisma.mailingListMember.findMany({ where: { listId: campaign.listId } });
+      if (members.length === 0) return [];
+      await this.prisma.campaignRecipient.createMany({
+        data: members.map(m => ({ campaignId, email: m.email, phone: m.phone, firstName: m.firstName, lastName: m.lastName })),
+      });
       return this.prisma.campaignRecipient.findMany({ where: { campaignId } });
     }
 
@@ -504,32 +560,7 @@ export class CommunicationService {
     for (const recipient of recipients) {
       if (recipient.status === RecipientStatus.SENT) continue;
 
-      const startDate = new Date(campaign.event.startDate);
-      const appBase = this.config.get<string>('APP_BASE_URL') ||
-        `http://localhost:${this.config.get('port') || 3001}`;
-      const rawBanner: string = campaign.event.bannerUrl || '';
-      const resolvedBanner = rawBanner
-        ? rawBanner.replace(/^https?:\/\/localhost:\d+/, appBase)
-        : '';
-      const vars = {
-        firstName: recipient.firstName || 'Participant',
-        lastName: recipient.lastName || '',
-        eventName: campaign.event.name,
-        eventDate: startDate.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: campaign.event.timeZone }),
-        eventTime: startDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: campaign.event.timeZone }),
-        eventVenue: campaign.event.venue,
-        eventCity: campaign.event.city,
-        ticketSerial: recipient.ticketId || '',
-        bannerUrl: resolvedBanner,
-      };
-
-      // No poster: drop its row rather than show a broken image
-      const source = vars.bannerUrl ? campaign.body : campaign.body.replace(/<tr>\s*<td[^>]*>\s*<img src="\{\{bannerUrl\}\}"[\s\S]*?<\/td>\s*<\/tr>/g, '');
-      // Values typed by buyers and organizers go into HTML: escaped, never markup
-      const body = this.renderTemplate(source, campaign.channel === NotificationChannel.EMAIL
-        ? Object.fromEntries(Object.entries(vars).map(([k, v]) => [k, esc(String(v ?? ''))]))
-        : vars);
-      const subject = campaign.subject ? this.renderTemplate(campaign.subject, vars) : undefined;
+      const { body, subject } = this.render(campaign, recipient);
 
       try {
         if (campaign.channel === NotificationChannel.EMAIL && recipient.email) {
@@ -574,6 +605,40 @@ export class CommunicationService {
     });
 
     this.logger.log(`Campagne ${campaign.id}: ${sent} envoyés, ${failed} échoués`);
+  }
+
+  /** The message one recipient gets: variables filled in, the poster row dropped when there is none */
+  private render(
+    campaign: { channel: NotificationChannel; subject?: string | null; body: string; event: { name: string; startDate: Date; timeZone: string; venue: string; city: string; bannerUrl: string | null } },
+    recipient: { firstName?: string | null; lastName?: string | null; ticketId?: string | null },
+  ) {
+    const startDate = new Date(campaign.event.startDate);
+    const appBase = this.config.get<string>('APP_BASE_URL') ||
+      `http://localhost:${this.config.get('port') || 3001}`;
+    const rawBanner: string = campaign.event.bannerUrl || '';
+    const resolvedBanner = rawBanner
+      ? rawBanner.replace(/^https?:\/\/localhost:\d+/, appBase)
+      : '';
+    const vars = {
+      firstName: recipient.firstName || 'Participant',
+      lastName: recipient.lastName || '',
+      eventName: campaign.event.name,
+      eventDate: startDate.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: campaign.event.timeZone }),
+      eventTime: startDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: campaign.event.timeZone }),
+      eventVenue: campaign.event.venue,
+      eventCity: campaign.event.city,
+      ticketSerial: recipient.ticketId || '',
+      bannerUrl: resolvedBanner,
+    };
+
+    // No poster: drop its row rather than show a broken image
+    const source = vars.bannerUrl ? campaign.body : campaign.body.replace(/<tr>\s*<td[^>]*>\s*<img src="\{\{bannerUrl\}\}"[\s\S]*?<\/td>\s*<\/tr>/g, '');
+    // Values typed by buyers and organizers go into HTML: escaped, never markup
+    const body = this.renderTemplate(source, campaign.channel === NotificationChannel.EMAIL
+      ? Object.fromEntries(Object.entries(vars).map(([k, v]) => [k, esc(String(v ?? ''))]))
+      : vars);
+    const subject = campaign.subject ? this.renderTemplate(campaign.subject, vars) : undefined;
+    return { body, subject };
   }
 
   private async sendEmail(to: string, subject: string, html: string) {

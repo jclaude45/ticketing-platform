@@ -10,8 +10,11 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { CommunicationService } from './communication.service';
 import { SubscriptionService } from '../subscription/subscription.service';
 import {
-  CreateCampaignDto, UpdateCampaignDto, ScheduleCampaignDto,
+  CreateCampaignDto, UpdateCampaignDto, ScheduleCampaignDto, TestEmailDto,
+  CreateMailingListDto, RenameMailingListDto, MailingListMembersDto,
 } from './dto/create-campaign.dto';
+import { MailingListsService } from './mailing-lists.service';
+import { Throttle } from '@nestjs/throttler';
 import { CreateTemplateDto, UpdateTemplateDto } from './dto/create-template.dto';
 
 @ApiTags('Communication')
@@ -22,6 +25,7 @@ export class CommunicationController {
   constructor(
     private readonly service: CommunicationService,
     private readonly subscriptionService: SubscriptionService,
+    private readonly lists: MailingListsService,
   ) {}
 
   @Get('channels/status')
@@ -40,6 +44,68 @@ export class CommunicationController {
     await this.subscriptionService.checkAllowCommunication(userId);
     if (!file) throw new BadRequestException('Aucune image reçue');
     return this.service.uploadImage(userId, file);
+  }
+
+  // ─── TEST E-MAIL ──────────────────────────────────────────────
+
+  @Post('test')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 10 * 60000 } })
+  @ApiOperation({ summary: 'Send a design to oneself (or one address) as a guest will get it' })
+  async sendTest(@CurrentUser() user: any, @Body() dto: TestEmailDto) {
+    await this.subscriptionService.checkAllowCommunication(user.id);
+    return this.service.sendTest(user.id, user.role, dto);
+  }
+
+  // ─── MAILING LISTS ────────────────────────────────────────────
+
+  @Get('contacts')
+  @ApiOperation({ summary: "People with an e-mail on the organizer's tickets (buyers, guests), one per address" })
+  contacts(@CurrentUser('id') userId: string) {
+    return this.lists.contacts(userId);
+  }
+
+  @Get('lists')
+  getLists(@CurrentUser('id') userId: string) {
+    return this.lists.lists(userId);
+  }
+
+  @Get('lists/:id')
+  getList(@Param('id') id: string, @CurrentUser('id') userId: string) {
+    return this.lists.list(id, userId);
+  }
+
+  @Post('lists')
+  async createList(@CurrentUser('id') userId: string, @Body() dto: CreateMailingListDto) {
+    await this.subscriptionService.checkAllowCommunication(userId);
+    return this.lists.create(userId, dto.name, dto.emails ?? []);
+  }
+
+  @Put('lists/:id')
+  async renameList(@Param('id') id: string, @CurrentUser('id') userId: string, @Body() dto: RenameMailingListDto) {
+    await this.subscriptionService.checkAllowCommunication(userId);
+    return this.lists.rename(id, userId, dto.name);
+  }
+
+  @Post('lists/:id/members')
+  @HttpCode(HttpStatus.OK)
+  async addMembers(@Param('id') id: string, @CurrentUser('id') userId: string, @Body() dto: MailingListMembersDto) {
+    await this.subscriptionService.checkAllowCommunication(userId);
+    return this.lists.addMembers(id, userId, dto.emails);
+  }
+
+  @Post('lists/:id/members/remove')
+  @HttpCode(HttpStatus.OK)
+  async removeMembers(@Param('id') id: string, @CurrentUser('id') userId: string, @Body() dto: MailingListMembersDto) {
+    await this.subscriptionService.checkAllowCommunication(userId);
+    return this.lists.removeMembers(id, userId, dto.emails);
+  }
+
+  @Delete('lists/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteList(@Param('id') id: string, @CurrentUser('id') userId: string) {
+    await this.subscriptionService.checkAllowCommunication(userId);
+    return this.lists.remove(id, userId);
   }
 
   // ─── TEMPLATES ────────────────────────────────────────────────

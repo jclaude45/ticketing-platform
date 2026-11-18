@@ -27,11 +27,13 @@ import {
   Sparkles,
   X,
   Lock,
-  Crown, AlarmClock, ImagePlus
+  Crown, AlarmClock, ImagePlus, Pencil, Users
 } from 'lucide-react';
 import { communicationApi, subscriptionApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import type { OrganizerLimits } from '@/types';
+import { MailingListsTab, useMailingLists } from '@/components/communication/MailingLists';
+import { TestEmailButton } from '@/components/communication/TestEmailButton';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -54,6 +56,7 @@ interface Campaign {
   createdAt: string;
   _count: { recipients: number };
   createdBy: { firstName: string; lastName: string };
+  list?: { id: string; name: string; _count: { members: number } } | null;
 }
 
 interface Template {
@@ -133,9 +136,9 @@ const VARIABLES_HINT = [
 
 export default function CommunicationPage() {
   const { id: eventId } = useParams<{ id: string }>();
-  const [activeTab, setActiveTab] = useState<'campaigns' | 'templates' | 'reminders'>('campaigns');
+  const [activeTab, setActiveTab] = useState<'campaigns' | 'templates' | 'lists' | 'reminders'>('campaigns');
   const [showNewCampaign, setShowNewCampaign] = useState(false);
-  const [showNewTemplate, setShowNewTemplate] = useState(false);
+  const [editedTemplate, setEditedTemplate] = useState<Template | 'new' | null>(null);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const queryClient = useQueryClient();
 
@@ -175,7 +178,10 @@ export default function CommunicationPage() {
       queryClient.invalidateQueries({ queryKey: ['campaigns', eventId] });
       queryClient.invalidateQueries({ queryKey: ['comm-stats', eventId] });
     },
-    onError: () => toast.error('Erreur lors de l\'envoi'),
+    onError: (e: any) => {
+      const m = e?.response?.data?.message;
+      toast.error(Array.isArray(m) ? m[0] : m || 'Erreur lors de l\'envoi');
+    },
   });
 
   const deleteMutation = useMutation({
@@ -221,7 +227,10 @@ export default function CommunicationPage() {
       toast.error('Cette campagne a déjà été envoyée');
       return;
     }
-    if (!confirm(`Envoyer "${campaign.name}" à tous les porteurs de billets ?`)) return;
+    const to = campaign.list
+      ? `aux ${campaign.list._count.members} personne(s) de la liste « ${campaign.list.name} »`
+      : 'à tous les participants de l\'événement';
+    if (!confirm(`Envoyer "${campaign.name}" ${to} ?`)) return;
     sendMutation.mutate(campaign.id);
   };
 
@@ -382,7 +391,8 @@ export default function CommunicationPage() {
         <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-fit">
           {([
             { key: 'campaigns', label: 'Campagnes', icon: <Send className="h-4 w-4" /> },
-            { key: 'templates', label: 'Modèles', icon: <LayoutTemplate className="h-4 w-4" /> },
+            { key: 'templates', label: 'Designs', icon: <LayoutTemplate className="h-4 w-4" /> },
+            { key: 'lists', label: 'Listes', icon: <Users className="h-4 w-4" /> },
             { key: 'reminders', label: 'Rappels auto', icon: <Bell className="h-4 w-4" /> },
           ] as const).map(tab => (
             <button
@@ -459,7 +469,7 @@ export default function CommunicationPage() {
             {/* Actions bar */}
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="font-semibold text-gray-900 dark:text-white">
-                Modèles <span className="text-gray-400 font-normal text-sm ml-1">({templates.length})</span>
+                Designs <span className="text-gray-400 font-normal text-sm ml-1">({templates.length})</span>
               </h2>
               <div className="flex items-center gap-2">
                 <button
@@ -473,11 +483,11 @@ export default function CommunicationPage() {
                   Charger les 10 modèles prédéfinis
                 </button>
                 <button
-                  onClick={() => setShowNewTemplate(true)}
+                  onClick={() => setEditedTemplate('new')}
                   className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-full text-sm font-medium transition-colors"
                 >
                   <Plus className="h-4 w-4" />
-                  Nouveau modèle
+                  Nouveau design
                 </button>
               </div>
             </div>
@@ -498,9 +508,9 @@ export default function CommunicationPage() {
             {templates.length === 0 ? (
               <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 py-12 text-center">
                 <LayoutTemplate className="h-12 w-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                <p className="text-gray-500 dark:text-gray-400 font-medium">Aucun modèle</p>
+                <p className="text-gray-500 dark:text-gray-400 font-medium">Aucun design</p>
                 <p className="text-sm text-gray-400 dark:text-gray-500 mt-1 mb-6">
-                  Chargez les 10 modèles prédéfinis ou créez le vôtre
+                  Chargez les 10 modèles prédéfinis ou créez votre propre design
                 </p>
                 <button
                   onClick={() => initDefaultsMutation.mutate()}
@@ -519,6 +529,7 @@ export default function CommunicationPage() {
                   <TemplateCard
                     key={tpl.id}
                     template={tpl}
+                    onEdit={() => setEditedTemplate(tpl)}
                     onDelete={(id) => {
                       if (confirm('Supprimer ce modèle ?')) deleteTemplateMutation.mutate(id);
                     }}
@@ -546,6 +557,9 @@ export default function CommunicationPage() {
           </div>
         )}
 
+        {/* ── LISTS TAB ──────────────────────────────────────────────────────── */}
+        {activeTab === 'lists' && <MailingListsTab />}
+
         {/* ── REMINDERS TAB ─────────────────────────────────────────────────── */}
         {activeTab === 'reminders' && (
           <ReminderTab
@@ -571,12 +585,14 @@ export default function CommunicationPage() {
         />
       )}
 
-      {showNewTemplate && (
-        <NewTemplateModal
-          onClose={() => setShowNewTemplate(false)}
-          onCreated={() => {
+      {editedTemplate && (
+        <TemplateModal
+          eventId={eventId}
+          template={editedTemplate === 'new' ? null : editedTemplate}
+          onClose={() => setEditedTemplate(null)}
+          onSaved={() => {
             queryClient.invalidateQueries({ queryKey: ['comm-templates'] });
-            setShowNewTemplate(false);
+            setEditedTemplate(null);
           }}
         />
       )}
@@ -628,6 +644,10 @@ function CampaignRow({
         {campaign.subject && (
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">{campaign.subject}</p>
         )}
+        <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
+          <Users className="h-3 w-3" />
+          {campaign.list ? `Liste « ${campaign.list.name} » (${campaign.list._count.members})` : 'Tous les participants de l’événement'}
+        </p>
 
         <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
           {campaign._count.recipients > 0 && (
@@ -693,9 +713,11 @@ function CampaignRow({
 
 function TemplateCard({
   template,
+  onEdit,
   onDelete,
 }: {
   template: Template;
+  onEdit: () => void;
   onDelete: (id: string) => void;
 }) {
   const [showPreview, setShowPreview] = useState(false);
@@ -726,6 +748,13 @@ function TemplateCard({
                 <Eye className="h-3.5 w-3.5" />
               </button>
             )}
+            <button
+              onClick={onEdit}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
+              title="Modifier"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
             <button
               onClick={() => onDelete(template.id)}
               className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
@@ -960,9 +989,11 @@ function NewCampaignModal({
     subject: '',
     body: '',
     templateId: '',
+    listId: '',
     scheduledAt: '',
     sendNow: false,
   });
+  const { data: lists = [] } = useMailingLists();
   const [showPreview, setShowPreview] = useState(false);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const queryClient = useQueryClient();
@@ -1010,6 +1041,7 @@ function NewCampaignModal({
     };
     if (form.subject) data.subject = form.subject;
     if (form.templateId) data.templateId = form.templateId;
+    if (form.listId) data.listId = form.listId;
     if (form.scheduledAt && !form.sendNow) data.scheduledAt = form.scheduledAt;
     createMutation.mutate(data);
   };
@@ -1068,7 +1100,7 @@ function NewCampaignModal({
           {channelTemplates.length > 0 && (
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Utiliser un modèle (optionnel)
+                Design (optionnel)
               </label>
               <select
                 value={form.templateId}
@@ -1082,6 +1114,24 @@ function NewCampaignModal({
               </select>
             </div>
           )}
+
+          {/* Recipients */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Destinataires</label>
+            <select
+              value={form.listId}
+              onChange={e => setForm(f => ({ ...f, listId: e.target.value }))}
+              className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+            >
+              <option value="">Tous les participants de cet événement</option>
+              {lists.map(l => (
+                <option key={l.id} value={l.id}>Liste « {l.name} » — {l.memberCount} personne{l.memberCount > 1 ? 's' : ''}</option>
+              ))}
+            </select>
+            {lists.length === 0 && (
+              <p className="text-xs text-gray-400 mt-1">Créez des listes dans l’onglet « Listes » pour cibler certaines personnes.</p>
+            )}
+          </div>
 
           {/* Subject (email only) */}
           {isEmail && (
@@ -1107,6 +1157,7 @@ function NewCampaignModal({
               {isEmail && (
                 <div className="flex items-center gap-4">
                   <InsertImageButton textarea={bodyRef} body={form.body} onChange={body => setForm(f => ({ ...f, body }))} />
+                  <TestEmailButton eventId={eventId} subject={form.subject} body={form.body} />
                   <button
                     type="button"
                     onClick={() => setShowPreview(!showPreview)}
@@ -1191,88 +1242,104 @@ function NewCampaignModal({
   );
 }
 
-// ─── NewTemplateModal ─────────────────────────────────────────────────────────
+// ─── TemplateModal ────────────────────────────────────────────────────────────
 
-function NewTemplateModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+/** A design: created here or reopened to change it, with pictures, preview and a test e-mail */
+function TemplateModal({ eventId, template, onClose, onSaved }: {
+  eventId: string;
+  template: Template | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const [form, setForm] = useState({
-    name: '',
-    channel: 'EMAIL' as Channel,
-    subject: '',
-    body: '',
-    isDefault: false,
+    name: template?.name ?? '',
+    channel: template?.channel ?? ('EMAIL' as Channel),
+    subject: template?.subject ?? '',
+    body: template?.body ?? '',
+    isDefault: template?.isDefault ?? false,
   });
+  const [showPreview, setShowPreview] = useState(false);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const isEmail = form.channel === 'EMAIL';
 
-  const createMutation = useMutation({
-    mutationFn: (data: any) => communicationApi.createTemplate(data),
+  const saveMutation = useMutation({
+    mutationFn: (data: typeof form) => template
+      // The channel stays: campaigns already made from it were built for that channel
+      ? communicationApi.updateTemplate(template.id, { name: data.name, subject: data.subject, body: data.body, isDefault: data.isDefault })
+      : communicationApi.createTemplate(data),
     onSuccess: () => {
-      toast.success('Modèle créé');
-      onCreated();
+      toast.success(template ? 'Design enregistré' : 'Design créé');
+      onSaved();
     },
-    onError: () => toast.error('Erreur lors de la création'),
+    onError: () => toast.error('Erreur lors de l\'enregistrement'),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name || !form.body) { toast.error('Nom et corps obligatoires'); return; }
-    createMutation.mutate(form);
+    saveMutation.mutate(form);
   };
+
+  const field = 'w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white';
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-lg">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-3xl max-h-[92vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-800">
-          <h2 className="font-bold text-gray-900 dark:text-white">Nouveau modèle</h2>
+          <h2 className="font-bold text-gray-900 dark:text-white">{template ? 'Modifier le design' : 'Nouveau design'}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1" aria-label="Fermer"><X className="h-5 w-5" /></button>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nom *</label>
-            <input
-              value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
-              placeholder="Ex: Invitation standard"
-            />
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
+          <div className="grid gap-4 sm:grid-cols-[1fr_180px]">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nom *</label>
+              <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={field} placeholder="Ex : Invitation gala" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Canal</label>
+              <select value={form.channel} disabled={!!template} onChange={e => setForm(f => ({ ...f, channel: e.target.value as Channel }))} className={cn(field, 'disabled:opacity-60')}>
+                <option value="EMAIL">Email</option>
+                <option value="SMS">SMS</option>
+                <option value="WHATSAPP">WhatsApp</option>
+              </select>
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Canal</label>
-            <select
-              value={form.channel}
-              onChange={e => setForm(f => ({ ...f, channel: e.target.value as Channel }))}
-              className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
-            >
-              <option value="EMAIL">Email</option>
-              <option value="SMS">SMS</option>
-              <option value="WHATSAPP">WhatsApp</option>
-            </select>
-          </div>
-          {form.channel === 'EMAIL' && (
+          {isEmail && (
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Objet</label>
-              <input
-                value={form.subject}
-                onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}
-                className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
-                placeholder="{{eventName}} — Votre invitation"
-              />
+              <input value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} className={field} placeholder="{{eventName}} — Votre invitation" />
             </div>
           )}
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Contenu *</label>
-              {form.channel === 'EMAIL' && (
-                <InsertImageButton textarea={bodyRef} body={form.body} onChange={body => setForm(f => ({ ...f, body }))} />
+              {isEmail && (
+                <div className="flex items-center gap-4">
+                  <InsertImageButton textarea={bodyRef} body={form.body} onChange={body => setForm(f => ({ ...f, body }))} />
+                  <TestEmailButton eventId={eventId} subject={form.subject} body={form.body} />
+                  <button type="button" onClick={() => setShowPreview(p => !p)}
+                    className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1">
+                    <Eye className="h-3 w-3" />
+                    {showPreview ? 'Masquer aperçu' : 'Aperçu'}
+                  </button>
+                </div>
               )}
             </div>
-            <textarea
-              ref={bodyRef}
-              value={form.body}
-              onChange={e => setForm(f => ({ ...f, body: e.target.value }))}
-              rows={6}
-              className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 resize-none font-mono dark:text-white"
-              placeholder="HTML pour email, texte pour SMS/WhatsApp"
-            />
+            {showPreview && isEmail ? (
+              <EmailPreview html={form.body} className="w-full h-[55vh] block border border-gray-200 dark:border-gray-700 rounded-lg bg-white" />
+            ) : (
+              <textarea
+                ref={bodyRef}
+                value={form.body}
+                onChange={e => setForm(f => ({ ...f, body: e.target.value }))}
+                rows={14}
+                className={cn(field, 'resize-y font-mono')}
+                placeholder="HTML pour email, texte pour SMS/WhatsApp"
+              />
+            )}
+            {isEmail && (
+              <p className="text-xs text-gray-400 mt-1">Le mail test reprend les détails de cet événement et votre nom à la place des variables.</p>
+            )}
           </div>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
@@ -1283,19 +1350,18 @@ function NewTemplateModal({ onClose, onCreated }: { onClose: () => void; onCreat
             />
             <span className="text-sm text-gray-700 dark:text-gray-300">Marquer comme modèle par défaut</span>
           </label>
-
-          <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose} className="text-sm text-gray-500 px-4 py-2">Annuler</button>
-            <button
-              type="submit"
-              disabled={createMutation.isPending}
-              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-full text-sm font-medium disabled:opacity-60"
-            >
-              {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Créer
-            </button>
-          </div>
         </form>
+        <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-800">
+          <button type="button" onClick={onClose} className="text-sm text-gray-500 px-4 py-2">Annuler</button>
+          <button
+            onClick={handleSubmit as any}
+            disabled={saveMutation.isPending}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-full text-sm font-medium disabled:opacity-60"
+          >
+            {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {template ? 'Enregistrer' : 'Créer'}
+          </button>
+        </div>
       </div>
     </div>
   );
