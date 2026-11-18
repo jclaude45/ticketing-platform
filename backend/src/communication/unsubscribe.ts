@@ -30,3 +30,11 @@ export function readUnsubscribeToken(token: string): { organizerId: string; emai
   if (!organizerId || !email) return null;
   return { organizerId, email };
 }
+
+/** Page of the unsubscribe link (zaya.live) and its one-click address (mail apps' button) */
+export function unsubscribeLinks(config: { get<T = any>(key: string): T | undefined }, organizerId: string, email: string) {
+  const token = unsubscribeToken(organizerId, email);
+  const site = config.get<string>('frontend.publicUrl') || 'https://zaya.live';
+  const api = config.get<string>('APP_BASE_URL') || `http://localhost:${config.get('port') || 3001}`;
+  return { page: `${site}/desinscription/${token}`, oneClick: `${api}/api/v1/public/unsubscribe/${token}` };
+}

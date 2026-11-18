@@ -11,7 +11,8 @@ import { CreateTemplateDto, UpdateTemplateDto } from './dto/create-template.dto'
 import { DEFAULT_TEMPLATES } from './default-templates';
 import { SubscriptionService } from '../subscription/subscription.service';
 import { esc } from '../common/email/layout';
-import { unsubscribeToken } from './unsubscribe';
+import { unsubscribeLinks } from './unsubscribe';
+import { createBulkTransport } from '../common/email/bulk-transport';
 import { StorageService } from '../storage/storage.service';
 import { MAX_IMAGE_PIXELS } from '../common/image-limits';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -69,21 +70,14 @@ export class CommunicationService {
       pool: true,
       maxConnections: SEND_CONCURRENCY,
     });
-    // Campaigns go through their own stream when one is set: a campaign's bounces or spam
-    // complaints then never get the tickets' and login codes' stream suspended
-    const bulk = config.get<{ host?: string; port: number; user?: string; password?: string }>('email.bulk');
-    if (bulk?.host) {
-      this.mailerTransport = nodemailer.createTransport({
-        host: bulk.host,
-        port: bulk.port,
-        secure: false,
-        auth: { user: bulk.user, pass: bulk.password },
-        pool: true,
-        maxConnections: SEND_CONCURRENCY,
-      });
-      this.logger.log('Campagnes : flux d’envoi dédié (bulk)');
+    // Campaigns go through the bulk stream: their bounces or spam complaints never get the
+    // tickets' and login codes' stream suspended
+    const bulk = createBulkTransport(config, SEND_CONCURRENCY);
+    if (bulk) {
+      this.mailerTransport = bulk;
+      this.logger.log('Campagnes : flux d’envoi groupé (bulk)');
     } else {
-      this.logger.warn('Campagnes : pas de flux dédié (BULK_EMAIL_HOST vide), envoi par le SMTP des e-mails de la plateforme');
+      this.logger.warn('Campagnes : pas de flux groupé configuré, envoi par le SMTP des e-mails de la plateforme');
     }
     this.emailFrom = config.get('email.from') || 'noreply@ticketing.com';
 
@@ -831,10 +825,7 @@ export class CommunicationService {
 
   /** Page of the unsubscribe link (zaya.live) and its one-click address (mail apps' button) */
   private unsubscribeLinks(organizerId: string, email: string) {
-    const token = unsubscribeToken(organizerId, email);
-    const site = this.config.get<string>('frontend.publicUrl') || 'https://zaya.live';
-    const api = this.config.get<string>('APP_BASE_URL') || `http://localhost:${this.config.get('port') || 3001}`;
-    return { page: `${site}/desinscription/${token}`, oneClick: `${api}/api/v1/public/unsubscribe/${token}` };
+    return unsubscribeLinks(this.config, organizerId, email);
   }
 
   private addFooter(html: string, unsubscribeUrl: string | null, signature: boolean) {

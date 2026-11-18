@@ -295,7 +295,7 @@ export class GuestRsvpService {
     ]);
     if (!ticket.holderEmail) return;
     const message = (ticket.metadata as { message?: string | null } | null)?.message ?? null;
-    await this.invitations.deliverOne(event, ticket, message);
+    await this.invitations.deliverOne(event, ticket, message, true);
   }
 
   private async load(token: string) {

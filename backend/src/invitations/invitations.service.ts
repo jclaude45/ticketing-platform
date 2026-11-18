@@ -9,6 +9,7 @@ import { Prisma, Role, TicketStatus } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import { loadCsv, loadXlsx } from '../common/spreadsheet-guard';
 import { readPeople } from '../common/contact-sheet';
+import { unsubscribeLinks } from '../communication/unsubscribe';
 import { PassThrough } from 'stream';
 import { randomBytes } from 'crypto';
 import * as archiver from 'archiver';
@@ -634,9 +635,23 @@ export class InvitationsService {
       template: { name: string; currency: string; validDays?: string[] };
     },
     message: string | null,
+    /** The guest asked for it (they just answered on their page): their unsubscribe does not apply */
+    requestedByGuest = false,
   ): Promise<EmailStatus> {
     let status: EmailStatus = 'FAILED';
+    let skipped: string | null = null;
     try {
+      // Never again to an address that bounced or reported spam, nor to someone who asked
+      // this organizer to stop: those are what got the platform's sending suspended
+      const email = ticket.holderEmail!.trim().toLowerCase();
+      const [bad, gone] = await Promise.all([
+        this.prisma.emailSuppression.findUnique({ where: { email }, select: { reason: true } }),
+        this.prisma.emailUnsubscribe.findUnique({ where: { organizerId_email: { organizerId: event.organizerId, email } }, select: { id: true } }),
+      ]);
+      if (bad || (gone && !requestedByGuest)) {
+        skipped = bad ? 'Adresse en erreur ou plainte pour spam : e-mail non envoyé' : 'Cette personne s’est désinscrite de vos e-mails';
+        throw new Error(skipped);
+      }
       const awaitingReply = ticket.status === TicketStatus.INVITED;
       const [form, response] = await Promise.all([
         this.prisma.guestForm.findUnique({ where: { eventId: event.id }, select: { deadline: true, fields: true } }),
@@ -671,6 +686,7 @@ export class InvitationsService {
               ? this.labelAnswers(fields, response.answers as Answers).map((a) => [a.label, a.value] as [string, string])
               : [],
           }),
+          unsubscribe: unsubscribeLinks(this.config, event.organizerId, email),
         },
       );
       status = sent ? 'SENT' : 'FAILED';
@@ -687,6 +703,7 @@ export class InvitationsService {
           ...meta,
           emailStatus: status,
           ...(status === 'SENT' && { emailSentAt: new Date().toISOString() }),
+          ...(skipped ? { emailError: skipped } : { emailError: null }),
         } as Prisma.InputJsonValue,
       },
     });

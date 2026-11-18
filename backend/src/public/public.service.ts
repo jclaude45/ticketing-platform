@@ -26,6 +26,7 @@ import * as path from 'path';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const sharp: typeof import('sharp').default = require('sharp');
 import { MAX_IMAGE_PIXELS } from '../common/image-limits';
+import { createBulkTransport } from '../common/email/bulk-transport';
 
 /** The "Z" of the ZAYA logo, copied from frontend/public/zaya-logo.svg. */
 const ZAYA_LOGO_Z_PATH =
@@ -57,6 +58,8 @@ const LIST_SELECT = {
 export class PublicService {
   private readonly logger = new Logger(PublicService.name);
   private mailer: nodemailer.Transporter | null = null;
+  /** Invitations: the bulk stream when there is one, else the same as `mailer` */
+  private bulkMailer: nodemailer.Transporter | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -73,6 +76,8 @@ export class PublicService {
         secure: this.config.get<boolean>('email.secure') ?? false,
         auth: { user, pass: this.config.get<string>('email.password') },
       });
+      // Event invitations are the organizer's outreach: the bulk stream, like campaigns
+      this.bulkMailer = createBulkTransport(this.config) ?? this.mailer;
     }
   }
 
@@ -499,6 +504,8 @@ export class PublicService {
       deadline?: Date | null;
       /** The guest's answers, recalled in the ticket e-mail */
       answers?: [string, string][];
+      /** The organizer's unsubscribe link for this address */
+      unsubscribe?: { page: string; oneClick: string } | null;
     } | null,
   ): Promise<boolean> {
     if (!this.mailer) return false;
@@ -620,9 +627,16 @@ export class PublicService {
         ? note(`Organisé par ${esc(organizerName)}${organizerEmail ? ` — ${esc(organizerEmail)}` : ''}. Pour toute question sur l’événement, contactez l’organisateur.`)
         : '');
 
-    await this.mailer.sendMail({
+    const unsubscribe = invitation?.unsubscribe;
+    await (invitation ? this.bulkMailer : this.mailer).sendMail({
       from,
       to: holder.holderEmail,
+      ...(unsubscribe && {
+        headers: {
+          'List-Unsubscribe': `<${unsubscribe.oneClick}>`,
+          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        },
+      }),
       subject: invitation
         ? (invitation.link && !awaitingReply ? `Invitation confirmée — ${event.name}` : `Invitation — ${event.name}`)
         : `${event.name} — votre billet`,
@@ -634,7 +648,7 @@ export class PublicService {
         banner: bannerSrc ? { src: bannerSrc, alt: event.name } : undefined,
         body,
         reason: invitation
-          ? 'Vous recevez cet e-mail parce qu’un organisateur vous a invité(e) via ZAYA.'
+          ? `Vous recevez cet e-mail parce qu’un organisateur vous a invité(e) via ZAYA.${unsubscribe ? ` <a href="${esc(unsubscribe.page)}" style="${linkStyle}">Ne plus recevoir ses e-mails</a>` : ''}`
           : 'Vous recevez cet e-mail suite à votre commande sur zaya.live.',
       }),
       text: emailText(event.name, [
