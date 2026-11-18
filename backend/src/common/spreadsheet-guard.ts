@@ -3,6 +3,7 @@ import { inflateRawSync } from 'zlib';
 import * as ExcelJS from 'exceljs';
 import * as JSZip from 'jszip';
 import { posix } from 'path';
+import { Readable } from 'stream';
 
 /** What a guest list or team list can unzip to: far above any real file */
 const MAX_UNZIPPED_BYTES = 50 * 1024 * 1024;
@@ -93,4 +94,17 @@ export async function loadXlsx(wb: ExcelJS.Workbook, buf: Buffer): Promise<void>
     if (!fixed) throw err;
     await wb.xlsx.load(fixed as unknown as ArrayBuffer);
   }
+}
+
+/**
+ * Opens an uploaded .csv. Excel set to French (and most of Africa and Europe) saves them with
+ * semicolons, others with commas or tabs: the separator is the one the header line uses most.
+ */
+export async function loadCsv(wb: ExcelJS.Workbook, buf: Buffer): Promise<void> {
+  const text = buf.toString('utf8').replace(/^﻿/, '');
+  const header = text.split(/\r?\n/, 1)[0] ?? '';
+  const count = (c: string) => header.split(c).length - 1;
+  const delimiter = [';', '\t', ','].reduce((best, c) => (count(c) > count(best) ? c : best), ',');
+  // Values kept as written: "0811…" stays a phone number, not 811… read as a number
+  await wb.csv.read(Readable.from(text), { parserOptions: { delimiter }, map: (value: string) => value } as any);
 }

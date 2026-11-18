@@ -11,7 +11,7 @@ import { CommunicationService } from './communication.service';
 import { SubscriptionService } from '../subscription/subscription.service';
 import {
   CreateCampaignDto, UpdateCampaignDto, ScheduleCampaignDto, TestEmailDto,
-  CreateMailingListDto, RenameMailingListDto, MailingListMembersDto,
+  CreateMailingListDto, RenameMailingListDto, MailingListMembersDto, ImportMembersDto,
 } from './dto/create-campaign.dto';
 import { MailingListsService } from './mailing-lists.service';
 import { Throttle } from '@nestjs/throttler';
@@ -92,6 +92,24 @@ export class CommunicationController {
   async addMembers(@Param('id') id: string, @CurrentUser('id') userId: string, @Body() dto: MailingListMembersDto) {
     await this.subscriptionService.checkAllowCommunication(userId);
     return this.lists.addMembers(id, userId, dto.emails);
+  }
+
+  @Post('lists/parse-import')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Read people from an .xlsx / .csv file or a pasted list (nothing saved)' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 1 } }))
+  async parseImport(@CurrentUser('id') userId: string, @UploadedFile() file?: Express.Multer.File, @Body('text') text?: string) {
+    await this.subscriptionService.checkAllowCommunication(userId);
+    return this.lists.parseImport(file, typeof text === 'string' ? text.slice(0, 2_000_000) : undefined);
+  }
+
+  @Post('lists/:id/import')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Add imported people to a list (consent certified by the organizer)' })
+  async importMembers(@Param('id') id: string, @CurrentUser('id') userId: string, @Body() dto: ImportMembersDto) {
+    await this.subscriptionService.checkAllowCommunication(userId);
+    return this.lists.importMembers(id, userId, dto.rows, dto.consent);
   }
 
   @Post('lists/:id/members/remove')

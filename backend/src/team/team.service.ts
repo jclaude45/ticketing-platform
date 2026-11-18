@@ -19,10 +19,9 @@ import * as QRCode from 'qrcode';
 const sharp: typeof import('sharp').default = require('sharp');
 import { MAX_IMAGE_PIXELS } from '../common/image-limits';
 import * as fs from 'fs';
-import { Readable } from 'stream';
 import * as path from 'path';
 import * as ExcelJS from 'exceljs';
-import { loadXlsx } from '../common/spreadsheet-guard';
+import { loadCsv, loadXlsx } from '../common/spreadsheet-guard';
 import * as nodemailer from 'nodemailer';
 
 const LOGO_SVG_PATH = path.join(__dirname, '../../assets/powered-logo.svg');
@@ -236,7 +235,7 @@ export class TeamService {
     }
     try {
       if (/\.csv$/i.test(file.originalname) || /csv/.test(file.mimetype)) {
-        await workbook.csv.read(Readable.from(file.buffer.toString('utf8').replace(/^\uFEFF/, '')));
+        await loadCsv(workbook, file.buffer);
       } else {
         await loadXlsx(workbook, file.buffer);
       }

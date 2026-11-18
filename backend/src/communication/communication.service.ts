@@ -11,6 +11,7 @@ import { CreateTemplateDto, UpdateTemplateDto } from './dto/create-template.dto'
 import { DEFAULT_TEMPLATES } from './default-templates';
 import { SubscriptionService } from '../subscription/subscription.service';
 import { esc } from '../common/email/layout';
+import { unsubscribeToken } from './unsubscribe';
 import { StorageService } from '../storage/storage.service';
 import { MAX_IMAGE_PIXELS } from '../common/image-limits';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -511,7 +512,7 @@ export class CommunicationService {
 
 
   /** The campaign's list, or every ticket holder of its event; fixed at the first send */
-  private async buildRecipients(campaign: { id: string; eventId: string; listId: string | null }) {
+  private async buildRecipients(campaign: { id: string; eventId: string; listId: string | null; event: { organizerId: string } }) {
     const campaignId = campaign.id;
     const eventId = campaign.eventId;
     // Check if recipients already created
@@ -519,9 +520,14 @@ export class CommunicationService {
     if (existing > 0) {
       return this.prisma.campaignRecipient.findMany({ where: { campaignId } });
     }
+    // Those who used the unsubscribe link of one of this organizer's campaigns
+    const gone = new Set((await this.prisma.emailUnsubscribe.findMany({
+      where: { organizerId: campaign.event.organizerId }, select: { email: true },
+    })).map(u => u.email));
+    const wanted = (email: string | null) => !!email && !gone.has(email.trim().toLowerCase());
 
     if (campaign.listId) {
-      const members = await this.prisma.mailingListMember.findMany({ where: { listId: campaign.listId } });
+      const members = (await this.prisma.mailingListMember.findMany({ where: { listId: campaign.listId } })).filter(m => wanted(m.email));
       if (members.length === 0) return [];
       await this.prisma.campaignRecipient.createMany({
         data: members.map(m => ({ campaignId, email: m.email, phone: m.phone, firstName: m.firstName, lastName: m.lastName })),
@@ -529,14 +535,14 @@ export class CommunicationService {
       return this.prisma.campaignRecipient.findMany({ where: { campaignId } });
     }
 
-    const tickets = await this.prisma.ticket.findMany({
+    const tickets = (await this.prisma.ticket.findMany({
       where: {
         eventId,
         status: { in: ['VALID', 'PENDING'] },
         holderEmail: { not: null },
       },
       include: { template: { select: { name: true } } },
-    });
+    })).filter(t => wanted(t.holderEmail));
 
     if (tickets.length === 0) return [];
 
@@ -560,11 +566,12 @@ export class CommunicationService {
     for (const recipient of recipients) {
       if (recipient.status === RecipientStatus.SENT) continue;
 
-      const { body, subject } = this.render(campaign, recipient);
+      const unsubscribe = recipient.email ? this.unsubscribeLinks(campaign.event.organizerId, recipient.email) : null;
+      const { body, subject } = this.render(campaign, recipient, unsubscribe?.page);
 
       try {
         if (campaign.channel === NotificationChannel.EMAIL && recipient.email) {
-          await this.sendEmail(recipient.email, subject || campaign.name, body);
+          await this.sendEmail(recipient.email, subject || campaign.name, body, unsubscribe?.oneClick);
         } else if (campaign.channel === NotificationChannel.SMS && recipient.phone) {
           await this.sendSms(recipient.phone, body);
         } else if (campaign.channel === NotificationChannel.WHATSAPP && recipient.phone) {
@@ -611,6 +618,7 @@ export class CommunicationService {
   private render(
     campaign: { channel: NotificationChannel; subject?: string | null; body: string; event: { name: string; startDate: Date; timeZone: string; venue: string; city: string; bannerUrl: string | null } },
     recipient: { firstName?: string | null; lastName?: string | null; ticketId?: string | null },
+    unsubscribeUrl?: string,
   ) {
     const startDate = new Date(campaign.event.startDate);
     const appBase = this.config.get<string>('APP_BASE_URL') ||
@@ -629,6 +637,7 @@ export class CommunicationService {
       eventCity: campaign.event.city,
       ticketSerial: recipient.ticketId || '',
       bannerUrl: resolvedBanner,
+      unsubscribeUrl: unsubscribeUrl || '#',
     };
 
     // No poster: drop its row rather than show a broken image
@@ -638,17 +647,40 @@ export class CommunicationService {
       ? Object.fromEntries(Object.entries(vars).map(([k, v]) => [k, esc(String(v ?? ''))]))
       : vars);
     const subject = campaign.subject ? this.renderTemplate(campaign.subject, vars) : undefined;
-    return { body, subject };
+    // Every e-mail carries the way out, unless the design already places {{unsubscribeUrl}}
+    const withFooter = campaign.channel !== NotificationChannel.EMAIL || campaign.body.includes('{{unsubscribeUrl}}')
+      ? body
+      : this.addUnsubscribeFooter(body, vars.unsubscribeUrl);
+    return { body: withFooter, subject };
   }
 
-  private async sendEmail(to: string, subject: string, html: string) {
+  /** Page of the unsubscribe link (zaya.live) and its one-click address (mail apps' button) */
+  private unsubscribeLinks(organizerId: string, email: string) {
+    const token = unsubscribeToken(organizerId, email);
+    const site = this.config.get<string>('frontend.publicUrl') || 'https://zaya.live';
+    const api = this.config.get<string>('APP_BASE_URL') || `http://localhost:${this.config.get('port') || 3001}`;
+    return { page: `${site}/desinscription/${token}`, oneClick: `${api}/api/v1/public/unsubscribe/${token}` };
+  }
+
+  private addUnsubscribeFooter(html: string, url: string) {
+    const footer = `<div style="max-width:600px;margin:24px auto 8px;padding:0 16px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#888888;">`
+      + `Vous ne souhaitez plus recevoir ces e-mails ? <a href="${esc(url)}" style="color:#888888;text-decoration:underline;">Se désinscrire</a></div>`;
+    return /<\/body>/i.test(html) ? html.replace(/<\/body>/i, `${footer}</body>`) : `${html}${footer}`;
+  }
+
+  private async sendEmail(to: string, subject: string, html: string, oneClickUnsubscribe?: string) {
     await this.mailerTransport.sendMail({
       from: this.emailFrom,
       to,
       subject,
       html,
-      // Mail apps show a "Se désinscrire" button; the request reaches the ZAYA team
-      headers: { 'List-Unsubscribe': `<mailto:contact@zaya.live?subject=${encodeURIComponent(`Désinscription ${to}`)}>` },
+      // Mail apps show a "Se désinscrire" button: one click unsubscribes (RFC 8058)
+      headers: oneClickUnsubscribe
+        ? {
+            'List-Unsubscribe': `<${oneClickUnsubscribe}>, <mailto:contact@zaya.live?subject=${encodeURIComponent(`Désinscription ${to}`)}>`,
+            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+          }
+        : { 'List-Unsubscribe': `<mailto:contact@zaya.live?subject=${encodeURIComponent(`Désinscription ${to}`)}>` },
     });
   }
 

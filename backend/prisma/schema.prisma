@@ -130,6 +130,7 @@ model User {
   notificationTemplates NotificationTemplate[] @relation("UserTemplates")
   notificationCampaigns NotificationCampaign[] @relation("UserCampaigns")
   mailingLists          MailingList[]
+  emailUnsubscribes     EmailUnsubscribe[]
   notifications         Notification[]
   accountCollaborators  AccountMember[] @relation("AccountOwner")
   accountMemberships    AccountMember[] @relation("AccountMemberships")
@@ -646,9 +647,23 @@ model MailingListMember {
   firstName String
   lastName  String
   phone     String?
+  /// Typed or imported by the organizer (true), or taken from their tickets
+  imported  Boolean     @default(false)
   createdAt DateTime    @default(now())
 
   @@unique([listId, email])
+}
+
+/// Someone who asked not to receive an organizer's campaigns any more (link in every campaign)
+model EmailUnsubscribe {
+  id          String   @id @default(uuid())
+  organizerId String
+  organizer   User     @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  /// Lowercase
+  email       String
+  createdAt   DateTime @default(now())
+
+  @@unique([organizerId, email])
 }
 
 model CampaignRecipient {

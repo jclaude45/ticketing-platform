@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Loader2, Pencil, Plus, Search, Trash2, Users, X } from 'lucide-react';
+import { FileUp, Loader2, Pencil, Plus, Search, Trash2, Upload, Users, X } from 'lucide-react';
 import { communicationApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
-type Origin = 'PURCHASE' | 'INVITATION' | 'ISSUED';
+type Origin = 'PURCHASE' | 'INVITATION' | 'ISSUED' | 'IMPORTED';
 
 export interface Contact {
   email: string;
@@ -17,7 +17,11 @@ export interface Contact {
   events: { id: string; name: string }[];
   categories: string[];
   origins: Origin[];
+  unsubscribed?: boolean;
 }
+
+interface ImportRow { email: string; firstName: string; lastName: string; phone: string | null }
+interface ListMember extends ImportRow { imported: boolean; unsubscribed: boolean }
 
 export interface MailingList {
   id: string;
@@ -30,6 +34,7 @@ const ORIGIN_LABELS: Record<Origin, string> = {
   PURCHASE: 'Achat / inscription',
   INVITATION: 'Invitation',
   ISSUED: 'Billet émis',
+  IMPORTED: 'Importé',
 };
 
 const unwrap = (r: any) => r.data?.data ?? r.data;
@@ -72,7 +77,7 @@ export function MailingListsTab() {
         </button>
       </div>
       <p className="text-sm text-gray-500 dark:text-gray-400">
-        Une liste regroupe des personnes déjà présentes dans vos événements : acheteurs, inscrits et invités (y compris ceux importés). Elle sert pour toutes vos campagnes, quel que soit l’événement.
+        Une liste regroupe des personnes de vos événements (acheteurs, inscrits, invités) et celles que vous importez (fichier Excel / CSV ou adresses collées). Elle sert pour toutes vos campagnes, quel que soit l’événement. Chaque e-mail contient un lien « Se désinscrire » : ceux qui l’utilisent ne reçoivent plus vos campagnes.
       </p>
 
       {isLoading ? (
@@ -125,7 +130,7 @@ function ListEditorModal({ list, onClose, onSaved }: { list: MailingList | null;
     queryFn: () => communicationApi.getContacts().then(unwrap),
     staleTime: 30_000,
   });
-  const { data: current } = useQuery<{ name: string; members: { email: string }[] }>({
+  const { data: current } = useQuery<{ name: string; members: ListMember[] }>({
     queryKey: ['mailing-list', list?.id],
     queryFn: () => communicationApi.getList(list!.id).then(unwrap),
     enabled: !!list,
@@ -138,6 +143,9 @@ function ListEditorModal({ list, onClose, onSaved }: { list: MailingList | null;
   const [origin, setOrigin] = useState<Origin | ''>('');
   const [onlySelected, setOnlySelected] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Read from a file or a pasted list, saved with the list
+  const [pending, setPending] = useState<ImportRow[]>([]);
+  const [importing, setImporting] = useState(false);
 
   // An existing list starts from its members
   useEffect(() => {
@@ -150,14 +158,24 @@ function ListEditorModal({ list, onClose, onSaved }: { list: MailingList | null;
     return Array.from(byId).map(([id, n]) => ({ id, name: n })).sort((a, b) => a.name.localeCompare(b.name, 'fr'));
   }, [contacts]);
 
+  // Contacts, then the list's imported members, then what was just read
+  const rows = useMemo(() => {
+    const byEmail = new Map(contacts.map((c) => [c.email, c] as [string, Contact]));
+    const asContact = (r: ImportRow, unsubscribed = false): Contact =>
+      ({ ...r, events: [], categories: [], origins: ['IMPORTED'], unsubscribed });
+    current?.members.forEach((m) => { if (!byEmail.has(m.email)) byEmail.set(m.email, asContact(m, m.unsubscribed)); });
+    pending.forEach((r) => { if (!byEmail.has(r.email)) byEmail.set(r.email, asContact(r)); });
+    return Array.from(byEmail.values());
+  }, [contacts, current, pending]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return contacts.filter((c) =>
+    return rows.filter((c) =>
       (!eventId || c.events.some((e) => e.id === eventId))
       && (!origin || c.origins.includes(origin))
       && (!onlySelected || selected.has(c.email))
       && (!q || `${c.firstName} ${c.lastName} ${c.email} ${c.phone ?? ''} ${c.categories.join(' ')}`.toLowerCase().includes(q)));
-  }, [contacts, query, eventId, origin, onlySelected, selected]);
+  }, [rows, query, eventId, origin, onlySelected, selected]);
 
   const allFilteredSelected = filtered.length > 0 && filtered.every((c) => selected.has(c.email));
   const toggle = (email: string) => setSelected((s) => { const n = new Set(s); if (n.has(email)) n.delete(email); else n.add(email); return n; });
@@ -172,15 +190,23 @@ function ListEditorModal({ list, onClose, onSaved }: { list: MailingList | null;
     if (selected.size === 0) { toast.error('Cochez au moins une personne'); return; }
     setSaving(true);
     try {
-      if (!list) {
-        await communicationApi.createList({ name: name.trim(), emails: Array.from(selected) });
+      const known = new Set(contacts.map((c) => c.email));
+      const before = new Set(current?.members.map((m) => m.email) ?? []);
+      // Ticked people read from the import: added with the consent given when reading them
+      const imports = pending.filter((r) => selected.has(r.email) && !known.has(r.email) && !before.has(r.email));
+      const fromContacts = Array.from(selected).filter((e) => known.has(e) && !before.has(e));
+      let id = list?.id;
+      if (!id) {
+        id = (unwrap(await communicationApi.createList({ name: name.trim(), emails: fromContacts })) as { id: string }).id;
       } else {
-        const before = new Set(current?.members.map((m) => m.email) ?? []);
-        const added = Array.from(selected).filter((e) => !before.has(e));
         const removed = Array.from(before).filter((e) => !selected.has(e));
-        if (name.trim() !== list.name) await communicationApi.renameList(list.id, name.trim());
-        if (added.length) await communicationApi.addListMembers(list.id, added);
-        if (removed.length) await communicationApi.removeListMembers(list.id, removed);
+        if (name.trim() !== list!.name) await communicationApi.renameList(id, name.trim());
+        if (fromContacts.length) await communicationApi.addListMembers(id, fromContacts);
+        if (removed.length) await communicationApi.removeListMembers(id, removed);
+      }
+      if (imports.length) {
+        const res = unwrap(await communicationApi.importListMembers(id, imports, true)) as { added: number; unsubscribed: number };
+        if (res.unsubscribed) toast(`${res.unsubscribed} adresse(s) écartée(s) : ces personnes se sont désinscrites de vos e-mails.`);
       }
       toast.success(list ? 'Liste enregistrée' : 'Liste créée');
       onSaved();
@@ -220,6 +246,22 @@ function ListEditorModal({ list, onClose, onSaved }: { list: MailingList | null;
               {(Object.keys(ORIGIN_LABELS) as Origin[]).map((o) => <option key={o} value={o}>{ORIGIN_LABELS[o]}</option>)}
             </select>
           </div>
+          {importing
+            ? <ImportPanel onClose={() => setImporting(false)} onRead={(read) => {
+                setPending((p) => [...p, ...read]);
+                setSelected((s) => { const n = new Set(s); read.forEach((r) => n.add(r.email)); return n; });
+                setOrigin('');
+                setImporting(false);
+              }} />
+            : (
+              <button type="button" onClick={() => setImporting(true)} className="flex items-center gap-1.5 text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
+                <Upload className="h-4 w-4" />
+                Importer des adresses (Excel, CSV ou liste collée)
+              </button>
+            )}
+          {pending.length > 0 && (
+            <p className="text-xs text-gray-500">{pending.length} adresse(s) importée(s), ajoutées à la liste à l’enregistrement.</p>
+          )}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
             <button type="button" onClick={toggleFiltered} disabled={filtered.length === 0}
               className="text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-50">
@@ -236,8 +278,8 @@ function ListEditorModal({ list, onClose, onSaved }: { list: MailingList | null;
         <div className="flex-1 overflow-y-auto px-6 py-3 mt-2">
           {isLoading ? (
             <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-indigo-500" /></div>
-          ) : contacts.length === 0 ? (
-            <p className="py-12 text-center text-sm text-gray-500">Aucun contact pour l’instant : les personnes apparaissent ici dès qu’elles ont un billet ou une invitation avec une adresse e-mail.</p>
+          ) : rows.length === 0 ? (
+            <p className="py-12 text-center text-sm text-gray-500">Aucun contact pour l’instant : les personnes apparaissent ici dès qu’elles ont un billet ou une invitation avec une adresse e-mail, ou quand vous les importez.</p>
           ) : filtered.length === 0 ? (
             <p className="py-12 text-center text-sm text-gray-500">Personne ne correspond à ces filtres.</p>
           ) : (
@@ -256,8 +298,11 @@ function ListEditorModal({ list, onClose, onSaved }: { list: MailingList | null;
                     className="border-b border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50">
                     <td className="py-2"><input type="checkbox" readOnly checked={selected.has(c.email)} className="accent-indigo-600 pointer-events-none" /></td>
                     <td className="py-2 pr-3 text-gray-900 dark:text-white">{`${c.firstName} ${c.lastName}`.trim()}</td>
-                    <td className="py-2 pr-3 text-gray-600 dark:text-gray-400 break-all">{c.email}</td>
-                    <td className="py-2 text-xs text-gray-500 hidden md:table-cell">{c.events.map((e) => e.name).join(', ')}</td>
+                    <td className="py-2 pr-3 text-gray-600 dark:text-gray-400 break-all">
+                      {c.email}
+                      {c.unsubscribed && <span className="ml-2 rounded-full bg-red-50 px-2 py-0.5 text-[11px] text-red-600 dark:bg-red-900/30 dark:text-red-400" title="Ne recevra pas vos campagnes">désinscrit</span>}
+                    </td>
+                    <td className="py-2 text-xs text-gray-500 hidden md:table-cell">{c.events.length ? c.events.map((e) => e.name).join(', ') : 'Importé'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -278,6 +323,65 @@ function ListEditorModal({ list, onClose, onSaved }: { list: MailingList | null;
             {list ? 'Enregistrer' : 'Créer la liste'}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * File or pasted addresses, read by the server and shown in the table before anything is saved.
+ * The organizer must certify these people agreed to receive their e-mails.
+ */
+function ImportPanel({ onRead, onClose }: { onRead: (rows: ImportRow[]) => void; onClose: () => void }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [text, setText] = useState('');
+  const [consent, setConsent] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const read = async () => {
+    if (!consent) { toast.error('Cochez la case de consentement'); return; }
+    if (!file && !text.trim()) { toast.error('Choisissez un fichier ou collez des adresses'); return; }
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      if (file) fd.append('file', file); else fd.append('text', text);
+      const res = unwrap(await communicationApi.parseListImport(fd)) as { rows: ImportRow[]; invalid: number; duplicates: number };
+      const notes = [res.invalid && `${res.invalid} ligne(s) sans adresse valide`, res.duplicates && `${res.duplicates} doublon(s)`].filter(Boolean).join(', ');
+      toast.success(`${res.rows.length} adresse(s) lue(s)${notes ? ` — ignorées : ${notes}` : ''}`);
+      onRead(res.rows);
+    } catch (e) {
+      toast.error(errorText(e, 'Lecture impossible'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium text-gray-900 dark:text-white">Importer des adresses</p>
+        <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600" aria-label="Fermer"><X className="h-4 w-4" /></button>
+      </div>
+      <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+        <FileUp className="h-4 w-4 text-indigo-600" />
+        <span className="text-indigo-600 dark:text-indigo-400 hover:underline">{file ? file.name : 'Choisir un fichier .xlsx ou .csv'}</span>
+        <input type="file" accept=".xlsx,.csv" className="hidden" onChange={(e) => { setFile(e.target.files?.[0] ?? null); setText(''); }} />
+        {file && <button type="button" onClick={(e) => { e.preventDefault(); setFile(null); }} className="text-xs text-gray-400">retirer</button>}
+      </label>
+      <p className="text-xs text-gray-500">Colonnes reconnues : Email (obligatoire), Nom ou Prénom + Nom, Téléphone. Ou collez une adresse par ligne :</p>
+      <textarea value={text} onChange={(e) => { setText(e.target.value); setFile(null); }} rows={4} disabled={!!file}
+        placeholder={'marie@exemple.com\nJean Kabila <jean@exemple.com>\npaul@exemple.com; Paul Mbuyi; +243 81 000 0000'}
+        className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-mono text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50" />
+      <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+        <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 accent-indigo-600" />
+        <span>Je certifie que ces personnes ont accepté de recevoir mes e-mails. Les adresses achetées ou récupérées sans accord sont interdites : elles font classer les envois comme spam.</span>
+      </label>
+      <div className="flex justify-end">
+        <button type="button" onClick={read} disabled={busy}
+          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-full text-sm font-medium disabled:opacity-60">
+          {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+          Lire les adresses
+        </button>
       </div>
     </div>
   );

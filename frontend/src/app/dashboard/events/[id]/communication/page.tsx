@@ -130,6 +130,7 @@ const VARIABLES_HINT = [
   { key: '{{eventVenue}}', desc: 'Lieu' },
   { key: '{{eventCity}}', desc: 'Ville' },
   { key: '{{ticketSerial}}', desc: 'Numéro de billet' },
+  { key: '{{unsubscribeUrl}}', desc: 'Lien de désinscription (ajouté en bas sinon)' },
 ];
 
 // ─── Main Component ───────────────────────────────────────────────────────────

@@ -822,6 +822,13 @@ export const communicationApi = {
     apiClient.post(`/communication/lists/${id}/members/remove`, { emails }),
   deleteList: (id: string) =>
     apiClient.delete(`/communication/lists/${id}`),
+  parseListImport: (formData: FormData) =>
+    apiClient.post('/communication/lists/parse-import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    }),
+  importListMembers: (id: string, rows: { email: string; firstName: string; lastName: string; phone: string | null }[], consent: boolean) =>
+    apiClient.post(`/communication/lists/${id}/import`, { rows, consent }),
 
   // Pictures put in campaigns and templates (resized server-side, returned as a public URL)
   uploadImage: (formData: FormData) =>
@@ -868,6 +875,13 @@ export const publicApi = {
     publicClient.get(`/public/invitations/${encodeURIComponent(token)}`),
   answerInvitation: (token: string, body: { attending: boolean; name?: string; phone?: string; email?: string; answers?: Record<string, string | boolean> }) =>
     publicClient.post(`/public/invitations/${encodeURIComponent(token)}`, body),
+  /** Unsubscribe link of campaign e-mails */
+  getUnsubscribe: (token: string) =>
+    publicClient.get(`/public/unsubscribe/${encodeURIComponent(token)}`),
+  unsubscribe: (token: string) =>
+    publicClient.post(`/public/unsubscribe/${encodeURIComponent(token)}`),
+  resubscribe: (token: string) =>
+    publicClient.post(`/public/unsubscribe/${encodeURIComponent(token)}/resubscribe`),
   /** Shared invitation link (one QR printed on every paper invitation) */
   getOpenInvitation: (token: string) =>
     publicClient.get(`/public/invitations/open/${encodeURIComponent(token)}`),

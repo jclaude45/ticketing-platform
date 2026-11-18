@@ -7,8 +7,8 @@ import {
 } from '@nestjs/common';
 import { Prisma, Role, TicketStatus } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
-import { loadXlsx } from '../common/spreadsheet-guard';
-import { PassThrough, Readable } from 'stream';
+import { loadCsv, loadXlsx } from '../common/spreadsheet-guard';
+import { PassThrough } from 'stream';
 import { randomBytes } from 'crypto';
 import * as archiver from 'archiver';
 import * as QRCode from 'qrcode';
@@ -700,7 +700,7 @@ export class InvitationsService {
     const isCsv = /\.csv$/i.test(file.originalname) || /csv/.test(file.mimetype);
     try {
       if (isCsv) {
-        await wb.csv.read(Readable.from(file.buffer.toString('utf8').replace(/^\uFEFF/, '')));
+        await loadCsv(wb, file.buffer);
       } else if (/\.xls$/i.test(file.originalname)) {
         throw new BadRequestException('Format .xls non pris en charge : enregistrez le fichier en .xlsx ou .csv');
       } else {

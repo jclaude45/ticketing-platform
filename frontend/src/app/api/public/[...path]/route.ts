@@ -21,6 +21,8 @@ const ALLOWED: RegExp[] = [
   /^\/public\/invitations\/[\w-]+\.[\w-]+$/,
   // Shared invitation link: <random token>
   /^\/public\/invitations\/open\/[\w-]+$/,
+  // Unsubscribe link of campaign e-mails: <payload>.<signature>
+  /^\/public\/unsubscribe\/[\w-]+\.[\w-]+(\/resubscribe)?$/,
 ];
 
 async function proxy(req: NextRequest) {

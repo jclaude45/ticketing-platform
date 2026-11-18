@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum, IsDateString, IsEmail, IsArray, ArrayMaxSize, MaxLength, IsNotEmpty } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsDateString, IsEmail, IsArray, ArrayMaxSize, MaxLength, IsNotEmpty, IsBoolean } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { NotificationChannel, CampaignType } from '@prisma/client';
 
@@ -109,6 +109,17 @@ export class RenameMailingListDto {
   @IsNotEmpty()
   @MaxLength(120)
   name: string;
+}
+
+export class ImportMembersDto {
+  @ApiProperty({ description: 'People read by lists/parse-import: [{ email, firstName, lastName, phone }]' })
+  @IsArray()
+  @ArrayMaxSize(20000)
+  rows: { email: string; firstName: string; lastName: string; phone: string | null }[];
+
+  @ApiProperty({ description: 'The organizer certifies these people agreed to receive their e-mails' })
+  @IsBoolean()
+  consent: boolean;
 }
 
 export class MailingListMembersDto {
