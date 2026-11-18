@@ -230,6 +230,12 @@ export default function CommunicationPage() {
       toast.error('Cette campagne a déjà été envoyée');
       return;
     }
+    const left = campaign._count.recipients - campaign.totalSent;
+    if (campaign.status === 'PARTIALLY_SENT' || campaign.status === 'FAILED') {
+      if (!confirm(`Reprendre l'envoi de "${campaign.name}" pour les ${left} personne(s) pas encore atteintes ?`)) return;
+      sendMutation.mutate(campaign.id);
+      return;
+    }
     const to = campaign.list
       ? `aux ${campaign.list._count.members} personne(s) de la liste « ${campaign.list.name} »`
       : 'à tous les participants de l\'événement';
@@ -626,6 +632,9 @@ function CampaignRow({
   isSending: boolean;
 }) {
   const canSend = campaign.status === 'DRAFT' || campaign.status === 'SCHEDULED';
+  // Stopped part-way (mail provider's limit, errors): the rest can be sent later
+  const left = campaign._count.recipients - campaign.totalSent;
+  const canResume = (campaign.status === 'PARTIALLY_SENT' || campaign.status === 'FAILED') && left > 0;
 
   return (
     <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 py-4 flex items-start gap-4">
@@ -701,6 +710,17 @@ function CampaignRow({
             title="Voir les stats"
           >
             <BarChart3 className="h-4 w-4" />
+          </button>
+        )}
+        {canResume && (
+          <button
+            onClick={() => onSend(campaign)}
+            disabled={isSending}
+            title="Envoyer à ceux qui ne l'ont pas encore reçue"
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-indigo-600 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-xs font-medium rounded-full transition-colors disabled:opacity-50"
+          >
+            {isSending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+            Reprendre ({left})
           </button>
         )}
         {canSend && (

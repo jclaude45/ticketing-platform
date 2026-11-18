@@ -23,6 +23,13 @@ const sharp: typeof import('sharp').default = require('sharp');
  */
 const FREE_CAMPAIGNS_PER_EVENT = 5;
 const FREE_RECIPIENTS_PER_DAY = 300;
+/**
+ * Refusal meaning the mail provider will take nothing more for now (daily / monthly quota,
+ * rate limit), as opposed to one bad address: the send stops instead of burning the list.
+ */
+const isQuotaError = (err: any) =>
+  /sending limit|quota|rate limit|too many (messages|emails|requests)|limit exceeded/i.test(String(err?.message ?? err));
+
 /** Messages sent at the same time (as many SMTP connections in the pool) */
 const SEND_CONCURRENCY = 5;
 
@@ -295,6 +302,9 @@ export class CommunicationService {
     if (campaign.status === CampaignStatus.SENDING) {
       throw new BadRequestException('Envoi déjà en cours');
     }
+    if (campaign.status === CampaignStatus.SENT) {
+      throw new BadRequestException('Cette campagne a déjà été envoyée à tous ses destinataires');
+    }
 
     const recipients = await this.buildRecipients(campaign);
     if (recipients.length === 0) {
@@ -311,7 +321,8 @@ export class CommunicationService {
       this.logger.error(`Erreur envoi campagne ${campaignId}: ${err.message}`)
     );
 
-    return { message: 'Envoi lancé', recipientCount: recipients.length };
+    // A resumed send only goes to those not reached yet
+    return { message: 'Envoi lancé', recipientCount: recipients.filter(r => r.status !== RecipientStatus.SENT).length };
   }
 
   async getCampaignStats(campaignId: string, userId: string, role: Role) {
@@ -577,17 +588,21 @@ export class CommunicationService {
   private async dispatchCampaign(campaign: any, recipients: any[]) {
     const queue = recipients.filter(r => r.status !== RecipientStatus.SENT);
     let done = 0;
+    // The mail provider's quota is reached: every next message would be refused too
+    let quota: string | null = null;
     const worker = async () => {
-      for (let r = queue.shift(); r; r = queue.shift()) {
-        await this.sendToRecipient(campaign, r);
+      for (let r = queue.shift(); r && !quota; r = queue.shift()) {
+        quota = await this.sendToRecipient(campaign, r);
         if (++done % 20 === 0) await this.saveProgress(campaign.id);
       }
     };
     await Promise.all(Array.from({ length: Math.min(SEND_CONCURRENCY, queue.length) }, worker));
 
-    const { sent, failed } = await this.saveProgress(campaign.id);
+    const { sent, failed, pending } = await this.saveProgress(campaign.id);
+    if (quota) this.logger.error(`Campagne ${campaign.id} arrêtée, limite d'envoi atteinte : ${quota}`);
+    // Those not reached stay pending: "Reprendre l'envoi" sends to them later
     const finalStatus =
-      failed === 0 ? CampaignStatus.SENT :
+      failed === 0 && pending === 0 ? CampaignStatus.SENT :
       sent === 0 ? CampaignStatus.FAILED :
       CampaignStatus.PARTIALLY_SENT;
 
@@ -599,7 +614,8 @@ export class CommunicationService {
     this.logger.log(`Campagne ${campaign.id}: ${sent} envoyés, ${failed} échoués`);
   }
 
-  private async sendToRecipient(campaign: any, recipient: any) {
+  /** Sends one message; returns the provider's refusal when its sending quota is reached */
+  private async sendToRecipient(campaign: any, recipient: any): Promise<string | null> {
     const unsubscribe = recipient.email ? this.unsubscribeLinks(campaign.event.organizerId, recipient.email) : null;
     const { body, subject } = this.render(campaign, recipient, unsubscribe?.page);
     const send = async () => {
@@ -617,7 +633,11 @@ export class CommunicationService {
 
     try {
       // One more try after a pause: a mail server asking to slow down answers with a temporary error
-      const reached = await send().catch(async () => { await new Promise(r => setTimeout(r, 3000)); return send(); });
+      const reached = await send().catch(async (err) => {
+        if (isQuotaError(err)) throw err;
+        await new Promise(r => setTimeout(r, 3000));
+        return send();
+      });
       await this.prisma.campaignRecipient.update({
         where: { id: recipient.id },
         data: reached
@@ -625,12 +645,15 @@ export class CommunicationService {
           : { status: RecipientStatus.FAILED, error: 'Coordonnées manquantes' },
       });
     } catch (err) {
+      // Quota: not this person's fault, they stay pending for the next attempt
+      if (isQuotaError(err)) return String(err.message);
       await this.prisma.campaignRecipient.update({
         where: { id: recipient.id },
         data: { status: RecipientStatus.FAILED, error: String(err.message).slice(0, 500) },
       });
       this.logger.warn(`Échec envoi campagne ${campaign.id}: ${err.message}`);
     }
+    return null;
   }
 
   /** Counts from the recipients themselves (a resumed send adds to the first one) */
@@ -640,7 +663,7 @@ export class CommunicationService {
     const sent = n(RecipientStatus.SENT);
     const failed = n(RecipientStatus.FAILED);
     await this.prisma.notificationCampaign.update({ where: { id: campaignId }, data: { totalSent: sent, totalFailed: failed } });
-    return { sent, failed };
+    return { sent, failed, pending: n(RecipientStatus.PENDING) };
   }
 
   /** Sends cut short by a restart: no progress saved for 10 minutes, taken up again once */
