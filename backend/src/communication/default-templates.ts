@@ -57,7 +57,7 @@ const footer = () => `
     <tr>
       <td class="pad" style="border-top:1px solid #e6e6e6;padding:18px 32px 26px;">
         <p style="margin:0;color:#6b6b6b;font-family:${FONT};font-size:12px;line-height:1.6;">
-          Vous recevez cet e-mail car vous êtes inscrit(e) à cet événement. Pour ne plus en recevoir, répondez à ce message.<br/>
+          Vous recevez cet e-mail car vous êtes inscrit(e) à cet événement. <a href="{{unsubscribeUrl}}" style="color:#6b6b6b;text-decoration:underline;">Se désinscrire</a><br/>
           Envoyé avec <strong style="color:#111111;">ZAYA</strong> — BACK2NEXT, Kinshasa
         </p>
       </td>

@@ -24,6 +24,9 @@ const sharp: typeof import('sharp').default = require('sharp');
 const FREE_CAMPAIGNS_PER_EVENT = 5;
 const FREE_RECIPIENTS_PER_DAY = 300;
 
+const OLD_UNSUBSCRIBE_LINE = 'Pour ne plus en recevoir, répondez à ce message.';
+const UNSUBSCRIBE_LINE = '<a href="{{unsubscribeUrl}}" style="color:#6b6b6b;text-decoration:underline;">Se désinscrire</a>';
+
 @Injectable()
 export class CommunicationService {
   private readonly logger = new Logger(CommunicationService.name);
@@ -640,15 +643,18 @@ export class CommunicationService {
       unsubscribeUrl: unsubscribeUrl || '#',
     };
 
+    // Designs copied from the predefined templates before the link existed: their footer
+    // still asked to reply to unsubscribe; it now carries the link itself
+    const design = campaign.body.replace(OLD_UNSUBSCRIBE_LINE, UNSUBSCRIBE_LINE);
     // No poster: drop its row rather than show a broken image
-    const source = vars.bannerUrl ? campaign.body : campaign.body.replace(/<tr>\s*<td[^>]*>\s*<img src="\{\{bannerUrl\}\}"[\s\S]*?<\/td>\s*<\/tr>/g, '');
+    const source = vars.bannerUrl ? design : design.replace(/<tr>\s*<td[^>]*>\s*<img src="\{\{bannerUrl\}\}"[\s\S]*?<\/td>\s*<\/tr>/g, '');
     // Values typed by buyers and organizers go into HTML: escaped, never markup
     const body = this.renderTemplate(source, campaign.channel === NotificationChannel.EMAIL
       ? Object.fromEntries(Object.entries(vars).map(([k, v]) => [k, esc(String(v ?? ''))]))
       : vars);
     const subject = campaign.subject ? this.renderTemplate(campaign.subject, vars) : undefined;
     // Every e-mail carries the way out, unless the design already places {{unsubscribeUrl}}
-    const withFooter = campaign.channel !== NotificationChannel.EMAIL || campaign.body.includes('{{unsubscribeUrl}}')
+    const withFooter = campaign.channel !== NotificationChannel.EMAIL || design.includes('{{unsubscribeUrl}}')
       ? body
       : this.addUnsubscribeFooter(body, vars.unsubscribeUrl);
     return { body: withFooter, subject };
