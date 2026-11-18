@@ -44,8 +44,12 @@ export interface Guest {
   name: string;
   /** Empty for a paper invitation whose address is not known */
   email: string;
+  phone?: string;
   row?: number; // spreadsheet row, for error reporting
 }
+
+/** Guests read from a file before anything is created: the organizer picks whom to invite */
+const MAX_PREVIEW = 5000;
 
 export interface GuestIssue {
   row?: number;
@@ -104,7 +108,7 @@ export class InvitationsService {
       if (!(paper && !email) && !EMAIL_RE.test(email)) { errors.push({ row: g.row, name, email, reason: 'Email invalide ou manquant' }); continue; }
       if (email && seen.has(email)) { skipped.push({ row: g.row, name, email, reason: 'Doublon dans la liste' }); continue; }
       if (email) seen.add(email);
-      valid.push({ name, email, row: g.row });
+      valid.push({ name, email, phone: g.phone?.trim().slice(0, 30) || undefined, row: g.row });
     }
 
     // Skip guests who already hold an active invitation for this event
@@ -147,7 +151,7 @@ export class InvitationsService {
       eventId,
       userId,
       role,
-      { templateId, holders: valid.map((g) => ({ holderName: g.name, holderEmail: g.email || undefined })) },
+      { templateId, holders: valid.map((g) => ({ holderName: g.name, holderEmail: g.email || undefined, holderPhone: g.phone })) },
       {
         price: 0, metadata: metadata as unknown as Prisma.InputJsonValue, source: 'INVITATION',
         // A paper guest always confirms by scanning the QR: that is when their ticket goes out
@@ -267,6 +271,45 @@ export class InvitationsService {
       created: tickets.length,
       templateName: template.name,
       guests: tickets.map((t) => ({ id: t.id, serialNumber: t.serialNumber, holderName: t.holderName })),
+    };
+  }
+
+  /**
+   * The guests of a file as they will be invited, nothing created yet: each line with what
+   * would stop it (no name, bad address, twice in the file, already invited, address that
+   * bounced, person who unsubscribed). The organizer then invites all, some or one.
+   */
+  async previewImport(eventId: string, userId: string, role: Role, file: Express.Multer.File, delivery: DeliveryMode = 'EMAIL') {
+    const event = await this.loadEvent(eventId, userId, role);
+    const paper = delivery === 'PAPER';
+    const guests = await this.parseGuestFile(file, !paper, MAX_PREVIEW);
+    const emails = guests.map((g) => (g.email ?? '').trim().toLowerCase()).filter((e) => EMAIL_RE.test(e));
+    const [invited, bounced, gone] = await Promise.all([
+      this.prisma.ticket.findMany({
+        where: { eventId, holderEmail: { in: emails }, status: { not: TicketStatus.CANCELLED }, metadata: { path: ['source'], equals: INVITATION_SOURCE } },
+        select: { holderEmail: true },
+      }),
+      this.prisma.emailSuppression.findMany({ where: { email: { in: emails } }, select: { email: true } }),
+      this.prisma.emailUnsubscribe.findMany({ where: { organizerId: event.organizerId, email: { in: emails } }, select: { email: true } }),
+    ]);
+    const already = new Set(invited.map((t) => t.holderEmail?.toLowerCase()));
+    const bad = new Set(bounced.map((r) => r.email));
+    const out = new Set(gone.map((r) => r.email));
+    const seen = new Set<string>();
+    return {
+      guests: guests.map((g) => {
+        const name = (g.name ?? '').trim();
+        const email = (g.email ?? '').trim().toLowerCase();
+        let issue: string | null = null;
+        if (!name) issue = 'Nom manquant';
+        else if (!(paper && !email) && !EMAIL_RE.test(email)) issue = email ? 'E-mail invalide' : 'E-mail manquant';
+        else if (email && seen.has(email)) issue = 'Doublon dans le fichier';
+        else if (email && already.has(email)) issue = 'Déjà invité(e)';
+        else if (email && bad.has(email)) issue = 'Adresse en erreur (rebond ou spam)';
+        else if (email && out.has(email) && !paper) issue = 'S’est désinscrit(e) de vos e-mails';
+        if (email && !issue) seen.add(email);
+        return { row: g.row, name, email, phone: g.phone ?? '', issue };
+      }),
     };
   }
 
@@ -711,7 +754,7 @@ export class InvitationsService {
   }
 
   /** Reads guests from .xlsx or .csv (see readPeople for the layouts understood) */
-  private async parseGuestFile(file: Express.Multer.File, requireEmail = true): Promise<Guest[]> {
+  private async parseGuestFile(file: Express.Multer.File, requireEmail = true, max = MAX_GUESTS_PER_BATCH): Promise<Guest[]> {
     if (!file) throw new BadRequestException('Aucun fichier reçu');
 
     const wb = new ExcelJS.Workbook();
@@ -730,11 +773,11 @@ export class InvitationsService {
     }
 
     // Found by content: titles above the table or headers worded differently no longer block it
-    const guests: Guest[] = readPeople(wb, requireEmail).map((p) => ({ name: p.name, email: p.email, row: p.row }));
+    const guests: Guest[] = readPeople(wb, requireEmail).map((p) => ({ name: p.name, email: p.email, phone: p.phone, row: p.row }));
 
     if (!guests.length) throw new BadRequestException('Aucun invité trouvé dans le fichier');
-    if (guests.length > MAX_GUESTS_PER_BATCH) {
-      throw new BadRequestException(`Maximum ${MAX_GUESTS_PER_BATCH} invités par import`);
+    if (guests.length > max) {
+      throw new BadRequestException(`Maximum ${max} invités par import`);
     }
     return guests;
   }

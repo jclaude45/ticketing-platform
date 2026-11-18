@@ -13,7 +13,8 @@ import {
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
-export const MAX_GUESTS_PER_BATCH = 500;
+/** Guests per request: a whole imported file's selection goes in one (one print-quota payment) */
+export const MAX_GUESTS_PER_BATCH = 2000;
 
 export class InvitationGuestDto {
   @ApiProperty({ example: 'Marie Dupont' })
@@ -26,7 +27,14 @@ export class InvitationGuestDto {
   @IsOptional()
   @IsEmail()
   email?: string;
+
+  @ApiPropertyOptional({ example: '0811111111' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  phone?: string;
 }
+
 
 /** EMAIL: sent by e-mail. PAPER: printed with its QR code (no e-mail; the guest confirms by scanning it) */
 export const DELIVERY_MODES = ['EMAIL', 'PAPER'] as const;
@@ -71,6 +79,14 @@ export class ImportInvitationsDto {
   @MaxLength(1000)
   message?: string;
 
+  @ApiPropertyOptional({ enum: DELIVERY_MODES, default: 'EMAIL' })
+  @IsOptional()
+  @IsIn(DELIVERY_MODES)
+  delivery?: DeliveryMode;
+}
+
+/** Multipart field sent with the file to preview */
+export class PreviewImportDto {
   @ApiPropertyOptional({ enum: DELIVERY_MODES, default: 'EMAIL' })
   @IsOptional()
   @IsIn(DELIVERY_MODES)

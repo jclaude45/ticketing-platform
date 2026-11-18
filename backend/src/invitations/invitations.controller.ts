@@ -12,7 +12,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { InvitationsService } from './invitations.service';
-import { SendInvitationsDto, ImportInvitationsDto } from './dto/invitation.dto';
+import { SendInvitationsDto, ImportInvitationsDto, PreviewImportDto } from './dto/invitation.dto';
 import { SaveGuestFormDto } from './dto/guest-form.dto';
 
 @ApiTags('Invitations')
@@ -35,8 +35,33 @@ export class InvitationsController {
   send(@Param('eventId') eventId: string, @CurrentUser() user: any, @Body() dto: SendInvitationsDto) {
     return this.invitationsService.sendInvitations(
       eventId, user.id, user.role, dto.templateId,
-      dto.guests.map((g) => ({ name: g.name, email: g.email ?? '' })), dto.message, dto.delivery,
+      dto.guests.map((g) => ({ name: g.name, email: g.email ?? '', phone: g.phone })), dto.message, dto.delivery,
     );
+  }
+
+  @Post('import/preview')
+  @HttpCode(HttpStatus.OK)
+  @Roles(Role.ORGANIZER, Role.ADMIN)
+  @ApiOperation({ summary: 'Read a guest file and show each line, with what would stop it (nothing created)' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file', {
+    storage: memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (_, file, cb) => {
+      if (file.originalname.match(/\.(xlsx|xls|csv)$/i)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Seuls les fichiers .xlsx et .csv sont acceptés'), false);
+      }
+    },
+  }))
+  preview(
+    @Param('eventId') eventId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() dto: PreviewImportDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.invitationsService.previewImport(eventId, user.id, user.role, file, dto.delivery);
   }
 
   @Post('import')

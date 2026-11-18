@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePrintPayment, isPrintPaymentError } from '@/components/billing/usePrintPayment';
@@ -12,6 +12,7 @@ import toast from 'react-hot-toast';
 import { apiClient, eventsApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { GuestFormEditor, type GuestForm } from '@/components/invitations/GuestFormEditor';
+import { ImportPreview, type PreviewGuest } from '@/components/invitations/ImportPreview';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -66,6 +67,12 @@ export default function InvitationsPage() {
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [result, setResult] = useState<SendResult | null>(null);
+  // Imported file: its lines are shown first, the organizer then invites all, some or one
+  const [preview, setPreview] = useState<PreviewGuest[] | null>(null);
+  const [invitedLines, setInvitedLines] = useState<Set<number>>(new Set());
+  // Read by a retry after paying: only the lines not invited yet go again
+  const invitedRef = useRef(invitedLines);
+  invitedRef.current = invitedLines;
   const fileRef = useRef<HTMLInputElement>(null);
 
   const { data: event } = useQuery({
@@ -160,19 +167,67 @@ export default function InvitationsPage() {
     onError: (err: any) => onError(err, () => sendManual.mutate()),
   });
 
-  const sendImport = useMutation({
-    mutationFn: async () => {
+  const loadPreview = useMutation({
+    mutationFn: async (f: File) => {
       const form = new FormData();
-      form.append('file', file!);
-      form.append('templateId', templateId);
+      form.append('file', f);
       form.append('delivery', delivery);
-      if (message.trim()) form.append('message', message.trim());
-      return unwrap(await apiClient.post(`/events/${eventId}/invitations/import`, form, {
+      return (unwrap(await apiClient.post(`/events/${eventId}/invitations/import/preview`, form, {
         headers: { 'Content-Type': 'multipart/form-data' },
-      })) as SendResult;
+      })) as { guests: PreviewGuest[] }).guests;
     },
-    onSuccess: onSent,
-    onError: (err: any) => onError(err, () => sendImport.mutate()),
+    onSuccess: (guests) => { setPreview(guests); setInvitedLines(new Set()); },
+    onError: (err: any) => { setPreview(null); onError(err); },
+  });
+
+  // Paper or e-mail changes what a line needs (an address or not): read the file again
+  useEffect(() => {
+    if (file && mode === 'import') loadPreview.mutate(file);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [delivery]);
+
+  // The ticked lines, 2000 per request (the server's batch limit): one request, so one
+  // print-quota payment, for a whole file's selection
+  const sendImport = useMutation({
+    mutationFn: async (picked: number[]) => {
+      const indexes = picked.filter((i) => !invitedRef.current.has(i));
+      const total: SendResult = { created: 0, skipped: [], errors: [] };
+      for (let k = 0; k < indexes.length; k += 2000) {
+        const chunk = indexes.slice(k, k + 2000);
+        const res = unwrap(await apiClient.post(`/events/${eventId}/invitations`, {
+          templateId,
+          message: message.trim() || undefined,
+          delivery,
+          guests: chunk.map((i) => {
+            const g = preview![i];
+            return { name: g.name, ...(g.email && { email: g.email }), ...(g.phone && { phone: g.phone.slice(0, 30) }) };
+          }),
+        })) as SendResult;
+        total.created += res.created;
+        total.skipped.push(...res.skipped);
+        total.errors.push(...res.errors);
+        // Lines the server took: everything sent but what it reported back
+        const refused = new Set([...res.skipped, ...res.errors].map((e) => e.email));
+        setInvitedLines((s) => { const n = new Set(s); chunk.forEach((i) => { if (!preview![i].email || !refused.has(preview![i].email)) n.add(i); }); return n; });
+      }
+      return total;
+    },
+    onSuccess: (data) => {
+      setResult(data);
+      if (data.created > 0) {
+        toast.success(paper
+          ? `${data.created} invitation(s) papier créée(s) : téléchargez leurs QR pour les imprimer`
+          : `${data.created} invitation(s) en cours d'envoi`);
+      } else {
+        toast.error('Aucune invitation envoyée');
+      }
+      queryClient.invalidateQueries({ queryKey: ['invitations', eventId] });
+      queryClient.invalidateQueries({ queryKey: ['ticket-templates', eventId] });
+      queryClient.invalidateQueries({ queryKey: ['invitation-capacity', eventId] });
+      queryClient.invalidateQueries({ queryKey: ['tickets', eventId], refetchType: 'all' });
+      queryClient.invalidateQueries({ queryKey: ['event', eventId], refetchType: 'all' });
+    },
+    onError: (err: any, indexes) => onError(err, () => sendImport.mutate(indexes)),
   });
 
   const resend = useMutation({
@@ -205,6 +260,8 @@ export default function InvitationsPage() {
     }
     setFile(f);
     setResult(null);
+    setPreview(null);
+    loadPreview.mutate(f);
   };
 
   const updateRow = (i: number, patch: Partial<GuestRow>) =>
@@ -213,9 +270,7 @@ export default function InvitationsPage() {
   const sending = sendManual.isPending || sendImport.isPending;
   const guestCount = mode === 'manual' ? validRows.length : null;
   const notEnoughSeats = selectedTemplate && guestCount !== null && guestCount > selectedTemplate.availableCount;
-  const canSend = !!templateId && !sending && !notEnoughSeats && (
-    mode === 'manual' ? validRows.length > 0 && invalidRows.length === 0 : !!file
-  );
+  const canSend = !!templateId && !sending && !notEnoughSeats && mode === 'manual' && validRows.length > 0 && invalidRows.length === 0;
   const isCancelled = event?.status === 'CANCELLED';
 
   const sentCount = invitations.filter((i) => i.status !== 'CANCELLED').length;
@@ -408,13 +463,13 @@ export default function InvitationsPage() {
                   dragOver ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' : 'border-gray-300 dark:border-gray-700 hover:border-indigo-400',
                 )}
               >
-                <Upload className="mx-auto h-8 w-8 text-gray-400 mb-2" />
+                {loadPreview.isPending ? <Loader2 className="mx-auto h-8 w-8 text-gray-400 mb-2 animate-spin" /> : <Upload className="mx-auto h-8 w-8 text-gray-400 mb-2" />}
                 {file ? (
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">{file.name}</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{file.name}<span className="block text-xs font-normal text-gray-500 mt-1">Cliquez pour choisir un autre fichier</span></p>
                 ) : (
                   <>
                     <p className="text-sm font-medium text-gray-900 dark:text-white">Glissez votre fichier ici ou cliquez pour choisir</p>
-                    <p className="text-xs text-gray-500 mt-1">.xlsx ou .csv — colonnes « Nom » et « Email »{paper ? ' (email facultatif)' : ''} (500 invités max)</p>
+                    <p className="text-xs text-gray-500 mt-1">.xlsx ou .csv — colonnes « Nom » et « Email »{paper ? ' (email facultatif)' : ''} — vous verrez la liste avant d’envoyer</p>
                   </>
                 )}
                 <input
@@ -433,6 +488,16 @@ export default function InvitationsPage() {
                 <Download className="h-4 w-4" />
                 Télécharger le modèle Excel
               </button>
+              {preview && (
+                <ImportPreview
+                  guests={preview}
+                  invited={invitedLines}
+                  paper={paper}
+                  seatsLeft={templateId ? selectedTemplate?.availableCount ?? 0 : undefined}
+                  sending={sendImport.isPending}
+                  onInvite={(indexes) => sendImport.mutate(indexes)}
+                />
+              )}
             </div>
           )}
 
@@ -443,19 +508,17 @@ export default function InvitationsPage() {
             </p>
           )}
 
-          <div className="flex justify-end">
+          {mode === 'manual' && <div className="flex justify-end">
             <button
               type="button"
               disabled={!canSend}
-              onClick={() => (mode === 'manual' ? sendManual.mutate() : sendImport.mutate())}
+              onClick={() => sendManual.mutate()}
               className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
             >
               {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              {mode === 'manual'
-                ? `${paper ? 'Créer' : 'Envoyer'} ${validRows.length > 0 ? validRows.length : ''} invitation${validRows.length > 1 ? 's' : ''}${paper ? ' papier' : ''}`
-                : paper ? 'Importer et créer' : 'Importer et envoyer'}
+              {`${paper ? 'Créer' : 'Envoyer'} ${validRows.length > 0 ? validRows.length : ''} invitation${validRows.length > 1 ? 's' : ''}${paper ? ' papier' : ''}`}
             </button>
-          </div>
+          </div>}
 
           {result && <ResultPanel result={result} />}
         </div>
