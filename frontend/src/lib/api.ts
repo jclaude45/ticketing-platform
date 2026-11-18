@@ -800,6 +800,13 @@ export const communicationApi = {
     apiClient.post(`/communication/campaigns/${id}/schedule`, { scheduledAt }),
   getCampaignStats: (id: string) =>
     apiClient.get(`/communication/campaigns/${id}/stats`),
+
+  // Pictures put in campaigns and templates (resized server-side, returned as a public URL)
+  uploadImage: (formData: FormData) =>
+    apiClient.post<ApiResponse<{ url: string }>>('/communication/images', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000, // slow mobile connections
+    }),
 };
 
 export const invitationApi = {

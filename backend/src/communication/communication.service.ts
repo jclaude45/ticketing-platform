@@ -4,12 +4,17 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationChannel, CampaignStatus, CampaignType, RecipientStatus, Role } from '@prisma/client';
 import * as nodemailer from 'nodemailer';
+import { randomUUID } from 'crypto';
 import { Twilio } from 'twilio';
 import { CreateCampaignDto, UpdateCampaignDto, ScheduleCampaignDto } from './dto/create-campaign.dto';
 import { CreateTemplateDto, UpdateTemplateDto } from './dto/create-template.dto';
 import { DEFAULT_TEMPLATES } from './default-templates';
 import { SubscriptionService } from '../subscription/subscription.service';
 import { esc } from '../common/email/layout';
+import { StorageService } from '../storage/storage.service';
+import { MAX_IMAGE_PIXELS } from '../common/image-limits';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const sharp: typeof import('sharp').default = require('sharp');
 
 /**
  * Free plan: campaigns leave from ZAYA's mail domain, and a free account (made by a bot as
@@ -31,6 +36,7 @@ export class CommunicationService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly subscriptions: SubscriptionService,
+    private readonly storage: StorageService,
   ) {
     this.mailerTransport = nodemailer.createTransport({
       host: config.get('email.host'),
@@ -79,6 +85,39 @@ export class CommunicationService {
     if (role !== Role.ADMIN && role !== Role.SUPER_ADMIN && c.event.organizerId !== userId) {
       throw new ForbiddenException('Accès refusé');
     }
+  }
+
+  // ─── IMAGES ───────────────────────────────────────────────────
+
+  /**
+   * Picture put in a campaign or template: stored once, then linked by URL from every e-mail.
+   * Resized to 1200 px wide (twice the 600 px of the e-mail, sharp on phones) and re-encoded:
+   * a 5 MB photo sent to every guest would weigh on their data and on deliverability.
+   * WebP becomes JPEG or PNG, which Outlook and older mail apps do not show otherwise.
+   */
+  async uploadImage(userId: string, file: { buffer: Buffer }) {
+    const ext = this.storage.imageExtension(file.buffer);
+    let buffer = file.buffer;
+    let type = 'image/gif';
+    let out: string = ext;
+    // GIFs keep their animation, as long as they stay light
+    if (ext === '.gif') {
+      if (buffer.length > 2 * 1024 * 1024) throw new BadRequestException('GIF trop lourd : 2 Mo au maximum');
+    } else {
+      const image = sharp(buffer, { limitInputPixels: MAX_IMAGE_PIXELS }).rotate();
+      const meta = await image.metadata().catch(() => null);
+      if (!meta?.width || !meta?.height) throw new BadRequestException('Image illisible');
+      const resized = image.resize({ width: 1200, withoutEnlargement: true });
+      if (meta.hasAlpha) {
+        buffer = await resized.png({ compressionLevel: 9 }).toBuffer();
+        type = 'image/png'; out = '.png';
+      } else {
+        buffer = await resized.jpeg({ quality: 82, mozjpeg: true }).toBuffer();
+        type = 'image/jpeg'; out = '.jpg';
+      }
+    }
+    const { url } = await this.storage.uploadBuffer(buffer, `${randomUUID()}${out}`, type, `campaigns/${userId}`);
+    return { url };
   }
 
   // ─── TEMPLATES ────────────────────────────────────────────────

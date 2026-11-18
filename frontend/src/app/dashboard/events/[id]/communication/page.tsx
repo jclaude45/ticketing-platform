@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -27,7 +27,7 @@ import {
   Sparkles,
   X,
   Lock,
-  Crown, AlarmClock
+  Crown, AlarmClock, ImagePlus
 } from 'lucide-react';
 import { communicationApi, subscriptionApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -964,6 +964,7 @@ function NewCampaignModal({
     sendNow: false,
   });
   const [showPreview, setShowPreview] = useState(false);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
   const queryClient = useQueryClient();
 
   const createMutation = useMutation({
@@ -1104,14 +1105,17 @@ function NewCampaignModal({
                 Contenu *
               </label>
               {isEmail && (
-                <button
-                  type="button"
-                  onClick={() => setShowPreview(!showPreview)}
-                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
-                >
-                  <Eye className="h-3 w-3" />
-                  {showPreview ? 'Masquer aperçu' : 'Aperçu HTML'}
-                </button>
+                <div className="flex items-center gap-4">
+                  <InsertImageButton textarea={bodyRef} body={form.body} onChange={body => setForm(f => ({ ...f, body }))} />
+                  <button
+                    type="button"
+                    onClick={() => setShowPreview(!showPreview)}
+                    className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+                  >
+                    <Eye className="h-3 w-3" />
+                    {showPreview ? 'Masquer aperçu' : 'Aperçu HTML'}
+                  </button>
+                </div>
               )}
             </div>
 
@@ -1119,6 +1123,7 @@ function NewCampaignModal({
               <EmailPreview html={form.body} className="w-full h-[480px] block border-b border-gray-200 dark:border-gray-700 bg-white" />
             ) : (
               <textarea
+                ref={bodyRef}
                 value={form.body}
                 onChange={e => setForm(f => ({ ...f, body: e.target.value }))}
                 rows={8}
@@ -1128,8 +1133,10 @@ function NewCampaignModal({
                   : 'Texte du message. Max 160 caractères pour SMS standard.'}
               />
             )}
-            {!isEmail && (
+            {!isEmail ? (
               <p className="text-xs text-gray-400 mt-1">{form.body.length} caractères</p>
+            ) : (
+              <p className="text-xs text-gray-400 mt-1">« Insérer une image » remplace une image de votre modèle ou en ajoute une au curseur. Vérifiez le rendu avec l’aperçu.</p>
             )}
           </div>
 
@@ -1194,6 +1201,7 @@ function NewTemplateModal({ onClose, onCreated }: { onClose: () => void; onCreat
     body: '',
     isDefault: false,
   });
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   const createMutation = useMutation({
     mutationFn: (data: any) => communicationApi.createTemplate(data),
@@ -1251,8 +1259,14 @@ function NewTemplateModal({ onClose, onCreated }: { onClose: () => void; onCreat
             </div>
           )}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Contenu *</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Contenu *</label>
+              {form.channel === 'EMAIL' && (
+                <InsertImageButton textarea={bodyRef} body={form.body} onChange={body => setForm(f => ({ ...f, body }))} />
+              )}
+            </div>
             <textarea
+              ref={bodyRef}
               value={form.body}
               onChange={e => setForm(f => ({ ...f, body: e.target.value }))}
               rows={6}
@@ -1360,6 +1374,112 @@ function CampaignStatsModal({
       </div>
     </div>
   );
+}
+
+/**
+ * Picks a picture, uploads it and puts it in the e-mail, without writing HTML by hand. When the
+ * design already has pictures (a slot left for one, the poster…), the organizer chooses which
+ * one it replaces: only its src changes, the design's size and style stay. Otherwise, or on
+ * request, a mail-safe tag (fixed width, block, no border) goes at the cursor (at the end when
+ * the box was never clicked or the preview is shown).
+ */
+function InsertImageButton({ textarea, body, onChange }: {
+  textarea: React.RefObject<HTMLTextAreaElement | null>;
+  body: string;
+  onChange: (body: string) => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  // Uploaded, waiting for the organizer to say where it goes
+  const [pending, setPending] = useState<{ url: string; alt: string; at: number | null } | null>(null);
+  const slots = imageSlots(body);
+
+  const insertAtCursor = (p: { url: string; alt: string; at: number | null }) => {
+    const tag = `<img src="${p.url}" alt="${p.alt}" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0;margin:16px auto;" />`;
+    const pos = Math.min(p.at ?? body.length, body.length);
+    onChange(`${body.slice(0, pos)}\n${tag}\n${body.slice(pos)}`);
+  };
+  const replace = (slot: ImageSlot, url: string) => {
+    const tag = slot.src === null
+      ? slot.tag.replace(/^<img\b/i, `<img src="${url}"`)
+      : slot.tag.replace(/\bsrc\s*=\s*(["'])[\s\S]*?\1/i, `src="${url}"`);
+    onChange(body.slice(0, slot.index) + tag + body.slice(slot.index + slot.tag.length));
+  };
+
+  const upload = async (file: File) => {
+    if (file.size > 5 * 1024 * 1024) { toast.error('Image trop lourde : 5 Mo au maximum'); return; }
+    // Read before the upload: the cursor may move while it runs. A box never clicked says 0
+    const at = textarea.current?.selectionStart || null;
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append('image', file);
+      const res = await communicationApi.uploadImage(fd);
+      const p = { url: res.data.data.url, alt: file.name.replace(/\.[^.]+$/, '').replace(/[<>&"]/g, ''), at };
+      if (slots.length === 0) { insertAtCursor(p); toast.success('Image insérée'); } else setPending(p);
+    } catch (e: any) {
+      const m = e?.response?.data?.message;
+      toast.error(Array.isArray(m) ? m[0] : m || 'Impossible d’envoyer l’image');
+    } finally {
+      setBusy(false);
+      if (input.current) input.current.value = '';
+    }
+  };
+
+  const done = (text: string) => { setPending(null); toast.success(text); };
+
+  return (
+    <div className="relative">
+      <input ref={input} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; if (f) upload(f); }} />
+      <button type="button" disabled={busy} onClick={() => input.current?.click()}
+        className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 disabled:opacity-60">
+        {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <ImagePlus className="h-3 w-3" />}
+        Insérer une image
+      </button>
+      {pending && (
+        <div className="absolute right-0 top-6 z-10 w-80 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3 shadow-lg">
+          <p className="text-xs font-medium text-gray-700 dark:text-gray-200 mb-2">Votre modèle contient déjà des images. Où placer la nouvelle ?</p>
+          <div className="space-y-1 max-h-64 overflow-y-auto">
+            {slots.map((slot, i) => (
+              <button key={slot.index} type="button" onClick={() => { replace(slot, pending.url); done('Image remplacée'); }}
+                className="w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">
+                {slot.preview
+                  ? <img src={slot.preview} alt="" className="h-8 w-12 flex-shrink-0 rounded object-cover bg-gray-100" />
+                  : <span className="h-8 w-12 flex-shrink-0 rounded bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-[10px] text-gray-400">vide</span>}
+                <span className="truncate">Remplacer l’image n° {i + 1}{slot.label ? ` — ${slot.label}` : ''}</span>
+              </button>
+            ))}
+            <button type="button" onClick={() => { insertAtCursor(pending); done('Image insérée'); }}
+              className="w-full rounded-lg px-2 py-1.5 text-left text-xs text-indigo-600 dark:text-indigo-400 hover:bg-gray-100 dark:hover:bg-gray-700">
+              + Ajouter une nouvelle image à l’emplacement du curseur
+            </button>
+          </div>
+          <button type="button" onClick={() => setPending(null)} className="mt-2 text-xs text-gray-400 hover:text-gray-600">Annuler</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface ImageSlot { index: number; tag: string; src: string | null; label: string; preview: string | null }
+
+/** The <img> tags of an e-mail design, with what helps recognize each one */
+function imageSlots(body: string): ImageSlot[] {
+  return Array.from(body.matchAll(/<img\b[^>]*>/gi)).map((m) => {
+    const src = /\bsrc\s*=\s*(["'])([\s\S]*?)\1/i.exec(m[0])?.[2] ?? null;
+    const alt = /\balt\s*=\s*(["'])([\s\S]*?)\1/i.exec(m[0])?.[2] ?? '';
+    const isBanner = src?.includes('{{bannerUrl}}');
+    const file = src && !src.includes('{{') ? src.split(/[?#]/)[0].split('/').pop() ?? '' : '';
+    return {
+      index: m.index!,
+      tag: m[0],
+      src,
+      label: isBanner ? 'affiche de l’événement' : alt || file || (src ? '' : 'emplacement vide'),
+      // Only real web addresses are shown (a design's placeholder may be anything)
+      preview: src && /^https:\/\//i.test(src) ? src : null,
+    };
+  });
 }
 
 /**

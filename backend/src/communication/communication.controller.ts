@@ -1,7 +1,10 @@
 import {
   Controller, Get, Post, Put, Delete, Body, Param, UseGuards, HttpCode, HttpStatus,
+  UseInterceptors, UploadedFile, BadRequestException,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiConsumes } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { CommunicationService } from './communication.service';
@@ -25,6 +28,18 @@ export class CommunicationController {
   @ApiOperation({ summary: 'Check available channels (email/SMS/WhatsApp)' })
   getChannelStatus() {
     return this.service.getChannelStatus();
+  }
+
+  // ─── IMAGES ───────────────────────────────────────────────────
+
+  @Post('images')
+  @ApiOperation({ summary: 'Upload a picture for a campaign or template; returns its public URL' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('image', { storage: memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 1 } }))
+  async uploadImage(@CurrentUser('id') userId: string, @UploadedFile() file: Express.Multer.File) {
+    await this.subscriptionService.checkAllowCommunication(userId);
+    if (!file) throw new BadRequestException('Aucune image reçue');
+    return this.service.uploadImage(userId, file);
   }
 
   // ─── TEMPLATES ────────────────────────────────────────────────
