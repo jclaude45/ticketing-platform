@@ -164,6 +164,8 @@ export default function CommunicationPage() {
     queryKey: ['campaigns', eventId],
     queryFn: () => communicationApi.getCampaigns(eventId).then(r => (r.data as any).data),
     refetchOnMount: 'always',
+    // A send in progress: its counter moves every few seconds
+    refetchInterval: (q) => (q.state.data?.some(c => c.status === 'SENDING') ? 4000 : false),
   });
 
   const { data: templates = [] } = useQuery<Template[]>({
@@ -649,6 +651,19 @@ function CampaignRow({
           <Users className="h-3 w-3" />
           {campaign.list ? `Liste « ${campaign.list.name} » (${campaign.list._count.members})` : 'Tous les participants de l’événement'}
         </p>
+
+        {campaign.status === 'SENDING' && campaign._count.recipients > 0 && (
+          <div className="mt-2 max-w-sm">
+            <div className="flex justify-between text-xs text-gray-500 mb-1">
+              <span className="flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" />Envoi en cours…</span>
+              <span>{campaign.totalSent + campaign.totalFailed} / {campaign._count.recipients}</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+              <div className="h-full bg-indigo-600 transition-all"
+                style={{ width: `${Math.round(((campaign.totalSent + campaign.totalFailed) / campaign._count.recipients) * 100)}%` }} />
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
           {campaign._count.recipients > 0 && (

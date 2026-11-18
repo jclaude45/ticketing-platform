@@ -23,6 +23,8 @@ const sharp: typeof import('sharp').default = require('sharp');
  */
 const FREE_CAMPAIGNS_PER_EVENT = 5;
 const FREE_RECIPIENTS_PER_DAY = 300;
+/** Messages sent at the same time (as many SMTP connections in the pool) */
+const SEND_CONCURRENCY = 5;
 
 const OLD_UNSUBSCRIBE_LINE = 'Pour ne plus en recevoir, répondez à ce message.';
 /** Footer of the predefined templates: "Envoyé avec ZAYA" already signs them */
@@ -52,6 +54,9 @@ export class CommunicationService {
         user: config.get('email.user'),
         pass: config.get('email.password'),
       },
+      // Connections kept open and shared: campaigns send several messages at once
+      pool: true,
+      maxConnections: SEND_CONCURRENCY,
     });
     this.emailFrom = config.get('email.from') || 'noreply@ticketing.com';
 
@@ -564,48 +569,23 @@ export class CommunicationService {
     return this.prisma.campaignRecipient.findMany({ where: { campaignId } });
   }
 
+  /**
+   * Sends to everyone not reached yet, a few at a time (one by one, 500 e-mails took 9 minutes).
+   * The totals are saved as it goes: the dashboard shows the progress, and a send cut short
+   * (restart, deploy) is picked up again by the cron from where it stopped.
+   */
   private async dispatchCampaign(campaign: any, recipients: any[]) {
-    let sent = 0;
-    let failed = 0;
-
-    for (const recipient of recipients) {
-      if (recipient.status === RecipientStatus.SENT) continue;
-
-      const unsubscribe = recipient.email ? this.unsubscribeLinks(campaign.event.organizerId, recipient.email) : null;
-      const { body, subject } = this.render(campaign, recipient, unsubscribe?.page);
-
-      try {
-        if (campaign.channel === NotificationChannel.EMAIL && recipient.email) {
-          await this.sendEmail(recipient.email, subject || campaign.name, body, unsubscribe?.oneClick);
-        } else if (campaign.channel === NotificationChannel.SMS && recipient.phone) {
-          await this.sendSms(recipient.phone, body);
-        } else if (campaign.channel === NotificationChannel.WHATSAPP && recipient.phone) {
-          await this.sendWhatsApp(recipient.phone, body);
-        } else {
-          // No contact info for this channel
-          await this.prisma.campaignRecipient.update({
-            where: { id: recipient.id },
-            data: { status: RecipientStatus.FAILED, error: 'Coordonnées manquantes' },
-          });
-          failed++;
-          continue;
-        }
-
-        await this.prisma.campaignRecipient.update({
-          where: { id: recipient.id },
-          data: { status: RecipientStatus.SENT, sentAt: new Date() },
-        });
-        sent++;
-      } catch (err) {
-        await this.prisma.campaignRecipient.update({
-          where: { id: recipient.id },
-          data: { status: RecipientStatus.FAILED, error: err.message },
-        });
-        failed++;
-        this.logger.warn(`Échec envoi à ${recipient.email || recipient.phone}: ${err.message}`);
+    const queue = recipients.filter(r => r.status !== RecipientStatus.SENT);
+    let done = 0;
+    const worker = async () => {
+      for (let r = queue.shift(); r; r = queue.shift()) {
+        await this.sendToRecipient(campaign, r);
+        if (++done % 20 === 0) await this.saveProgress(campaign.id);
       }
-    }
+    };
+    await Promise.all(Array.from({ length: Math.min(SEND_CONCURRENCY, queue.length) }, worker));
 
+    const { sent, failed } = await this.saveProgress(campaign.id);
     const finalStatus =
       failed === 0 ? CampaignStatus.SENT :
       sent === 0 ? CampaignStatus.FAILED :
@@ -613,10 +593,74 @@ export class CommunicationService {
 
     await this.prisma.notificationCampaign.update({
       where: { id: campaign.id },
-      data: { status: finalStatus, sentAt: new Date(), totalSent: sent, totalFailed: failed },
+      data: { status: finalStatus, sentAt: new Date() },
     });
 
     this.logger.log(`Campagne ${campaign.id}: ${sent} envoyés, ${failed} échoués`);
+  }
+
+  private async sendToRecipient(campaign: any, recipient: any) {
+    const unsubscribe = recipient.email ? this.unsubscribeLinks(campaign.event.organizerId, recipient.email) : null;
+    const { body, subject } = this.render(campaign, recipient, unsubscribe?.page);
+    const send = async () => {
+      if (campaign.channel === NotificationChannel.EMAIL && recipient.email) {
+        await this.sendEmail(recipient.email, subject || campaign.name, body, unsubscribe?.oneClick);
+      } else if (campaign.channel === NotificationChannel.SMS && recipient.phone) {
+        await this.sendSms(recipient.phone, body);
+      } else if (campaign.channel === NotificationChannel.WHATSAPP && recipient.phone) {
+        await this.sendWhatsApp(recipient.phone, body);
+      } else {
+        return false;
+      }
+      return true;
+    };
+
+    try {
+      // One more try after a pause: a mail server asking to slow down answers with a temporary error
+      const reached = await send().catch(async () => { await new Promise(r => setTimeout(r, 3000)); return send(); });
+      await this.prisma.campaignRecipient.update({
+        where: { id: recipient.id },
+        data: reached
+          ? { status: RecipientStatus.SENT, sentAt: new Date(), error: null }
+          : { status: RecipientStatus.FAILED, error: 'Coordonnées manquantes' },
+      });
+    } catch (err) {
+      await this.prisma.campaignRecipient.update({
+        where: { id: recipient.id },
+        data: { status: RecipientStatus.FAILED, error: String(err.message).slice(0, 500) },
+      });
+      this.logger.warn(`Échec envoi campagne ${campaign.id}: ${err.message}`);
+    }
+  }
+
+  /** Counts from the recipients themselves (a resumed send adds to the first one) */
+  private async saveProgress(campaignId: string) {
+    const counts = await this.prisma.campaignRecipient.groupBy({ by: ['status'], where: { campaignId }, _count: { status: true } });
+    const n = (st: RecipientStatus) => counts.find(c => c.status === st)?._count.status ?? 0;
+    const sent = n(RecipientStatus.SENT);
+    const failed = n(RecipientStatus.FAILED);
+    await this.prisma.notificationCampaign.update({ where: { id: campaignId }, data: { totalSent: sent, totalFailed: failed } });
+    return { sent, failed };
+  }
+
+  /** Sends cut short by a restart: no progress saved for 10 minutes, taken up again once */
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async resumeStalledCampaigns() {
+    const stalled = await this.prisma.notificationCampaign.findMany({
+      where: { status: CampaignStatus.SENDING, updatedAt: { lt: new Date(Date.now() - 10 * 60 * 1000) } },
+      include: { event: true },
+    });
+    for (const campaign of stalled) {
+      // Taken by this run only: its updatedAt moves, another instance's claim then matches nothing
+      const { count } = await this.prisma.notificationCampaign.updateMany({
+        where: { id: campaign.id, status: CampaignStatus.SENDING, updatedAt: campaign.updatedAt },
+        data: { updatedAt: new Date() },
+      });
+      if (count === 0) continue;
+      this.logger.warn(`Reprise de la campagne ${campaign.id}, interrompue`);
+      const recipients = await this.buildRecipients(campaign);
+      await this.dispatchCampaign(campaign, recipients).catch(err => this.logger.error(`Reprise campagne ${campaign.id}: ${err.message}`));
+    }
   }
 
   /** The message one recipient gets: variables filled in, the poster row dropped when there is none */
