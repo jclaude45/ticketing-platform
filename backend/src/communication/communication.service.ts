@@ -25,6 +25,8 @@ const FREE_CAMPAIGNS_PER_EVENT = 5;
 const FREE_RECIPIENTS_PER_DAY = 300;
 
 const OLD_UNSUBSCRIBE_LINE = 'Pour ne plus en recevoir, répondez à ce message.';
+/** Footer of the predefined templates: "Envoyé avec ZAYA" already signs them */
+const ZAYA_SIGNED = /Envoyé avec\s*<strong[^>]*>ZAYA<\/strong>/;
 const UNSUBSCRIBE_LINE = '<a href="{{unsubscribeUrl}}" style="color:#6b6b6b;text-decoration:underline;">Se désinscrire</a>';
 
 @Injectable()
@@ -653,10 +655,11 @@ export class CommunicationService {
       ? Object.fromEntries(Object.entries(vars).map(([k, v]) => [k, esc(String(v ?? ''))]))
       : vars);
     const subject = campaign.subject ? this.renderTemplate(campaign.subject, vars) : undefined;
-    // Every e-mail carries the way out, unless the design already places {{unsubscribeUrl}}
-    const withFooter = campaign.channel !== NotificationChannel.EMAIL || design.includes('{{unsubscribeUrl}}')
+    // Every e-mail carries the way out (unless the design already places {{unsubscribeUrl}})
+    // and ZAYA's signature (unless the design is a predefined template, which has its own)
+    const withFooter = campaign.channel !== NotificationChannel.EMAIL
       ? body
-      : this.addUnsubscribeFooter(body, vars.unsubscribeUrl);
+      : this.addFooter(body, design.includes('{{unsubscribeUrl}}') ? null : vars.unsubscribeUrl, !ZAYA_SIGNED.test(design));
     return { body: withFooter, subject };
   }
 
@@ -668,9 +671,13 @@ export class CommunicationService {
     return { page: `${site}/desinscription/${token}`, oneClick: `${api}/api/v1/public/unsubscribe/${token}` };
   }
 
-  private addUnsubscribeFooter(html: string, url: string) {
-    const footer = `<div style="max-width:600px;margin:24px auto 8px;padding:0 16px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#888888;">`
-      + `Vous ne souhaitez plus recevoir ces e-mails ? <a href="${esc(url)}" style="color:#888888;text-decoration:underline;">Se désinscrire</a></div>`;
+  private addFooter(html: string, unsubscribeUrl: string | null, signature: boolean) {
+    const lines = [
+      unsubscribeUrl && `Vous ne souhaitez plus recevoir ces e-mails ? <a href="${esc(unsubscribeUrl)}" style="color:#888888;text-decoration:underline;">Se désinscrire</a>`,
+      signature && `Powered by <a href="https://zaya.live" style="color:#111111;font-weight:bold;text-decoration:none;">ZAYA</a>`,
+    ].filter(Boolean);
+    if (!lines.length) return html;
+    const footer = `<div style="max-width:600px;margin:24px auto 8px;padding:0 16px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:20px;color:#888888;">${lines.join('<br/>')}</div>`;
     return /<\/body>/i.test(html) ? html.replace(/<\/body>/i, `${footer}</body>`) : `${html}${footer}`;
   }
 
