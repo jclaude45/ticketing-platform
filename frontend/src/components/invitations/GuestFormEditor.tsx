@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, ChevronDown, ClipboardList, Loader2, Plus, QrCode, RefreshCw, Save, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ClipboardList, Loader2, Plus, QrCode, RefreshCw, Save, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -50,7 +50,6 @@ export function GuestFormEditor({ eventId, form, templates, timeZone = DEFAULT_T
 }) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<GuestForm | null>(null);
-  const [open, setOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
@@ -93,15 +92,16 @@ export function GuestFormEditor({ eventId, form, templates, timeZone = DEFAULT_T
     fields.splice(i + by, 0, f);
     update({ fields });
   };
-  const add = (f: Omit<FormField, 'id'>) => { update({ fields: [...draft.fields, { ...f, id: newId() }] }); setOpen(true); };
+  const add = (f: Omit<FormField, 'id'>) => update({ fields: [...draft.fields, { ...f, id: newId() }] });
 
   return (
-    <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 py-5">
+    <div className="flex flex-col gap-5">
+    <section className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           <ClipboardList className="mt-0.5 h-5 w-5 text-indigo-600" />
           <div>
-            <h2 className="font-semibold text-gray-900 dark:text-white">Confirmation par l&apos;invité</h2>
+            <h2 className="font-semibold text-gray-900 dark:text-white">Confirmation de présence</h2>
             <p className="text-sm text-gray-500">
               {draft.enabled
                 ? 'Chaque invité reçoit un lien : il confirme, répond à vos questions, puis reçoit son billet.'
@@ -115,13 +115,9 @@ export function GuestFormEditor({ eventId, form, templates, timeZone = DEFAULT_T
         </label>
       </div>
 
-      <button type="button" onClick={() => setOpen((o) => !o)} className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:underline">
-        <ChevronDown className={cn('h-4 w-4 transition-transform', open && 'rotate-180')} />
-        {open ? 'Masquer le formulaire' : `Modifier le formulaire (${draft.fields.length} question${draft.fields.length > 1 ? 's' : ''})`}
-      </button>
-
-      {open && (
-        <div className="mt-5 flex flex-col gap-5">
+      {/* The questions also serve sign-ups through the shared QR */}
+      {(draft.enabled || draft.openEnabled) && (
+        <div className="mt-5 flex flex-col gap-5 border-t border-gray-100 pt-5 dark:border-gray-800">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="block">
               <span className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Date limite de réponse</span>
@@ -228,17 +224,20 @@ export function GuestFormEditor({ eventId, form, templates, timeZone = DEFAULT_T
         </div>
       )}
 
+    </section>
+
       <SharedLink eventId={eventId} draft={draft} update={update} templates={templates} saved={form} dirty={dirty} capacityAvailable={capacityAvailable} />
 
       {dirty && (
-        <div className="mt-5 flex items-center justify-end gap-3">
+        <div className="sticky bottom-4 z-10 flex items-center justify-end gap-3 rounded-xl border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur dark:border-gray-700 dark:bg-gray-900/95">
+          <span className="mr-auto text-sm text-gray-600 dark:text-gray-400">Modifications non enregistrées</span>
           <button type="button" onClick={() => { setDirty(false); setDraft(form ? { ...form } : null); }} className="text-sm text-gray-500 hover:underline">
             Annuler
           </button>
           <button type="button" onClick={() => save.mutate(draft)} disabled={save.isPending}
             className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
             {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            Enregistrer le formulaire
+            Enregistrer
           </button>
         </div>
       )}
@@ -277,17 +276,22 @@ function SharedLink({ eventId, draft, update, templates, saved, dirty, capacityA
   const live = saved?.openEnabled && saved.openUrl;
 
   return (
-    <div className="mt-5 rounded-xl border border-gray-200 p-4 dark:border-gray-700">
-      <label className="flex cursor-pointer items-start gap-3">
-        <input type="checkbox" checked={!!draft.openEnabled} onChange={(e) => update({ openEnabled: e.target.checked })} className="mt-0.5 h-4 w-4 accent-indigo-600" />
-        <span>
-          <span className="block text-sm font-semibold text-gray-900 dark:text-white">QR commun (le même sur toutes les invitations papier)</span>
-          <span className="mt-0.5 block text-xs text-gray-500">
-            Quiconque scanne ce QR peut s&apos;inscrire : il donne son nom et son e-mail, répond à vos questions et reçoit son billet.
-            Limitez le nombre d&apos;inscriptions si besoin.
-          </span>
-        </span>
-      </label>
+    <section className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <QrCode className="mt-0.5 h-5 w-5 text-indigo-600" />
+          <div>
+            <h2 className="font-semibold text-gray-900 dark:text-white">QR commun d&apos;inscription</h2>
+            <p className="text-sm text-gray-500">
+              Le même QR sur toutes vos invitations papier ou vos affiches : quiconque le scanne s&apos;inscrit (nom, e-mail, vos questions) et reçoit son billet.
+            </p>
+          </div>
+        </div>
+        <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+          <input type="checkbox" checked={!!draft.openEnabled} onChange={(e) => update({ openEnabled: e.target.checked })} className="h-4 w-4 accent-indigo-600" />
+          Activer
+        </label>
+      </div>
       {draft.openEnabled && (
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="block">
@@ -327,8 +331,8 @@ function SharedLink({ eventId, draft, update, templates, saved, dirty, capacityA
           </div>
         </div>
       )}
-      {draft.openEnabled && dirty && <p className="mt-3 text-xs text-gray-500">Enregistrez le formulaire pour obtenir le lien et son QR.</p>}
-    </div>
+      {draft.openEnabled && dirty && <p className="mt-3 text-xs text-gray-500">Enregistrez pour obtenir le lien et son QR.</p>}
+    </section>
   );
 }
 

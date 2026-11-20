@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Loader2, Search, Send } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface PreviewGuest {
@@ -16,23 +16,29 @@ export interface PreviewGuest {
 /** Rows drawn at once: selection still applies to all the lines the search keeps */
 const SHOWN = 300;
 
+/** The lines that can be ticked: no problem, not invited yet */
+export const invitableLines = (guests: PreviewGuest[], invited: Set<number>, selected: Set<number>) =>
+  Array.from(selected).filter((i) => guests[i] && !guests[i].issue && !invited.has(i));
+
 /**
- * The lines of an imported guest file, before anything is sent: the organizer ticks whom to
- * invite (all, some, or one with its own button). Lines with a problem cannot be ticked.
+ * People to pick from before anything is sent (an imported file, the organizer's contacts):
+ * the organizer ticks whom to invite, or invites one with its own button. Lines with a problem
+ * cannot be ticked. The page holds the selection and sends it.
  */
-export function ImportPreview({ guests, invited, paper, seatsLeft, sending, onInvite, counted = 'ligne(s) lue(s)' }: {
+export function ImportPreview({ guests, invited, paper, canInvite, sending, selected, setSelected, onInvite, counted = 'ligne(s) lue(s)' }: {
   guests: PreviewGuest[];
   /** What the total counts: lines of a file, contacts */
   counted?: string;
   /** Lines (by index) invited during this session */
   invited: Set<number>;
   paper: boolean;
-  /** Seats left in the chosen category (undefined: no category chosen yet) */
-  seatsLeft?: number;
+  /** A category with seats is chosen: one line can be invited by its own button */
+  canInvite: boolean;
   sending: boolean;
+  selected: Set<number>;
+  setSelected: (update: (s: Set<number>) => Set<number>) => void;
   onInvite: (indexes: number[]) => void;
 }) {
-  const [selected, setSelected] = useState<Set<number>>(new Set());
   const [query, setQuery] = useState('');
   const [onlyIssues, setOnlyIssues] = useState(false);
 
@@ -46,10 +52,8 @@ export function ImportPreview({ guests, invited, paper, seatsLeft, sending, onIn
 
   const ready = guests.filter((_, i) => invitable(i)).length;
   const issues = guests.filter((g, i) => g.issue && !invited.has(i)).length;
-  const chosen = Array.from(selected).filter(invitable);
   const filteredInvitable = filtered.filter(({ i }) => invitable(i));
   const allFiltered = filteredInvitable.length > 0 && filteredInvitable.every(({ i }) => selected.has(i));
-  const tooMany = seatsLeft !== undefined && chosen.length > seatsLeft;
 
   const toggle = (i: number) => setSelected((s) => { const n = new Set(s); if (n.has(i)) n.delete(i); else n.add(i); return n; });
   const toggleFiltered = () => setSelected((s) => {
@@ -57,9 +61,9 @@ export function ImportPreview({ guests, invited, paper, seatsLeft, sending, onIn
     filteredInvitable.forEach(({ i }) => (allFiltered ? n.delete(i) : n.add(i)));
     return n;
   });
-  const invite = (indexes: number[]) => {
-    onInvite(indexes);
-    setSelected((s) => { const n = new Set(s); indexes.forEach((i) => n.delete(i)); return n; });
+  const invite = (i: number) => {
+    onInvite([i]);
+    setSelected((s) => { const n = new Set(s); n.delete(i); return n; });
   };
 
   return (
@@ -117,8 +121,8 @@ export function ImportPreview({ guests, invited, paper, seatsLeft, sending, onIn
                     ) : g.issue ? (
                       <span className="rounded-full bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 text-[11px] text-amber-700 dark:text-amber-400">{g.issue}</span>
                     ) : (
-                      <button type="button" disabled={sending || seatsLeft === undefined || seatsLeft < 1}
-                        onClick={(e) => { e.stopPropagation(); invite([i]); }}
+                      <button type="button" disabled={sending || !canInvite}
+                        onClick={(e) => { e.stopPropagation(); invite(i); }}
                         className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-50">
                         {paper ? 'Créer' : 'Inviter'}
                       </button>
@@ -136,22 +140,6 @@ export function ImportPreview({ guests, invited, paper, seatsLeft, sending, onIn
         )}
       </div>
 
-      {tooMany && (
-        <p className="flex items-center gap-2 text-sm text-red-600">
-          <AlertTriangle className="h-4 w-4" />
-          {chosen.length} personnes cochées pour {seatsLeft} place(s) disponible(s) dans cette catégorie.
-        </p>
-      )}
-
-      <div className="flex justify-end">
-        <button type="button" disabled={chosen.length === 0 || sending || tooMany || seatsLeft === undefined}
-          onClick={() => invite(chosen)}
-          className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors">
-          {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          {paper ? 'Créer' : 'Inviter'} {chosen.length > 0 ? `les ${chosen.length} personne(s) cochée(s)` : 'la sélection'}
-        </button>
-      </div>
-      {seatsLeft === undefined && <p className="text-right text-xs text-gray-500">Choisissez d’abord la catégorie des invitations.</p>}
     </div>
   );
 }
