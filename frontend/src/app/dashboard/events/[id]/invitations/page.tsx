@@ -17,7 +17,7 @@ import { ImportPreview, type PreviewGuest } from '@/components/invitations/Impor
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 /** NONE: paper invitation (printed QR code, no e-mail) */
-type EmailStatus = 'PENDING' | 'SENT' | 'FAILED' | 'NONE';
+type EmailStatus = 'PENDING' | 'SENT' | 'FAILED' | 'NONE' | 'HELD';
 
 interface Invitation {
   id: string;
@@ -40,6 +40,8 @@ interface GuestIssue { row?: number; name: string; email: string; reason: string
 
 interface SendResult {
   created: number;
+  /** Past the day's 200 new addresses: they go out automatically on the following days */
+  held?: number;
   skipped: GuestIssue[];
   errors: GuestIssue[];
 }
@@ -131,6 +133,7 @@ export default function InvitationsPage() {
       toast.success(paper
         ? `${data.created} invitation(s) papier créée(s) : téléchargez leurs QR pour les imprimer`
         : `${data.created} invitation(s) en cours d'envoi`);
+      if (!paper && data.held) toast(heldNotice(data.held), { duration: 10000 });
       setRows([{ name: '', email: '' }]);
       setFile(null);
     } else {
@@ -204,6 +207,7 @@ export default function InvitationsPage() {
           }),
         })) as SendResult;
         total.created += res.created;
+        total.held = (total.held ?? 0) + (res.held ?? 0);
         total.skipped.push(...res.skipped);
         total.errors.push(...res.errors);
         // Lines the server took: everything sent but what it reported back
@@ -218,6 +222,7 @@ export default function InvitationsPage() {
         toast.success(paper
           ? `${data.created} invitation(s) papier créée(s) : téléchargez leurs QR pour les imprimer`
           : `${data.created} invitation(s) en cours d'envoi`);
+      if (!paper && data.held) toast(heldNotice(data.held), { duration: 10000 });
       } else {
         toast.error('Aucune invitation envoyée');
       }
@@ -630,6 +635,7 @@ function ResultPanel({ result }: { result: SendResult }) {
         {result.skipped.length > 0 && <span className="text-gray-500 font-normal">· {result.skipped.length} ignorée(s)</span>}
         {result.errors.length > 0 && <span className="text-red-600 font-normal">· {result.errors.length} erreur(s)</span>}
       </p>
+      {!!result.held && <p className="mt-2 text-gray-600 dark:text-gray-400">{heldNotice(result.held)}</p>}
       {issues.length > 0 && (
         <ul className="mt-3 max-h-48 overflow-y-auto space-y-1">
           {issues.map((e, i) => (
@@ -643,11 +649,15 @@ function ResultPanel({ result }: { result: SendResult }) {
   );
 }
 
+const heldNotice = (n: number) =>
+  `${n} invitation(s) en attente : pour protéger la réception de vos e-mails, 200 nouvelles adresses partent au plus par jour. Les suivantes partent automatiquement les jours suivants.`;
+
 function EmailBadge({ status }: { status: EmailStatus }) {
   const map = {
     PENDING: { label: 'En cours', icon: Clock, cls: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400' },
     SENT: { label: 'Envoyé', icon: CheckCircle2, cls: 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400' },
     FAILED: { label: 'Échec', icon: AlertTriangle, cls: 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400' },
+    HELD: { label: 'En attente', icon: Clock, cls: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300' },
     NONE: { label: 'Papier', icon: QrCode, cls: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300' },
   }[status] ?? { label: status, icon: Clock, cls: 'bg-gray-100 text-gray-600' };
   return (

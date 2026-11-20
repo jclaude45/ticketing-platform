@@ -5,6 +5,7 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma, Role, TicketStatus } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import { loadCsv, loadXlsx } from '../common/spreadsheet-guard';
@@ -27,8 +28,16 @@ import { SaveGuestFormDto } from './dto/guest-form.dto';
 /** Invitation tickets are regular tickets tagged with metadata.source = INVITATION. */
 export const INVITATION_SOURCE = 'INVITATION';
 
-/** NONE: paper invitation, no e-mail is sent (the guest confirms by scanning its QR code) */
-export type EmailStatus = 'PENDING' | 'SENT' | 'FAILED' | 'NONE';
+/**
+ * NONE: paper invitation, no e-mail is sent (the guest confirms by scanning its QR code).
+ * HELD: past the day's allowance of addresses ZAYA does not know yet, sent on a later day.
+ */
+export type EmailStatus = 'PENDING' | 'SENT' | 'FAILED' | 'NONE' | 'HELD';
+
+/** Invitation e-mails to addresses ZAYA does not know, per organizer and 24 hours: to start, and at most */
+const NEW_ADDRESSES_DAILY_START = 200;
+const NEW_ADDRESSES_DAILY_MAX = 5000;
+const HELD_NOTE = 'En attente : 200 nouvelles adresses par jour au plus, envoi automatique les jours suivants';
 
 interface InvitationMetadata {
   source: typeof INVITATION_SOURCE;
@@ -37,6 +46,8 @@ interface InvitationMetadata {
   message: string | null;
   emailStatus: EmailStatus;
   emailSentAt?: string;
+  /** Sent to an address ZAYA did not know: counts against the organizer's daily allowance */
+  emailNew?: boolean;
   delivery?: DeliveryMode;
 }
 
@@ -169,14 +180,20 @@ export class InvitationsService {
 
     // Emails go out in the background: a large list would otherwise time out the request.
     // Each ticket's metadata.emailStatus tracks delivery, visible in the invitations list.
+    // Addresses ZAYA does not know past the day's allowance wait for the following days.
+    let heldIds = new Set<string>();
     if (!paper) {
-      this.deliver(event, tickets, cleanMessage).catch((err) =>
+      const { now, later, fresh } = await this.withinAllowance(event.organizerId, tickets);
+      heldIds = new Set(later.map((t) => t.id));
+      await this.hold(later.map((t) => t.id));
+      this.deliver(event, now, cleanMessage, fresh).catch((err) =>
         this.logger.error(`Invitation delivery crashed for event ${eventId}: ${err?.message}`),
       );
     }
 
     return {
       created: tickets.length,
+      held: heldIds.size,
       skipped,
       errors,
       invitations: tickets.map((t) => ({
@@ -184,7 +201,7 @@ export class InvitationsService {
         serialNumber: t.serialNumber,
         holderName: t.holderName,
         holderEmail: t.holderEmail,
-        emailStatus: (paper ? 'NONE' : 'PENDING') as EmailStatus,
+        emailStatus: (paper ? 'NONE' : heldIds.has(t.id) ? 'HELD' : 'PENDING') as EmailStatus,
       })),
     };
   }
@@ -263,7 +280,8 @@ export class InvitationsService {
         metadata: true, template: { select: { name: true, currency: true, validDays: true } },
       },
     });
-    this.deliver(event, tickets, null).catch((err) =>
+    // The guest stands at the door: a real person, outside the daily allowance
+    this.deliver(event, tickets, null, new Set()).catch((err) =>
       this.logger.error(`Door invitation delivery crashed for event ${eventId}: ${err?.message}`),
     );
 
@@ -385,7 +403,14 @@ export class InvitationsService {
     if (!ticket.holderEmail) throw new BadRequestException("Cette invitation n'a pas d'adresse email");
 
     const meta = (ticket.metadata ?? {}) as Partial<InvitationMetadata>;
-    const status = await this.deliverOne(event, ticket, meta.message ?? null);
+    // Already reached once: no new address. Otherwise it takes a place in the day's allowance.
+    const { now, fresh } = meta.emailStatus === 'SENT'
+      ? { now: [ticket], fresh: new Set<string>() }
+      : await this.withinAllowance(event.organizerId, [ticket]);
+    if (!now.length) {
+      throw new BadRequestException('Limite du jour atteinte : 200 nouvelles adresses par 24 heures. Cette invitation partira automatiquement plus tard.');
+    }
+    const status = await this.deliverOne(event, ticket, meta.message ?? null, false, fresh.has(ticket.id));
     if (status !== 'SENT') throw new BadRequestException("L'email n'a pas pu être envoyé. Réessayez plus tard.");
     return { emailStatus: status };
   }
@@ -658,12 +683,115 @@ export class InvitationsService {
     event: Awaited<ReturnType<InvitationsService['loadEvent']>>,
     tickets: Parameters<InvitationsService['deliverOne']>[1][],
     message: string | null,
+    fresh: Set<string>,
   ) {
     let sent = 0;
     for (const t of tickets) {
-      if ((await this.deliverOne(event, t, message)) === 'SENT') sent++;
+      if ((await this.deliverOne(event, t, message, false, fresh.has(t.id))) === 'SENT') sent++;
     }
     this.logger.log(`Invitations for event ${event.id}: ${sent}/${tickets.length} emails sent`);
+  }
+
+  /**
+   * Which invitations may be e-mailed now. Addresses ZAYA knows (an account, a ticket bought or
+   * registered for online) always; the others within the organizer's allowance of the day, the
+   * rest waits (`later`). Suppressed addresses take no place: deliverOne refuses them anyway.
+   */
+  private async withinAllowance<T extends { id: string; holderEmail: string | null }>(organizerId: string, tickets: T[]) {
+    const emails = Array.from(new Set(tickets.map((t) => t.holderEmail?.trim().toLowerCase()).filter((e): e is string => !!e)));
+    const [users, buyers, suppressed] = emails.length
+      ? await Promise.all([
+          this.prisma.user.findMany({ where: { email: { in: emails, mode: 'insensitive' } }, select: { email: true } }),
+          this.prisma.ticket.findMany({ where: { holderEmail: { in: emails, mode: 'insensitive' }, source: 'ONLINE' }, select: { holderEmail: true }, distinct: ['holderEmail'] }),
+          this.prisma.emailSuppression.findMany({ where: { email: { in: emails } }, select: { email: true } }),
+        ])
+      : [[], [], []];
+    const known = new Set([...users.map((u) => u.email), ...buyers.map((b) => b.holderEmail!), ...suppressed.map((s) => s.email)].map((e) => e.toLowerCase()));
+
+    let allowance = await this.newAddressAllowance(organizerId);
+    const now: T[] = [];
+    const later: T[] = [];
+    const fresh = new Set<string>();
+    for (const t of tickets) {
+      const email = t.holderEmail?.trim().toLowerCase();
+      if (!email || known.has(email)) now.push(t);
+      else if (allowance > 0) { allowance--; fresh.add(t.id); now.push(t); }
+      else later.push(t);
+    }
+    return { now, later, fresh };
+  }
+
+  /**
+   * New addresses an organizer's invitations may reach in the next 24 hours: 200 to start, plus
+   * those reached in the last 30 days that neither bounced nor complained (a real guest list
+   * opens the way for more), at most 5000. None while the day's bounces and complaints pass 5 %
+   * (10 or more): a made-up list cannot get far, nor get ZAYA's sending suspended again.
+   */
+  private async newAddressAllowance(organizerId: string): Promise<number> {
+    const [row] = await this.prisma.$queryRaw<{ today: bigint; proven: bigint; bad: bigint }[]>`
+      SELECT
+        count(*) FILTER (WHERE x.sent >= now() - interval '24 hours') AS today,
+        count(*) FILTER (WHERE x.sent < now() - interval '24 hours' AND s.email IS NULL) AS proven,
+        count(*) FILTER (WHERE x.sent >= now() - interval '24 hours' AND s.email IS NOT NULL) AS bad
+      FROM (
+        SELECT lower(t."holderEmail") AS email, (t.metadata->>'emailSentAt')::timestamptz AS sent
+        FROM "Ticket" t JOIN "Event" e ON e.id = t."eventId"
+        WHERE e."organizerId" = ${organizerId} AND t.source = 'INVITATION' AND t.metadata->>'emailNew' = 'true'
+      ) x
+      LEFT JOIN "EmailSuppression" s ON s.email = x.email
+      WHERE x.sent >= now() - interval '30 days'`;
+    const today = Number(row?.today ?? 0);
+    const bad = Number(row?.bad ?? 0);
+    if (bad >= 10 && bad >= today * 0.05) return 0;
+    return Math.max(0, Math.min(NEW_ADDRESSES_DAILY_MAX, NEW_ADDRESSES_DAILY_START + Number(row?.proven ?? 0)) - today);
+  }
+
+  /** Marks invitations as waiting for a later day's allowance */
+  private async hold(ticketIds: string[]) {
+    if (!ticketIds.length) return;
+    const patch = JSON.stringify({ emailStatus: 'HELD', emailError: HELD_NOTE });
+    await this.prisma.$executeRaw`
+      UPDATE "Ticket" SET metadata = coalesce(metadata, '{}'::jsonb) || ${patch}::jsonb
+      WHERE id IN (${Prisma.join(ticketIds)})`;
+  }
+
+  private releasing = false;
+
+  /** Waiting invitations go out as each organizer's allowance frees up, oldest first */
+  @Cron(CronExpression.EVERY_HOUR)
+  async releaseHeldInvitations() {
+    if (this.releasing) return;
+    this.releasing = true;
+    try {
+      const held = await this.prisma.ticket.findMany({
+        where: { source: 'INVITATION', status: { not: TicketStatus.CANCELLED }, metadata: { path: ['emailStatus'], equals: 'HELD' } },
+        orderBy: { createdAt: 'asc' },
+        take: 5000,
+        select: {
+          id: true, serialNumber: true, holderName: true, holderEmail: true, qrCode: true, status: true, eventId: true,
+          metadata: true, template: { select: { name: true, currency: true, validDays: true } },
+          event: { select: { organizerId: true } },
+        },
+      });
+      const byOrganizer = new Map<string, typeof held>();
+      held.forEach((t) => byOrganizer.set(t.event.organizerId, [...(byOrganizer.get(t.event.organizerId) ?? []), t]));
+
+      for (const [organizerId, tickets] of Array.from(byOrganizer)) {
+        const { now, fresh } = await this.withinAllowance(organizerId, tickets);
+        const events = new Map<string, Awaited<ReturnType<InvitationsService['eventForMail']>>>();
+        let sent = 0;
+        for (const t of now) {
+          if (!events.has(t.eventId)) events.set(t.eventId, await this.eventForMail(t.eventId));
+          const meta = (t.metadata ?? {}) as Partial<InvitationMetadata>;
+          if ((await this.deliverOne(events.get(t.eventId)!, t, meta.message ?? null, false, fresh.has(t.id))) === 'SENT') sent++;
+        }
+        if (now.length) this.logger.log(`Invitations en attente (organisateur ${organizerId}) : ${sent}/${now.length} envoyées, ${tickets.length - now.length} attendent encore`);
+      }
+    } catch (err) {
+      this.logger.error(`Release of held invitations failed: ${(err as Error).message}`);
+    } finally {
+      this.releasing = false;
+    }
   }
 
   /**
@@ -680,6 +808,8 @@ export class InvitationsService {
     message: string | null,
     /** The guest asked for it (they just answered on their page): their unsubscribe does not apply */
     requestedByGuest = false,
+    /** An address ZAYA did not know: once sent, it counts in the organizer's daily allowance */
+    fresh = false,
   ): Promise<EmailStatus> {
     let status: EmailStatus = 'FAILED';
     let skipped: string | null = null;
@@ -745,7 +875,7 @@ export class InvitationsService {
         metadata: {
           ...meta,
           emailStatus: status,
-          ...(status === 'SENT' && { emailSentAt: new Date().toISOString() }),
+          ...(status === 'SENT' && { emailSentAt: new Date().toISOString(), ...(fresh && { emailNew: true }) }),
           ...(skipped ? { emailError: skipped } : { emailError: null }),
         } as Prisma.InputJsonValue,
       },
