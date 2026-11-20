@@ -1,18 +1,19 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePrintPayment, isPrintPaymentError } from '@/components/billing/usePrintPayment';
 import {
   ArrowLeft, Mail, Plus, Trash2, Upload, Download, Loader2, Send, FileSpreadsheet,
-  CheckCircle2, AlertTriangle, RotateCw, UserPlus, Clock, XCircle, QrCode,
+  CheckCircle2, AlertTriangle, RotateCw, UserPlus, Clock, XCircle, QrCode, Users,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { apiClient, eventsApi } from '@/lib/api';
+import { apiClient, communicationApi, eventsApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { GuestFormEditor, type GuestForm } from '@/components/invitations/GuestFormEditor';
 import { ImportPreview, type PreviewGuest } from '@/components/invitations/ImportPreview';
+import type { Contact } from '@/components/communication/MailingLists';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -60,7 +61,9 @@ export default function InvitationsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const [mode, setMode] = useState<'manual' | 'import'>('manual');
+  const [mode, setMode] = useState<'manual' | 'import' | 'contacts'>('manual');
+  // Contacts mode: the people of one of the organizer's events, or of all of them
+  const [contactEvent, setContactEvent] = useState('');
   // PAPER: printed with a QR code, the address is optional and nothing is e-mailed
   const [delivery, setDelivery] = useState<'EMAIL' | 'PAPER'>('EMAIL');
   const [templateId, setTemplateId] = useState('');
@@ -75,6 +78,7 @@ export default function InvitationsPage() {
   // Read by a retry after paying: only the lines not invited yet go again
   const invitedRef = useRef(invitedLines);
   invitedRef.current = invitedLines;
+  const shownRef = useRef<PreviewGuest[] | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const { data: event } = useQuery({
@@ -94,6 +98,32 @@ export default function InvitationsPage() {
     refetchInterval: (query) =>
       (query.state.data ?? []).some((i) => i.emailStatus === 'PENDING') ? 4000 : false,
   });
+
+  // Everyone who left an e-mail on the organizer's events: buyers, sign-ups, guests, shop
+  const { data: contacts = [], isLoading: contactsLoading } = useQuery<Contact[]>({
+    queryKey: ['comm-contacts'],
+    queryFn: async () => unwrap(await communicationApi.getContacts()) ?? [],
+    enabled: mode === 'contacts',
+  });
+  const contactEvents = useMemo(() => {
+    const byId = new Map<string, string>();
+    contacts.forEach((c) => c.events.forEach((e) => byId.set(e.id, e.name)));
+    return Array.from(byId, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  }, [contacts]);
+  const contactGuests = useMemo<PreviewGuest[]>(() => {
+    const invited = new Set(invitations.filter((i) => i.status !== 'CANCELLED').map((i) => i.holderEmail?.toLowerCase()));
+    return contacts
+      .filter((c) => !contactEvent || c.events.some((e) => e.id === contactEvent))
+      .map((c) => ({
+        name: [c.firstName, c.lastName].filter(Boolean).join(' '),
+        email: c.email,
+        phone: c.phone ?? '',
+        issue: invited.has(c.email) ? 'Déjà invité(e)'
+          : c.bounced ? 'Adresse en erreur'
+          : c.unsubscribed && delivery === 'EMAIL' ? 'S’est désinscrit(e)'
+          : null,
+      }));
+  }, [contacts, contactEvent, invitations, delivery]);
 
   const { data: guestForm } = useQuery<GuestForm>({
     queryKey: ['guest-form', eventId],
@@ -193,6 +223,7 @@ export default function InvitationsPage() {
   // print-quota payment, for a whole file's selection
   const sendImport = useMutation({
     mutationFn: async (picked: number[]) => {
+      const shown = shownRef.current!;
       const indexes = picked.filter((i) => !invitedRef.current.has(i));
       const total: SendResult = { created: 0, skipped: [], errors: [] };
       for (let k = 0; k < indexes.length; k += 2000) {
@@ -202,7 +233,7 @@ export default function InvitationsPage() {
           message: message.trim() || undefined,
           delivery,
           guests: chunk.map((i) => {
-            const g = preview![i];
+            const g = shown[i];
             return { name: g.name, ...(g.email && { email: g.email }), ...(g.phone && { phone: g.phone.slice(0, 30) }) };
           }),
         })) as SendResult;
@@ -212,7 +243,7 @@ export default function InvitationsPage() {
         total.errors.push(...res.errors);
         // Lines the server took: everything sent but what it reported back
         const refused = new Set([...res.skipped, ...res.errors].map((e) => e.email));
-        setInvitedLines((s) => { const n = new Set(s); chunk.forEach((i) => { if (!preview![i].email || !refused.has(preview![i].email)) n.add(i); }); return n; });
+        setInvitedLines((s) => { const n = new Set(s); chunk.forEach((i) => { if (!shown[i].email || !refused.has(shown[i].email)) n.add(i); }); return n; });
       }
       return total;
     },
@@ -273,6 +304,9 @@ export default function InvitationsPage() {
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
 
   const sending = sendManual.isPending || sendImport.isPending;
+  // The lines the organizer picks from: the imported file, or their contacts
+  const shown = mode === 'contacts' ? contactGuests : mode === 'import' ? preview : null;
+  shownRef.current = shown;
   const guestCount = mode === 'manual' ? validRows.length : null;
   const notEnoughSeats = selectedTemplate && guestCount !== null && guestCount > selectedTemplate.availableCount;
   const canSend = !!templateId && !sending && !notEnoughSeats && mode === 'manual' && validRows.length > 0 && invalidRows.length === 0;
@@ -391,11 +425,12 @@ export default function InvitationsPage() {
             {([
               { key: 'manual', label: 'Ajouter des invités', icon: UserPlus },
               { key: 'import', label: 'Importer un fichier Excel', icon: FileSpreadsheet },
+              { key: 'contacts', label: 'Depuis mes contacts', icon: Users },
             ] as const).map((tab) => (
               <button
                 key={tab.key}
                 type="button"
-                onClick={() => { setMode(tab.key); setResult(null); }}
+                onClick={() => { setMode(tab.key); setResult(null); setInvitedLines(new Set()); }}
                 className={cn(
                   'inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
                   mode === tab.key
@@ -454,6 +489,36 @@ export default function InvitationsPage() {
               </button>
               {invalidRows.length > 0 && (
                 <p className="text-xs text-red-600">{paper ? 'Chaque invité doit avoir un nom ; l’email, s’il est rempli, doit être valide.' : 'Chaque invité doit avoir un nom et un email valide.'}</p>
+              )}
+            </div>
+          ) : mode === 'contacts' ? (
+            <div className="flex flex-col gap-3">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Les personnes qui ont laissé leur e-mail sur vos événements : achats, inscriptions, invitations, boutique.
+              </p>
+              <select
+                value={contactEvent}
+                onChange={(e) => { setContactEvent(e.target.value); setInvitedLines(new Set()); }}
+                className="w-full sm:w-auto self-start rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:border-indigo-500 focus:outline-none"
+              >
+                <option value="">Tous mes événements</option>
+                {contactEvents.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+              </select>
+              {contactsLoading ? (
+                <Loader2 className="mx-auto h-6 w-6 animate-spin text-gray-400" />
+              ) : contactGuests.length === 0 ? (
+                <p className="text-sm text-gray-500">Aucun contact pour le moment : ils apparaissent dès que des personnes achètent un billet, s’inscrivent ou commandent sur vos événements.</p>
+              ) : (
+                <ImportPreview
+                  key={contactEvent}
+                  counted="contact(s)"
+                  guests={contactGuests}
+                  invited={invitedLines}
+                  paper={paper}
+                  seatsLeft={templateId ? selectedTemplate?.availableCount ?? 0 : undefined}
+                  sending={sendImport.isPending}
+                  onInvite={(indexes) => sendImport.mutate(indexes)}
+                />
               )}
             </div>
           ) : (

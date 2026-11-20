@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { Prisma, Role, TicketStatus } from '@prisma/client';
+import { PaymentStatus, Prisma, Role, TicketStatus } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import { loadCsv, loadXlsx } from '../common/spreadsheet-guard';
 import { readPeople } from '../common/contact-sheet';
@@ -694,19 +694,24 @@ export class InvitationsService {
 
   /**
    * Which invitations may be e-mailed now. Addresses ZAYA knows (an account, a ticket bought or
-   * registered for online) always; the others within the organizer's allowance of the day, the
+   * registered for online, an order paid, a shop purchase) always; the others within the organizer's allowance of the day, the
    * rest waits (`later`). Suppressed addresses take no place: deliverOne refuses them anyway.
    */
   private async withinAllowance<T extends { id: string; holderEmail: string | null }>(organizerId: string, tickets: T[]) {
     const emails = Array.from(new Set(tickets.map((t) => t.holderEmail?.trim().toLowerCase()).filter((e): e is string => !!e)));
-    const [users, buyers, suppressed] = emails.length
+    const [users, holders, payers, shoppers, suppressed] = emails.length
       ? await Promise.all([
           this.prisma.user.findMany({ where: { email: { in: emails, mode: 'insensitive' } }, select: { email: true } }),
           this.prisma.ticket.findMany({ where: { holderEmail: { in: emails, mode: 'insensitive' }, source: 'ONLINE' }, select: { holderEmail: true }, distinct: ['holderEmail'] }),
+          this.prisma.payment.findMany({ where: { holderEmail: { in: emails, mode: 'insensitive' }, status: PaymentStatus.COMPLETED }, select: { holderEmail: true }, distinct: ['holderEmail'] }),
+          this.prisma.merchOrder.findMany({ where: { buyerEmail: { in: emails, mode: 'insensitive' }, paidAt: { not: null } }, select: { buyerEmail: true }, distinct: ['buyerEmail'] }),
           this.prisma.emailSuppression.findMany({ where: { email: { in: emails } }, select: { email: true } }),
         ])
-      : [[], [], []];
-    const known = new Set([...users.map((u) => u.email), ...buyers.map((b) => b.holderEmail!), ...suppressed.map((s) => s.email)].map((e) => e.toLowerCase()));
+      : [[], [], [], [], []];
+    const known = new Set([
+      ...users.map((u) => u.email), ...holders.map((h) => h.holderEmail!), ...payers.map((p) => p.holderEmail),
+      ...shoppers.map((o) => o.buyerEmail), ...suppressed.map((s) => s.email),
+    ].map((e) => e.toLowerCase()));
 
     let allowance = await this.newAddressAllowance(organizerId);
     const now: T[] = [];

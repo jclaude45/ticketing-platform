@@ -1,13 +1,14 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { CampaignStatus, TicketStatus } from '@prisma/client';
+import { CampaignStatus, PaymentStatus, TicketStatus } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../prisma/prisma.service';
 import { loadCsv, loadXlsx } from '../common/spreadsheet-guard';
 import { readPeople } from '../common/contact-sheet';
 import { readUnsubscribeToken } from './unsubscribe';
 
-/** Where a contact comes from: a purchase or sign-up, an invitation, a ticket issued by hand */
-const ORIGIN: Record<string, 'PURCHASE' | 'INVITATION' | 'ISSUED'> = {
+/** Where a contact comes from: a purchase or sign-up, an invitation, a ticket issued by hand, the shop */
+type Origin = 'PURCHASE' | 'INVITATION' | 'ISSUED' | 'SHOP';
+const ORIGIN: Record<string, Origin> = {
   ONLINE: 'PURCHASE',
   INVITATION: 'INVITATION',
   GENERATION: 'ISSUED',
@@ -20,7 +21,7 @@ export interface Contact {
   phone: string | null;
   events: { id: string; name: string }[];
   categories: string[];
-  origins: ('PURCHASE' | 'INVITATION' | 'ISSUED')[];
+  origins: Origin[];
   unsubscribed: boolean;
   /** Bounced or reported spam: no campaign reaches it */
   bounced: boolean;
@@ -49,34 +50,53 @@ const splitName = (name: string | null) => {
 export class MailingListsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Everyone with an e-mail on the organizer's tickets, one entry per address */
+  /**
+   * Everyone who left an e-mail on one of the organizer's events, one entry per address: ticket
+   * holders (buyers, sign-ups, guests, tickets issued), whoever paid an order for others, and
+   * the shop's buyers
+   */
   async contacts(organizerId: string): Promise<Contact[]> {
-    const tickets = await this.prisma.ticket.findMany({
-      where: { event: { organizerId }, holderEmail: { not: null }, status: { not: TicketStatus.CANCELLED } },
-      select: {
-        holderEmail: true, holderName: true, holderPhone: true, source: true, createdAt: true,
-        event: { select: { id: true, name: true } },
-        template: { select: { name: true } },
-      },
-      orderBy: { createdAt: 'asc' },
-    });
+    const event = { select: { id: true, name: true } };
+    const [tickets, payments, orders] = await Promise.all([
+      this.prisma.ticket.findMany({
+        where: { event: { organizerId }, holderEmail: { not: null }, status: { not: TicketStatus.CANCELLED } },
+        select: { holderEmail: true, holderName: true, holderPhone: true, source: true, createdAt: true, event, template: { select: { name: true } } },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.payment.findMany({
+        where: { event: { organizerId }, status: PaymentStatus.COMPLETED },
+        select: { holderEmail: true, holderName: true, holderPhone: true, createdAt: true, event },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.merchOrder.findMany({
+        where: { event: { organizerId }, paidAt: { not: null } },
+        select: { buyerEmail: true, buyerName: true, buyerPhone: true, createdAt: true, event },
+        orderBy: { createdAt: 'asc' },
+      }),
+    ]);
+
+    // Oldest first: the latest name and phone given win
+    const entries = [
+      ...tickets.map((t) => ({ email: t.holderEmail!, name: t.holderName, phone: t.holderPhone, at: t.createdAt, event: t.event, category: t.template.name, origin: ORIGIN[t.source] ?? ('ISSUED' as Origin) })),
+      ...payments.map((p) => ({ email: p.holderEmail, name: p.holderName, phone: p.holderPhone, at: p.createdAt, event: p.event, category: null, origin: 'PURCHASE' as Origin })),
+      ...orders.map((o) => ({ email: o.buyerEmail, name: o.buyerName, phone: o.buyerPhone, at: o.createdAt, event: o.event, category: null, origin: 'SHOP' as Origin })),
+    ].sort((a, b) => a.at.getTime() - b.at.getTime());
+
     const byEmail = new Map<string, Contact>();
-    for (const t of tickets) {
-      const email = t.holderEmail!.trim().toLowerCase();
+    for (const t of entries) {
+      const email = t.email.trim().toLowerCase();
       if (!EMAIL_RE.test(email)) continue;
       let c = byEmail.get(email);
       if (!c) {
-        c = { email, ...splitName(t.holderName), phone: null, events: [], categories: [], origins: [], unsubscribed: false, bounced: false };
+        c = { email, ...splitName(t.name), phone: null, events: [], categories: [], origins: [], unsubscribed: false, bounced: false };
         byEmail.set(email, c);
-      } else if (t.holderName?.trim()) {
-        // The latest name given wins
-        Object.assign(c, splitName(t.holderName));
+      } else if (t.name?.trim()) {
+        Object.assign(c, splitName(t.name));
       }
-      if (t.holderPhone) c.phone = t.holderPhone;
+      if (t.phone) c.phone = t.phone;
       if (!c.events.some((e) => e.id === t.event.id)) c.events.push(t.event);
-      if (!c.categories.includes(t.template.name)) c.categories.push(t.template.name);
-      const origin = ORIGIN[t.source] ?? 'ISSUED';
-      if (!c.origins.includes(origin)) c.origins.push(origin);
+      if (t.category && !c.categories.includes(t.category)) c.categories.push(t.category);
+      if (!c.origins.includes(t.origin)) c.origins.push(t.origin);
     }
     const gone = await this.unsubscribed(organizerId);
     const bad = await this.suppressed(Array.from(byEmail.keys()));

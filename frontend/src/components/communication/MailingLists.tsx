@@ -7,7 +7,7 @@ import { FileUp, Loader2, Pencil, Plus, Search, Trash2, Upload, Users, X } from 
 import { communicationApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
-type Origin = 'PURCHASE' | 'INVITATION' | 'ISSUED' | 'IMPORTED';
+type Origin = 'PURCHASE' | 'INVITATION' | 'ISSUED' | 'SHOP' | 'IMPORTED';
 
 export interface Contact {
   email: string;
@@ -35,6 +35,7 @@ const ORIGIN_LABELS: Record<Origin, string> = {
   PURCHASE: 'Achat / inscription',
   INVITATION: 'Invitation',
   ISSUED: 'Billet émis',
+  SHOP: 'Boutique',
   IMPORTED: 'Importé',
 };
 

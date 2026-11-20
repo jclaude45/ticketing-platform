@@ -20,8 +20,10 @@ const SHOWN = 300;
  * The lines of an imported guest file, before anything is sent: the organizer ticks whom to
  * invite (all, some, or one with its own button). Lines with a problem cannot be ticked.
  */
-export function ImportPreview({ guests, invited, paper, seatsLeft, sending, onInvite }: {
+export function ImportPreview({ guests, invited, paper, seatsLeft, sending, onInvite, counted = 'ligne(s) lue(s)' }: {
   guests: PreviewGuest[];
+  /** What the total counts: lines of a file, contacts */
+  counted?: string;
   /** Lines (by index) invited during this session */
   invited: Set<number>;
   paper: boolean;
@@ -63,7 +65,7 @@ export function ImportPreview({ guests, invited, paper, seatsLeft, sending, onIn
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-        <span className="font-medium text-gray-900 dark:text-white">{guests.length} ligne(s) lue(s)</span>
+        <span className="font-medium text-gray-900 dark:text-white">{guests.length} {counted}</span>
         <span className="flex items-center gap-1 text-green-700 dark:text-green-400"><CheckCircle2 className="h-4 w-4" />{ready} prête(s) à inviter</span>
         {invited.size > 0 && <span className="text-gray-500">{invited.size} invitée(s)</span>}
         {issues > 0 && (
