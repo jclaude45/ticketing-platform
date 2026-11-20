@@ -688,6 +688,17 @@ model CampaignRecipient {
   @@index([email])
 }
 
+/// What the address verification service (Mails.so) said of an address, kept 90 days
+model EmailVerification {
+  /// Lowercase
+  email     String   @id
+  /// deliverable, undeliverable, risky, unknown
+  result    String
+  /// accepted_email, rejected_email, catch_all, no_connect, invalid_domain…
+  reason    String?
+  checkedAt DateTime @default(now())
+}
+
 /// Address no campaign may reach again: it bounced, was rejected or its owner reported spam
 model EmailSuppression {
   id        String   @id @default(uuid())

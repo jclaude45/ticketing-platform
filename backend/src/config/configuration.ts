@@ -32,6 +32,8 @@ export default () => ({
     },
     /** Secret part of the URL Mailtrap posts bounces and complaints to */
     webhookSecret: process.env.MAILTRAP_WEBHOOK_SECRET,
+    /** Mails.so: addresses ZAYA does not know are verified before any campaign or invitation */
+    verifyApiKey: process.env.MAILS_SO_API_KEY,
   },
   aws: {
     region: process.env.AWS_REGION || 'us-east-1',

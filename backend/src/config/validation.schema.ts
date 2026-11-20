@@ -23,6 +23,7 @@ export const validationSchema = Joi.object({
   BULK_EMAIL_USER: Joi.string().optional().allow(''),
   BULK_EMAIL_PASSWORD: Joi.string().optional().allow(''),
   MAILTRAP_WEBHOOK_SECRET: Joi.string().optional().allow(''),
+  MAILS_SO_API_KEY: Joi.string().optional().allow(''),
   AWS_REGION: Joi.string().default('us-east-1'),
   AWS_ACCESS_KEY_ID: Joi.string().optional().allow(''),
   AWS_SECRET_ACCESS_KEY: Joi.string().optional().allow(''),

@@ -13,6 +13,7 @@ import { SubscriptionService } from '../subscription/subscription.service';
 import { esc } from '../common/email/layout';
 import { unsubscribeLinks } from './unsubscribe';
 import { createBulkTransport } from '../common/email/bulk-transport';
+import { EmailVerifierService } from '../common/email/email-verifier.service';
 import { StorageService } from '../storage/storage.service';
 import { MAX_IMAGE_PIXELS } from '../common/image-limits';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -57,6 +58,7 @@ export class CommunicationService {
     private readonly config: ConfigService,
     private readonly subscriptions: SubscriptionService,
     private readonly storage: StorageService,
+    private readonly verifier: EmailVerifierService,
   ) {
     this.mailerTransport = nodemailer.createTransport({
       host: config.get('email.host'),
@@ -642,7 +644,26 @@ export class CommunicationService {
     // Imported addresses: today's allowance first, ticket holders always
     const allowance = await this.importedAllowance(organizerId);
     const imported = queue.filter(r => r.imported);
-    queue = [...queue.filter(r => !r.imported), ...imported.slice(0, allowance)];
+    let todayImported = imported.slice(0, allowance);
+
+    // Those are verified before anything is sent: only deliverable ones are written to. The
+    // ones the service could not reach stay pending, for "Reprendre"
+    if (this.verifier.enabled && todayImported.length) {
+      // Visible progress: the stalled-send cron leaves a campaign that moved alone
+      await this.prisma.notificationCampaign.update({ where: { id: campaign.id }, data: { updatedAt: new Date() } });
+      const verdicts = await this.verifier.verify(todayImported.map(r => r.email));
+      const verdictOf = (r: any) => verdicts.get(String(r.email).trim().toLowerCase());
+      for (const [verdict, error] of [
+        ['undeliverable', 'Adresse invalide selon la vérification : non envoyée'],
+        ['risky', 'Adresse non confirmée par la vérification (le serveur accepte toute adresse) : non envoyée'],
+        ['unknown', 'Adresse impossible à vérifier : non envoyée'],
+      ] as const) {
+        const ids = todayImported.filter(r => verdictOf(r) === verdict).map(r => r.id);
+        if (ids.length) await this.prisma.campaignRecipient.updateMany({ where: { id: { in: ids } }, data: { status: RecipientStatus.FAILED, error } });
+      }
+      todayImported = todayImported.filter(r => verdictOf(r) === 'deliverable');
+    }
+    queue = [...queue.filter(r => !r.imported), ...todayImported];
 
     let done = 0;
     // The mail provider's quota is reached, or too many bounces and complaints come back:

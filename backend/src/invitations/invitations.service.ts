@@ -11,6 +11,7 @@ import * as ExcelJS from 'exceljs';
 import { loadCsv, loadXlsx } from '../common/spreadsheet-guard';
 import { readPeople } from '../common/contact-sheet';
 import { unsubscribeLinks } from '../communication/unsubscribe';
+import { EmailVerifierService, type Verdict } from '../common/email/email-verifier.service';
 import { PassThrough } from 'stream';
 import { randomBytes } from 'crypto';
 import * as archiver from 'archiver';
@@ -87,6 +88,7 @@ export class InvitationsService {
     private readonly ticketGeneration: TicketGenerationService,
     private readonly publicService: PublicService,
     private readonly config: ConfigService,
+    private readonly verifier: EmailVerifierService,
   ) {}
 
   // ─── Send ─────────────────────────────────────────────────────────────────
@@ -384,6 +386,8 @@ export class InvitationsService {
         emailStatus: meta.emailStatus ?? 'PENDING',
         delivery: meta.delivery ?? 'EMAIL',
         emailSentAt: meta.emailSentAt ?? null,
+        /** Why it was not sent, or why it waits */
+        emailError: (meta as { emailError?: string | null }).emailError ?? null,
       };
     });
   }
@@ -409,6 +413,14 @@ export class InvitationsService {
       : await this.withinAllowance(event.organizerId, [ticket]);
     if (!now.length) {
       throw new BadRequestException('Limite du jour atteinte : 200 nouvelles adresses par 24 heures. Cette invitation partira automatiquement plus tard.');
+    }
+    if (fresh.has(ticket.id) && ticket.holderEmail) {
+      const verdict = (await this.verifier.verify([ticket.holderEmail])).get(ticket.holderEmail.trim().toLowerCase());
+      if (verdict === 'unchecked') throw new BadRequestException('La vérification de l’adresse est indisponible. Réessayez plus tard.');
+      if (verdict === 'risky' || verdict === 'unknown') {
+        await this.markUnverified(ticket, verdict);
+        throw new BadRequestException('Cette adresse n’a pas pu être confirmée par la vérification : l’invitation n’est pas envoyée.');
+      }
     }
     const status = await this.deliverOne(event, ticket, meta.message ?? null, false, fresh.has(ticket.id));
     if (status !== 'SENT') throw new BadRequestException("L'email n'a pas pu être envoyé. Réessayez plus tard.");
@@ -682,14 +694,41 @@ export class InvitationsService {
   private async deliver(
     event: Awaited<ReturnType<InvitationsService['loadEvent']>>,
     tickets: Parameters<InvitationsService['deliverOne']>[1][],
-    message: string | null,
+    message: string | null | ((t: Parameters<InvitationsService['deliverOne']>[1]) => string | null),
     fresh: Set<string>,
   ) {
+    // New addresses are verified first: only those found deliverable are written to
+    const verdicts = await this.verifier.verify(tickets.filter((t) => fresh.has(t.id) && t.holderEmail).map((t) => t.holderEmail!));
     let sent = 0;
+    const waiting: string[] = [];
     for (const t of tickets) {
-      if ((await this.deliverOne(event, t, message, false, fresh.has(t.id))) === 'SENT') sent++;
+      const verdict = fresh.has(t.id) ? verdicts.get(t.holderEmail?.trim().toLowerCase() ?? '') : undefined;
+      if (verdict === 'unchecked') { waiting.push(t.id); continue; }
+      if (verdict === 'risky' || verdict === 'unknown') { await this.markUnverified(t, verdict); continue; }
+      // Undeliverable ones are now suppressed: deliverOne records the refusal
+      const text = typeof message === 'function' ? message(t) : message;
+      if ((await this.deliverOne(event, t, text, false, fresh.has(t.id))) === 'SENT') sent++;
     }
-    this.logger.log(`Invitations for event ${event.id}: ${sent}/${tickets.length} emails sent`);
+    // The verification service could not be reached: tried again with the waiting ones
+    await this.hold(waiting, 'En attente : vérification de l’adresse indisponible, nouvel essai automatique');
+    this.logger.log(`Invitations for event ${event.id}: ${sent}/${tickets.length} emails sent${waiting.length ? `, ${waiting.length} awaiting verification` : ''}`);
+  }
+
+  /** An address the verification could not confirm (catch-all, server unreachable): not written to */
+  private async markUnverified(ticket: { id: string; metadata: Prisma.JsonValue }, verdict: Verdict) {
+    const meta = (ticket.metadata ?? {}) as Record<string, unknown>;
+    await this.prisma.ticket.update({
+      where: { id: ticket.id },
+      data: {
+        metadata: {
+          ...meta,
+          emailStatus: 'FAILED',
+          emailError: verdict === 'risky'
+            ? 'Adresse non confirmée par la vérification (le serveur accepte toute adresse) : e-mail non envoyé'
+            : 'Adresse impossible à vérifier : e-mail non envoyé',
+        } as Prisma.InputJsonValue,
+      },
+    });
   }
 
   /**
@@ -752,9 +791,9 @@ export class InvitationsService {
   }
 
   /** Marks invitations as waiting for a later day's allowance */
-  private async hold(ticketIds: string[]) {
+  private async hold(ticketIds: string[], note = HELD_NOTE) {
     if (!ticketIds.length) return;
-    const patch = JSON.stringify({ emailStatus: 'HELD', emailError: HELD_NOTE });
+    const patch = JSON.stringify({ emailStatus: 'HELD', emailError: note });
     await this.prisma.$executeRaw`
       UPDATE "Ticket" SET metadata = coalesce(metadata, '{}'::jsonb) || ${patch}::jsonb
       WHERE id IN (${Prisma.join(ticketIds)})`;
@@ -783,14 +822,11 @@ export class InvitationsService {
 
       for (const [organizerId, tickets] of Array.from(byOrganizer)) {
         const { now, fresh } = await this.withinAllowance(organizerId, tickets);
-        const events = new Map<string, Awaited<ReturnType<InvitationsService['eventForMail']>>>();
-        let sent = 0;
-        for (const t of now) {
-          if (!events.has(t.eventId)) events.set(t.eventId, await this.eventForMail(t.eventId));
-          const meta = (t.metadata ?? {}) as Partial<InvitationMetadata>;
-          if ((await this.deliverOne(events.get(t.eventId)!, t, meta.message ?? null, false, fresh.has(t.id))) === 'SENT') sent++;
+        for (const eventId of Array.from(new Set(now.map((t) => t.eventId)))) {
+          const event = await this.eventForMail(eventId);
+          await this.deliver(event, now.filter((t) => t.eventId === eventId), (t) => ((t.metadata ?? {}) as Partial<InvitationMetadata>).message ?? null, fresh);
         }
-        if (now.length) this.logger.log(`Invitations en attente (organisateur ${organizerId}) : ${sent}/${now.length} envoyées, ${tickets.length - now.length} attendent encore`);
+        if (now.length) this.logger.log(`Invitations en attente (organisateur ${organizerId}) : ${now.length} reprises, ${tickets.length - now.length} attendent encore`);
       }
     } catch (err) {
       this.logger.error(`Release of held invitations failed: ${(err as Error).message}`);

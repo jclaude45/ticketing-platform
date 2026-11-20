@@ -32,6 +32,7 @@ interface Invitation {
   template: { id: string; name: string };
   emailStatus: EmailStatus;
   emailSentAt: string | null;
+  emailError?: string | null;
   delivery: 'EMAIL' | 'PAPER';
   /** The guest's answer on their confirmation page */
   response: { status: 'CONFIRMED' | 'DECLINED'; respondedAt: string; updatedAt: string; answers: { fieldId: string; label: string; value: string }[] } | null;
@@ -497,7 +498,12 @@ export default function InvitationsPage() {
                             )}
                           </td>
                           <td className="px-5 py-3 text-gray-700 dark:text-gray-300">{inv.template?.name}</td>
-                          <td className="px-5 py-3"><EmailBadge status={inv.emailStatus} /></td>
+                          <td className="px-5 py-3">
+                            <EmailBadge status={inv.emailStatus} />
+                            {inv.emailError && (inv.emailStatus === 'FAILED' || inv.emailStatus === 'HELD') && (
+                              <p className="mt-1 max-w-[220px] text-[11px] leading-snug text-gray-500">{inv.emailError}</p>
+                            )}
+                          </td>
                           <td className="px-5 py-3"><TicketBadge status={inv.status} response={inv.response?.status} /></td>
                           <td className="px-5 py-3 text-right whitespace-nowrap">
                             {(inv.status === 'INVITED' || inv.status === 'VALID') && (
