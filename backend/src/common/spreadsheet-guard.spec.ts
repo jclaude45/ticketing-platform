@@ -19,7 +19,8 @@ describe('assertSafeXlsx', () => {
     const buf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 9 } });
     expect(buf.length).toBeLessThan(200 * 1024); // tiny upload
     expect(() => assertSafeXlsx(buf)).toThrow(/trop volumineux/);
-  });
+    // Compressing 60 MB takes seconds on a busy build server
+  }, 30000);
 
   it('refuses something that is not a zip', () => {
     expect(() => assertSafeXlsx(Buffer.from('Nom;Email\nA;a@b.cd'))).toThrow();
