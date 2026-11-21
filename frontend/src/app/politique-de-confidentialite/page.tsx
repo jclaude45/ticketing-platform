@@ -97,7 +97,7 @@ const SECTIONS: LegalSection[] = [
         <Ul items={[
           'l’Organisateur de l’événement concerné et les personnes qu’il habilite (collaborateurs, contrôleurs), pour ses participants, son équipe et ses ventes ;',
           'le personnel habilité de BACK2NEXT ;',
-          'les prestataires techniques de ZAYA, tenus à la confidentialité : Hetzner Online GmbH (hébergement des serveurs, Union européenne), FlexPay (paiements Mobile Money et carte, RDC), Mailtrap (envoi des e-mails), Twilio (envoi des SMS lorsque ce service est activé), IPinfo (localisation approximative des visiteurs) ;',
+          'les prestataires techniques de ZAYA, tenus à la confidentialité : Hetzner Online GmbH (hébergement des serveurs, Union européenne), FlexPay (paiements Mobile Money et carte, RDC), Mailtrap (envoi des e-mails), Elongo SMS (envoi des SMS), IPinfo (localisation approximative des visiteurs) ;',
           'les autorités administratives ou judiciaires, sur demande légalement fondée.',
         ]} />
       </>
@@ -109,7 +109,7 @@ const SECTIONS: LegalSection[] = [
     body: (
       <p>
         Certaines données sont hébergées ou traitées hors de la République démocratique du Congo, notamment dans l’Union européenne
-        (hébergement) et aux États-Unis (envoi d’e-mails et de SMS, localisation des visiteurs). Ces transferts sont limités à ce qui est
+        (hébergement) et aux États-Unis (envoi d’e-mails, localisation des visiteurs). Ces transferts sont limités à ce qui est
         nécessaire au service et encadrés par des engagements contractuels de confidentialité et de sécurité de nos prestataires, dans le
         respect des conditions posées par le Code du numérique.
       </p>

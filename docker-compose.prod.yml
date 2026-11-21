@@ -90,6 +90,9 @@ services:
       # Mailtrap webhook (bounces, spam complaints): https://app.zaya.live/api/v1/webhooks/mailtrap/<secret>
       MAILTRAP_WEBHOOK_SECRET: ${MAILTRAP_WEBHOOK_SECRET:-}
       MAILS_SO_API_KEY: ${MAILS_SO_API_KEY:-}
+      # Elongo SMS: application key and sender name; empty key = no SMS campaigns
+      ELONGO_SMS_KEY: ${ELONGO_SMS_KEY:-}
+      ELONGO_SMS_SENDER: ${ELONGO_SMS_SENDER:-}
       # Receives the « Parle-nous » messages and quote requests of zaya.live
       CONTACT_EMAIL: ${CONTACT_EMAIL:-}
       # Organizer app push notifications (Firebase service account JSON, base64); empty = no push

@@ -14,6 +14,8 @@ import { esc } from '../common/email/layout';
 import { unsubscribeLinks } from './unsubscribe';
 import { createBulkTransport } from '../common/email/bulk-transport';
 import { EmailVerifierService } from '../common/email/email-verifier.service';
+import { SmsService } from '../common/sms/sms.service';
+import { toInternationalPhone } from '../common/phone';
 import { StorageService } from '../storage/storage.service';
 import { MAX_IMAGE_PIXELS } from '../common/image-limits';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -30,7 +32,7 @@ const FREE_RECIPIENTS_PER_DAY = 300;
  * rate limit), as opposed to one bad address: the send stops instead of burning the list.
  */
 const isQuotaError = (err: any) =>
-  /sending limit|quota|rate limit|too many (messages|emails|requests)|limit exceeded/i.test(String(err?.message ?? err));
+  err?.quota === true || /sending limit|quota|rate limit|too many (messages|emails|requests)|limit exceeded/i.test(String(err?.message ?? err));
 
 /** Imported addresses reachable per 24 hours: to start, and at most */
 const IMPORTED_DAILY_START = 200;
@@ -59,6 +61,7 @@ export class CommunicationService {
     private readonly subscriptions: SubscriptionService,
     private readonly storage: StorageService,
     private readonly verifier: EmailVerifierService,
+    private readonly sms: SmsService,
   ) {
     this.mailerTransport = nodemailer.createTransport({
       host: config.get('email.host'),
@@ -95,7 +98,7 @@ export class CommunicationService {
   getChannelStatus() {
     return {
       email: true,
-      sms: !!this.twilioClient && !!this.twilioFrom,
+      sms: this.sms.enabled || (!!this.twilioClient && !!this.twilioFrom),
       whatsapp: !!this.twilioClient && !!this.twilioWhatsAppFrom,
     };
   }
@@ -324,7 +327,12 @@ export class CommunicationService {
 
     const recipients = await this.buildRecipients(campaign);
     if (recipients.length === 0) {
-      throw new BadRequestException(campaign.listId ? 'La liste de diffusion est vide.' : 'Aucun participant avec une adresse e-mail pour cet événement.');
+      const sms = campaign.channel === NotificationChannel.SMS;
+      throw new BadRequestException(
+        campaign.listId ? (sms ? 'Aucun membre de la liste n’a de numéro de téléphone valide.' : 'La liste de diffusion est vide.')
+          : sms ? 'Aucun participant avec un numéro de téléphone valide pour cet événement.'
+          : 'Aucun participant avec une adresse e-mail pour cet événement.',
+      );
     }
     await this.assertSendAllowed(campaign, recipients);
 
@@ -529,10 +537,14 @@ export class CommunicationService {
   // ─── PRIVATE HELPERS ──────────────────────────────────────────
 
   /** Plan limits of a send: communication allowed, and the free plan's caps */
-  private async assertSendAllowed(campaign: { id: string; eventId: string; event: { organizerId: string } }, recipients: { status: RecipientStatus; imported: boolean }[]) {
+  private async assertSendAllowed(campaign: { id: string; eventId: string; channel: NotificationChannel; event: { organizerId: string } }, recipients: { status: RecipientStatus; imported: boolean }[]) {
     const organizerId = campaign.event.organizerId;
     const { plan } = await this.subscriptions.getEffectivePlan(organizerId);
     if (!plan.allowCommunication) throw new ForbiddenException('Votre forfait ne comprend pas les campagnes.');
+    // Every SMS is paid from ZAYA's SMS credits
+    if (campaign.channel === NotificationChannel.SMS && plan.code === 'FREE') {
+      throw new ForbiddenException('Les campagnes SMS sont réservées aux forfaits payants.');
+    }
     const problem = await this.reputationProblem(organizerId);
     if (problem) throw new ForbiddenException(problem);
     if (plan.code !== 'FREE') return;
@@ -570,7 +582,7 @@ export class CommunicationService {
   }
 
   /** The campaign's list, or every ticket holder of its event; fixed at the first send */
-  private async buildRecipients(campaign: { id: string; eventId: string; listId: string | null; event: { organizerId: string } }) {
+  private async buildRecipients(campaign: { id: string; eventId: string; listId: string | null; channel: NotificationChannel; event: { organizerId: string } }) {
     const campaignId = campaign.id;
     const eventId = campaign.eventId;
     // Check if recipients already created
@@ -587,9 +599,20 @@ export class CommunicationService {
       ? (await this.prisma.mailingListMember.findMany({ where: { listId: campaign.listId }, select: { email: true } })).map(m => m.email)
       : (await this.prisma.ticket.findMany({ where: { eventId, holderEmail: { not: null } }, select: { holderEmail: true } })).map(t => t.holderEmail!));
     const wanted = (email: string | null) => !!email && !gone.has(email.trim().toLowerCase()) && !suppressed.has(email.trim().toLowerCase());
+    // SMS: whoever has a number, once per number (an e-mail bounce says nothing of a phone);
+    // those who unsubscribed from the organizer's campaigns stay out
+    const sms = campaign.channel === NotificationChannel.SMS;
+    const numbers = new Set<string>();
+    const reachable = (email: string | null, phone: string | null) => {
+      if (!sms) return wanted(email);
+      const number = toInternationalPhone(phone);
+      if (!number || numbers.has(number) || (email && gone.has(email.trim().toLowerCase()))) return false;
+      numbers.add(number);
+      return true;
+    };
 
     if (campaign.listId) {
-      const members = (await this.prisma.mailingListMember.findMany({ where: { listId: campaign.listId } })).filter(m => wanted(m.email));
+      const members = (await this.prisma.mailingListMember.findMany({ where: { listId: campaign.listId } })).filter(m => reachable(m.email, m.phone));
       if (members.length === 0) return [];
       await this.prisma.campaignRecipient.createMany({
         data: members.map(m => ({ campaignId, email: m.email, phone: m.phone, firstName: m.firstName, lastName: m.lastName, imported: m.imported })),
@@ -601,17 +624,19 @@ export class CommunicationService {
       where: {
         eventId,
         status: { in: ['VALID', 'PENDING'] },
-        holderEmail: { not: null },
+        ...(sms ? { holderPhone: { not: null } } : { holderEmail: { not: null } }),
       },
       include: { template: { select: { name: true } } },
-    })).filter(t => wanted(t.holderEmail));
+      orderBy: { createdAt: 'asc' },
+    })).filter(t => reachable(t.holderEmail, t.holderPhone));
 
     if (tickets.length === 0) return [];
 
     await this.prisma.campaignRecipient.createMany({
       data: tickets.map(t => ({
         campaignId,
-        email: t.holderEmail!,
+        email: t.holderEmail,
+        phone: t.holderPhone,
         firstName: (t.holderName || 'Participant').split(' ')[0],
         lastName: (t.holderName || '').split(' ').slice(1).join(' ') || '',
         ticketId: t.id,
@@ -630,8 +655,9 @@ export class CommunicationService {
     const organizerId: string = campaign.event.organizerId;
     let queue = recipients.filter(r => r.status !== RecipientStatus.SENT);
 
+    const email = campaign.channel === NotificationChannel.EMAIL;
     // Bounced or reported since the list was built (a resumed send): left out for good
-    const suppressed = await this.suppressedAmong(queue.filter(r => r.email).map(r => r.email));
+    const suppressed = email ? await this.suppressedAmong(queue.filter(r => r.email).map(r => r.email)) : new Set<string>();
     const excluded = queue.filter(r => r.email && suppressed.has(r.email.trim().toLowerCase()));
     if (excluded.length) {
       await this.prisma.campaignRecipient.updateMany({
@@ -648,7 +674,7 @@ export class CommunicationService {
 
     // Those are verified before anything is sent: only deliverable ones are written to. The
     // ones the service could not reach stay pending, for "Reprendre"
-    if (this.verifier.enabled && todayImported.length) {
+    if (email && this.verifier.enabled && todayImported.length) {
       // Visible progress: the stalled-send cron leaves a campaign that moved alone
       await this.prisma.notificationCampaign.update({ where: { id: campaign.id }, data: { updatedAt: new Date() } });
       const verdicts = await this.verifier.verify(todayImported.map(r => r.email));
@@ -875,8 +901,10 @@ export class CommunicationService {
     });
   }
 
+  /** Campaign SMS: through Elongo when its key is set, Twilio otherwise */
   private async sendSms(to: string, body: string) {
-    if (!this.twilioClient) throw new BadRequestException('Twilio non configuré');
+    if (this.sms.enabled) return this.sms.send(to, body, { marketing: true });
+    if (!this.twilioClient) throw new BadRequestException('SMS non configurés');
     await this.twilioClient.messages.create({
       body,
       from: this.twilioFrom,

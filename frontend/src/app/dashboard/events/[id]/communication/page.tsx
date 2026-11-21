@@ -133,6 +133,16 @@ const VARIABLES_HINT = [
   { key: '{{unsubscribeUrl}}', desc: 'Lien de désinscription (ajouté en bas sinon)' },
 ];
 
+/** Characters of the GSM alphabet: a text made only of them fits 160 per SMS, otherwise 70 */
+const GSM_CHARS = /^[A-Za-z0-9 \n\r@£$¥èéùìòÇØøÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ!"#¤%&'()*+,\-./:;<=>?¡ÄÖÑÜ§¿äöñüà^{}\\[~\]|€]*$/;
+
+/** How many SMS one text takes (before variables are filled in): long ones are sent in parts */
+function smsParts(text: string): number {
+  const gsm = GSM_CHARS.test(text);
+  const [single, part] = gsm ? [160, 153] : [70, 67];
+  return text.length <= single ? 1 : Math.ceil(text.length / part);
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function CommunicationPage() {
@@ -306,7 +316,7 @@ export default function CommunicationPage() {
             {[
               'Invitations et confirmations par email',
               'Rappels automatiques à J-7 et J-1 avec billet joint',
-              'SMS et WhatsApp via Twilio',
+              'Campagnes SMS (forfaits payants)',
               '10 modèles prêts à l\'emploi, anti-spam optimisés',
               'Suivi des envois et statistiques par campagne',
             ].map(f => (
@@ -374,9 +384,9 @@ export default function CommunicationPage() {
               </div>
             );
           })}
-          {(!channelStatus?.sms || !channelStatus?.whatsapp) && (
+          {!channelStatus?.sms && (
             <p className="text-xs text-gray-400 dark:text-gray-500 self-center ml-1">
-              SMS/WhatsApp nécessitent les clés Twilio dans le fichier <code className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">.env</code>
+              Les SMS ne sont pas encore activés sur ZAYA.
             </p>
           )}
         </div>
@@ -1220,11 +1230,14 @@ function NewCampaignModal({
                 className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none font-mono resize-none"
                 placeholder={isEmail
                   ? 'HTML ou texte. Utilisez {{firstName}}, {{eventName}}, etc.'
-                  : 'Texte du message. Max 160 caractères pour SMS standard.'}
+                  : 'Texte du message. Un SMS compte 160 caractères (70 avec des emojis ou certains accents) ; au-delà, il est envoyé en plusieurs parties.'}
               />
             )}
             {!isEmail ? (
-              <p className="text-xs text-gray-400 mt-1">{form.body.length} caractères</p>
+              <p className={`text-xs mt-1 ${form.body.length > 1000 ? 'text-red-600' : 'text-gray-400'}`}>
+                {form.body.length} caractères{form.channel === 'SMS' && form.body.length > 0 && ` · ${smsParts(form.body)} SMS par destinataire`}
+                {form.body.length > 1000 && ' · 1000 au plus'}
+              </p>
             ) : (
               <p className="text-xs text-gray-400 mt-1">« Insérer une image » remplace une image de votre modèle ou en ajoute une au curseur. Vérifiez le rendu avec l’aperçu.</p>
             )}

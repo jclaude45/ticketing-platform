@@ -58,6 +58,12 @@ export default () => ({
   crypto: {
     privateKeyEncryptionKey: process.env.PRIVATE_KEY_ENCRYPTION_KEY,
   },
+  /** SMS gateway (sms.elongocrea.com); without a key, SMS go through Twilio if it is set */
+  sms: {
+    url: process.env.ELONGO_SMS_URL || 'https://sms.elongocrea.com',
+    key: process.env.ELONGO_SMS_KEY || '',
+    sender: process.env.ELONGO_SMS_SENDER || '',
+  },
   twilio: {
     accountSid: process.env.TWILIO_ACCOUNT_SID || '',
     authToken: process.env.TWILIO_AUTH_TOKEN || '',

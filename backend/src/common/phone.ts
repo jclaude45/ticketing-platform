@@ -16,3 +16,17 @@ export function formatDrcPhone(stored: string): string {
   const m = /^243(\d{2})(\d{3})(\d{4})$/.exec(stored);
   return m ? `+243 ${m[1]} ${m[2]} ${m[3]}` : stored;
 }
+
+/**
+ * A number in the international form SMS gateways expect (+ and 8 to 15 digits): Congolese
+ * numbers in any of the forms above become +243…, others must already carry their country
+ * code (+ or 00). Null when it cannot be read as a phone number.
+ */
+export function toInternationalPhone(raw: string | null | undefined): string | null {
+  const drc = normalizeDrcPhone(raw);
+  if (drc) return `+${drc}`;
+  const s = (raw ?? '').trim();
+  const d = s.replace(/\D/g, '');
+  const intl = s.startsWith('+') ? d : d.startsWith('00') ? d.slice(2) : null;
+  return intl && /^[1-9]\d{7,14}$/.test(intl) ? `+${intl}` : null;
+}

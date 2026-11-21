@@ -6,6 +6,7 @@ import { ClientIpThrottlerGuard } from './common/guards/client-ip-throttler.guar
 import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { EmailVerifierModule } from './common/email/email-verifier.service';
+import { SmsModule } from './common/sms/sms.service';
 
 import configuration from './config/configuration';
 import { validationSchema } from './config/validation.schema';
@@ -72,6 +73,7 @@ import { SecurityMiddleware } from './common/middleware/security.middleware';
     }),
     ScheduleModule.forRoot(),
     EmailVerifierModule,
+    SmsModule,
     PrismaModule,
     RedisModule,
     CryptoModule,
