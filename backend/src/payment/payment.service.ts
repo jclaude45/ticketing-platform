@@ -47,7 +47,11 @@ export class PaymentService {
     this.FLEXPAY_MERCHANT = this.config.get<string>('FLEXPAY_MERCHANT') || '';
   }
 
-  async initiatePayment(eventId: string, dto: InitiatePaymentDto, ip?: string) {
+  /**
+   * `payerPhone`: the mobile money number that pays when it is not the ticket holder's (the
+   * ZAYA app: tickets go to the account's number, whatever number pays).
+   */
+  async initiatePayment(eventId: string, dto: InitiatePaymentDto, ip?: string, opts: { payerPhone?: string } = {}) {
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
       select: { id: true, name: true, organizerId: true, status: true, startDate: true, endDate: true, timeZone: true, city: true, venue: true, feePayer: true },
@@ -68,7 +72,8 @@ export class PaymentService {
     const holderPhone = normalizeDrcPhone(dto.holderPhone);
     if (!holderPhone) throw new BadRequestException('Numéro de téléphone invalide : utilisez 089…, +24389… ou 89…');
     dto = { ...dto, holderPhone };
-    await assertMailDomain(dto.holderEmail);
+    // The ZAYA app's buyers may have no e-mail (their tickets are in the app)
+    if (dto.holderEmail) await assertMailDomain(dto.holderEmail);
 
     // ── Tickets ──
     const templateIds = ticketItems.map(i => i.templateId);
@@ -165,7 +170,8 @@ export class PaymentService {
         }, merchQuote);
       }
       if (dto.paymentMethod === 'mobile_money') {
-        return await this.initiateMobileMoney(payment, dto, total, currency, apiBackend);
+        const payer = opts.payerPhone ? { ...dto, holderPhone: opts.payerPhone } : dto;
+        return await this.initiateMobileMoney(payment, payer, total, currency, apiBackend);
       }
       return await this.initiateCard(payment, event, total, currency, apiBase, apiBackend);
     } catch (err) {

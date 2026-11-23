@@ -25,6 +25,8 @@ export class PublicController {
   @ApiQuery({ name: 'city',   required: false, type: String })
   @ApiQuery({ name: 'type',   required: false, type: String })
   @ApiQuery({ name: 'past',   required: false, type: Boolean, description: 'Events already over, kept on the site' })
+  @ApiQuery({ name: 'from',   required: false, type: String, description: 'ISO date: events still on at that moment' })
+  @ApiQuery({ name: 'to',     required: false, type: String, description: 'ISO date: events started by then' })
   listEvents(
     @Query('page',  new DefaultValuePipe(1),  ParseIntPipe) page:  number,
     @Query('limit', new DefaultValuePipe(12), ParseIntPipe) limit: number,
@@ -32,8 +34,14 @@ export class PublicController {
     @Query('city')   city?: string,
     @Query('type')   type?: string,
     @Query('past')   past?: string,
+    @Query('from')   from?: string,
+    @Query('to')     to?: string,
   ) {
-    return this.service.listEvents(page, Math.min(limit, 50), search, city, type, past === 'true' || past === '1');
+    const date = (v?: string) => {
+      const d = v ? new Date(v) : null;
+      return d && !isNaN(d.getTime()) ? d : undefined;
+    };
+    return this.service.listEvents(page, Math.min(limit, 50), search, city, type, past === 'true' || past === '1', date(from), date(to));
   }
 
   @Get('plans')

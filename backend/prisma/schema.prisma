@@ -99,41 +99,41 @@ enum TeamMemberRole {
 }
 
 model User {
-  id                    String    @id @default(uuid())
-  email                 String    @unique
-  password              String
-  firstName             String
-  lastName              String
-  role                  Role      @default(ORGANIZER)
-  isEmailVerified       Boolean   @default(false)
-  emailVerificationToken String?
+  id                      String    @id @default(uuid())
+  email                   String    @unique
+  password                String
+  firstName               String
+  lastName                String
+  role                    Role      @default(ORGANIZER)
+  isEmailVerified         Boolean   @default(false)
+  emailVerificationToken  String?
   emailVerificationExpiry DateTime?
-  twoFactorSecret       String?
-  twoFactorEnabled      Boolean   @default(false)
-  passwordResetToken    String?
-  passwordResetExpiry   DateTime?
-  refreshToken          String?
-  isActive              Boolean   @default(true)
-  avatar                String?
-  lastLoginAt           DateTime?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  twoFactorSecret         String?
+  twoFactorEnabled        Boolean   @default(false)
+  passwordResetToken      String?
+  passwordResetExpiry     DateTime?
+  refreshToken            String?
+  isActive                Boolean   @default(true)
+  avatar                  String?
+  lastLoginAt             DateTime?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
-  events       Event[]
-  controllers  Controller[]
-  keyPairs     KeyPair[]
-  auditLogs    AuditLog[]
-  subscription OrganizerSubscription?
-  sentInvitations    ProjectInvitation[] @relation("SentInvitations")
-  projectMemberships ProjectMember[]
-  taskAssignments    TaskAssignee[]
+  events                Event[]
+  controllers           Controller[]
+  keyPairs              KeyPair[]
+  auditLogs             AuditLog[]
+  subscription          OrganizerSubscription?
+  sentInvitations       ProjectInvitation[]    @relation("SentInvitations")
+  projectMemberships    ProjectMember[]
+  taskAssignments       TaskAssignee[]
   notificationTemplates NotificationTemplate[] @relation("UserTemplates")
   notificationCampaigns NotificationCampaign[] @relation("UserCampaigns")
   mailingLists          MailingList[]
   emailUnsubscribes     EmailUnsubscribe[]
   notifications         Notification[]
-  accountCollaborators  AccountMember[] @relation("AccountOwner")
-  accountMemberships    AccountMember[] @relation("AccountMemberships")
+  accountCollaborators  AccountMember[]        @relation("AccountOwner")
+  accountMemberships    AccountMember[]        @relation("AccountMemberships")
   accessZones           AccessZone[]
   eventDrafts           EventDraft[]
   billingAccount        BillingAccount?
@@ -180,67 +180,67 @@ model UserSession {
 }
 
 model Event {
-  id               String      @id @default(uuid())
-  name             String
-  description      String?
+  id            String      @id @default(uuid())
+  name          String
+  description   String?
   /// Artists, bands or speakers, as shown on the event page (and to search engines)
-  performers       String[]    @default([])
-  venue            String
-  address          String?
-  city             String
-  country          String
-  startDate        DateTime
-  endDate          DateTime
+  performers    String[]    @default([])
+  venue         String
+  address       String?
+  city          String
+  country       String
+  startDate     DateTime
+  endDate       DateTime
   /// IANA zone of the event's city: its times are typed, shown and split into days there
-  timeZone         String      @default("Africa/Kinshasa")
-  totalCapacity    Int
-  status           EventStatus @default(DRAFT)
-  type             EventType   @default(OTHER)
-  currency         String      @default("USD")
-  bannerUrl        String?
-  organizerId      String
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
+  timeZone      String      @default("Africa/Kinshasa")
+  totalCapacity Int
+  status        EventStatus @default(DRAFT)
+  type          EventType   @default(OTHER)
+  currency      String      @default("USD")
+  bannerUrl     String?
+  organizerId   String
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
-  organizer         User               @relation(fields: [organizerId], references: [id])
-  ticketTemplates   TicketTemplate[]
-  tickets           Ticket[]
-  controllerEvents  ControllerEvent[]
-  teamMembers       TeamMember[]
-  accreditations    Accreditation[]
-  tasks             EventTask[]
-  budgetLines       BudgetLine[]
+  organizer          User                   @relation(fields: [organizerId], references: [id])
+  ticketTemplates    TicketTemplate[]
+  tickets            Ticket[]
+  controllerEvents   ControllerEvent[]
+  teamMembers        TeamMember[]
+  accreditations     Accreditation[]
+  tasks              EventTask[]
+  budgetLines        BudgetLine[]
   projectInvitations ProjectInvitation[]
   projectMembers     ProjectMember[]
   campaigns          NotificationCampaign[]
   payments           Payment[]
-  views           EventView[]
-  products         Product[]
-  merchOrders      MerchOrder[]
+  views              EventView[]
+  products           Product[]
+  merchOrders        MerchOrder[]
   // Shop settings: delivery is offered when merchDeliveryFee is set (0 = free delivery)
-  merchDeliveryFee Decimal? @db.Decimal(10, 2)
-  merchPickupInfo  String?
+  merchDeliveryFee   Decimal?               @db.Decimal(10, 2)
+  merchPickupInfo    String?
   /// Who pays ZAYA's 9 % on paid tickets: 'ORGANIZER' (taken from the price) or 'BUYER' (added to it)
-  feePayer         String   @default("ORGANIZER")
+  feePayer           String                 @default("ORGANIZER")
   /// Once over, the event stays on the public site (marked as ended) unless the organizer turns this off
-  showAfterEnd     Boolean  @default(true)
-  payouts          Payout[]
-  guestForm        GuestForm?
-  guestResponses   GuestResponse[]
+  showAfterEnd       Boolean                @default(true)
+  payouts            Payout[]
+  guestForm          GuestForm?
+  guestResponses     GuestResponse[]
 }
 
 model TeamMember {
-  id           String         @id @default(uuid())
-  eventId      String
-  name         String
-  email        String?
-  phone        String?
-  role         TeamMemberRole @default(STAFF)
-  department   String?
-  notes        String?
-  photoUrl     String?
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  id         String         @id @default(uuid())
+  eventId    String
+  name       String
+  email      String?
+  phone      String?
+  role       TeamMemberRole @default(STAFF)
+  department String?
+  notes      String?
+  photoUrl   String?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
 
   event         Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
   accreditation Accreditation?
@@ -265,80 +265,83 @@ model Accreditation {
 }
 
 model TicketTemplate {
-  id              String   @id @default(uuid())
-  name            String
-  description     String?
-  price           Decimal  @db.Decimal(10, 2)
-  currency        String   @default("USD")
-  quantity        Int
-  availableCount  Int
-  color           String   @default("#1a1a2e")
-  logoUrl         String?
-  backgroundUrl   String?
-  customFields    Json?
+  id             String   @id @default(uuid())
+  name           String
+  description    String?
+  price          Decimal  @db.Decimal(10, 2)
+  currency       String   @default("USD")
+  quantity       Int
+  availableCount Int
+  color          String   @default("#1a1a2e")
+  logoUrl        String?
+  backgroundUrl  String?
+  customFields   Json?
   // Days the tariff is valid ('YYYY-MM-DD', Kinshasa time); empty = every day of the event.
   // Several days = a pass: one entry per day
-  validDays       String[] @default([])
+  validDays      String[] @default([])
   /// The event's seats left beyond its tariffs, for invitations: sized automatically
   /// (capacity − tariffs, never below the invitations issued), never sold nor shown publicly
-  capacityPool    Boolean  @default(false)
-  eventId         String
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  capacityPool   Boolean  @default(false)
+  eventId        String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   event   Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   tickets Ticket[]
 }
 
 model Ticket {
-  id               String       @id @default(uuid())
-  serialNumber     String       @unique
-  qrCode           String?      @db.Text
-  qrCodeSignature  String?      @db.Text
-  holderName       String?
-  holderEmail      String?
-  holderPhone      String?
-  status           TicketStatus @default(PENDING)
-  price            Decimal      @db.Decimal(10, 2)
-  currency         String       @default("USD")
-  purchasedAt      DateTime?
-  checkedInAt      DateTime?
-  cancelledAt      DateTime?
-  metadata         Json?
+  id              String       @id @default(uuid())
+  serialNumber    String       @unique
+  qrCode          String?      @db.Text
+  qrCodeSignature String?      @db.Text
+  holderName      String?
+  holderEmail     String?
+  holderPhone     String?
+  status          TicketStatus @default(PENDING)
+  price           Decimal      @db.Decimal(10, 2)
+  currency        String       @default("USD")
+  purchasedAt     DateTime?
+  checkedInAt     DateTime?
+  cancelledAt     DateTime?
+  metadata        Json?
   /// GENERATION / INVITATION (count against the print quota) or ONLINE (sale or registration: never counted)
-  source           String       @default("GENERATION")
-  eventId          String
-  templateId       String
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
+  source          String       @default("GENERATION")
+  eventId         String
+  templateId      String
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
-  event           Event          @relation(fields: [eventId], references: [id])
-  template        TicketTemplate @relation(fields: [templateId], references: [id])
+  event           Event            @relation(fields: [eventId], references: [id])
+  template        TicketTemplate   @relation(fields: [templateId], references: [id])
   scanValidations ScanValidation[]
   guestResponse   GuestResponse?
+
+  /// The ZAYA app shows a customer the tickets issued to their number
+  @@index([holderPhone])
 }
 
 /// Confirmation form of an event's invitations. When enabled, an invitation is sent as a link:
 /// the guest confirms (or declines) on zaya.live and receives the ticket only once confirmed.
 model GuestForm {
-  eventId   String    @id
-  enabled   Boolean   @default(false)
+  eventId        String    @id
+  enabled        Boolean   @default(false)
   /// Last moment to answer or change one's answer (null: until the event starts)
-  deadline  DateTime?
-  intro     String?
+  deadline       DateTime?
+  intro          String?
   /// HIDDEN, OPTIONAL or REQUIRED
-  askPhone  String    @default("OPTIONAL")
+  askPhone       String    @default("OPTIONAL")
   /// Questions: [{ id, type: CHOICE | TEXT | YESNO, label, help?, required, options?: [{ id, label, limit? }], templateIds? }]
-  fields    Json      @default("[]")
+  fields         Json      @default("[]")
   /// Shared link (one QR for everyone, printed on paper invitations): whoever opens it signs up
-  openEnabled    Boolean @default(false)
+  openEnabled    Boolean   @default(false)
   /// Random, changed when the organizer regenerates the link (the old QR stops working)
-  openToken      String? @unique
+  openToken      String?   @unique
   /// Category of the tickets made through the shared link
   openTemplateId String?
   /// Most sign-ups through the shared link (null: up to the category's seats)
   openLimit      Int?
-  updatedAt DateTime  @updatedAt
+  updatedAt      DateTime  @updatedAt
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 }
@@ -392,16 +395,16 @@ model ControllerEvent {
 }
 
 model ScanValidation {
-  id             String     @id @default(uuid())
-  ticketId       String?    // nullable — null when QR code is invalid/unrecognized
-  controllerId   String
-  result         ScanResult
-  scannedAt      DateTime   @default(now())
-  deviceId       String?
-  location       String?
-  ipAddress      String?
-  notes          String?
-  isSynced       Boolean    @default(true)
+  id               String     @id @default(uuid())
+  ticketId         String? // nullable — null when QR code is invalid/unrecognized
+  controllerId     String
+  result           ScanResult
+  scannedAt        DateTime   @default(now())
+  deviceId         String?
+  location         String?
+  ipAddress        String?
+  notes            String?
+  isSynced         Boolean    @default(true)
   offlineScannedAt DateTime?
 
   ticket     Ticket?    @relation(fields: [ticketId], references: [id])
@@ -409,28 +412,28 @@ model ScanValidation {
 }
 
 model AuditLog {
-  id          String   @id @default(uuid())
-  userId      String?
-  action      String
-  entity      String?
-  entityId    String?
-  oldValues   Json?
-  newValues   Json?
-  ipAddress   String?
-  userAgent   String?
-  createdAt   DateTime @default(now())
+  id        String   @id @default(uuid())
+  userId    String?
+  action    String
+  entity    String?
+  entityId  String?
+  oldValues Json?
+  newValues Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
 
   user User? @relation(fields: [userId], references: [id])
 }
 
 model KeyPair {
-  id          String   @id @default(uuid())
-  publicKey   String   @db.Text
-  privateKey  String   @db.Text
-  algorithm   String   @default("RSA-4096")
-  isActive    Boolean  @default(true)
+  id          String    @id @default(uuid())
+  publicKey   String    @db.Text
+  privateKey  String    @db.Text
+  algorithm   String    @default("RSA-4096")
+  isActive    Boolean   @default(true)
   organizerId String
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
   expiresAt   DateTime?
 
   organizer User @relation(fields: [organizerId], references: [id])
@@ -444,25 +447,25 @@ enum SubscriptionStatus {
 }
 
 model SubscriptionPlan {
-  id              String   @id @default(uuid())
-  name            String   @unique
-  description     String?
-  price           Float    @default(0)
-  maxTickets      Int      @default(200)
-  maxBadges       Int      @default(50)
-  maxEvents       Int      @default(-1)
-  showPoweredBy        Boolean  @default(true)
-  allowBulkExport      Boolean  @default(true)
-  allowCommunication   Boolean  @default(false)
+  id                 String   @id @default(uuid())
+  name               String   @unique
+  description        String?
+  price              Float    @default(0)
+  maxTickets         Int      @default(200)
+  maxBadges          Int      @default(50)
+  maxEvents          Int      @default(-1)
+  showPoweredBy      Boolean  @default(true)
+  allowBulkExport    Boolean  @default(true)
+  allowCommunication Boolean  @default(false)
   /// FREE / STARTER / PRO: the plans of the pricing page
-  code            String?  @unique
+  code               String?  @unique
   /// Quota period: 'EVENT' (per event, free plan) or 'MONTH' (paid plans)
-  period          String   @default("MONTH")
+  period             String   @default("MONTH")
   /// Controllers the organizer can have (-1 = unlimited)
-  maxControllers  Int      @default(-1)
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  maxControllers     Int      @default(-1)
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   subscriptions OrganizerSubscription[]
 }
@@ -485,23 +488,23 @@ model OrganizerSubscription {
 }
 
 model EventTask {
-  id           String    @id @default(uuid())
-  eventId      String
-  event        Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  title        String
-  description  String?
-  status       String    @default("TODO")
-  priority     String    @default("MEDIUM")
-  category     String?
-  assigneeName String?
-  assigneeId   String?
-  dueDate      DateTime?
-  position     Int       @default(0)
-  startDate    DateTime?
-  assignees    TaskAssignee[]
+  id               String                @id @default(uuid())
+  eventId          String
+  event            Event                 @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  title            String
+  description      String?
+  status           String                @default("TODO")
+  priority         String                @default("MEDIUM")
+  category         String?
+  assigneeName     String?
+  assigneeId       String?
+  dueDate          DateTime?
+  position         Int                   @default(0)
+  startDate        DateTime?
+  assignees        TaskAssignee[]
   pendingAssignees TaskPendingAssignee[]
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
 }
 
 // A task assigned to someone who has no account yet (pending project invitation or
@@ -585,55 +588,55 @@ model ProjectMember {
 }
 
 model NotificationTemplate {
-  id          String              @id @default(uuid())
+  id          String                 @id @default(uuid())
   name        String
   channel     NotificationChannel
   subject     String?
-  body        String              @db.Text
-  isDefault   Boolean             @default(false)
+  body        String                 @db.Text
+  isDefault   Boolean                @default(false)
   organizerId String
-  organizer   User                @relation("UserTemplates", fields: [organizerId], references: [id], onDelete: Cascade)
+  organizer   User                   @relation("UserTemplates", fields: [organizerId], references: [id], onDelete: Cascade)
   campaigns   NotificationCampaign[]
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
 }
 
 model NotificationCampaign {
-  id          String              @id @default(uuid())
+  id          String                @id @default(uuid())
   name        String
   eventId     String
-  event       Event               @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event       Event                 @relation(fields: [eventId], references: [id], onDelete: Cascade)
   channel     NotificationChannel
-  type        CampaignType        @default(CUSTOM)
+  type        CampaignType          @default(CUSTOM)
   subject     String?
-  body        String              @db.Text
+  body        String                @db.Text
   templateId  String?
   template    NotificationTemplate? @relation(fields: [templateId], references: [id])
   scheduledAt DateTime?
   sentAt      DateTime?
-  status      CampaignStatus      @default(DRAFT)
-  totalSent   Int                 @default(0)
-  totalFailed Int                 @default(0)
+  status      CampaignStatus        @default(DRAFT)
+  totalSent   Int                   @default(0)
+  totalFailed Int                   @default(0)
   createdById String
-  createdBy   User                @relation("UserCampaigns", fields: [createdById], references: [id])
+  createdBy   User                  @relation("UserCampaigns", fields: [createdById], references: [id])
   /// Who receives it: this list, or (none) every ticket holder of the event
   listId      String?
-  list        MailingList?        @relation(fields: [listId], references: [id], onDelete: SetNull)
+  list        MailingList?          @relation(fields: [listId], references: [id], onDelete: SetNull)
   recipients  CampaignRecipient[]
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
 }
 
 /// Mailing list of an organizer: people taken from their own events (buyers, guests), for campaigns
 model MailingList {
-  id          String              @id @default(uuid())
+  id          String                 @id @default(uuid())
   name        String
   organizerId String
-  organizer   User                @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  organizer   User                   @relation(fields: [organizerId], references: [id], onDelete: Cascade)
   members     MailingListMember[]
   campaigns   NotificationCampaign[]
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
 
   @@index([organizerId])
 }
@@ -667,23 +670,23 @@ model EmailUnsubscribe {
 }
 
 model CampaignRecipient {
-  id          String          @id @default(uuid())
-  campaignId  String
-  campaign    NotificationCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  email       String?
-  phone       String?
-  firstName   String
-  lastName    String
-  ticketId    String?
-  status      RecipientStatus @default(PENDING)
-  sentAt      DateTime?
-  error       String?
+  id         String               @id @default(uuid())
+  campaignId String
+  campaign   NotificationCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  email      String?
+  phone      String?
+  firstName  String
+  lastName   String
+  ticketId   String?
+  status     RecipientStatus      @default(PENDING)
+  sentAt     DateTime?
+  error      String?
   /// Imported by the organizer (not from their tickets): capped per day until they prove valid
-  imported    Boolean         @default(false)
+  imported   Boolean              @default(false)
   /// What the mail provider reported afterwards: bounce, soft bounce, spam, unsubscribe
-  feedback    String?
-  feedbackAt  DateTime?
-  createdAt   DateTime        @default(now())
+  feedback   String?
+  feedbackAt DateTime?
+  createdAt  DateTime             @default(now())
 
   @@index([email])
 }
@@ -758,13 +761,13 @@ model Payment {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
-  event Event @relation(fields: [eventId], references: [id])
-  refund Refund?
+  event      Event       @relation(fields: [eventId], references: [id])
+  refund     Refund?
+  merchOrder MerchOrder?
 
   @@index([reference])
   @@index([orderNumber])
   @@index([status])
-  merchOrder    MerchOrder?
 }
 
 // Collaborators of an organizer account: a person (with their own ZAYA login) who works
@@ -869,7 +872,7 @@ model MerchOrder {
   buyerName       String
   buyerEmail      String
   buyerPhone      String?
-  fulfillment     String           // PICKUP | DELIVERY
+  fulfillment     String // PICKUP | DELIVERY
   deliveryAddress String?
   deliveryCity    String?
   deliveryNotes   String?
@@ -991,4 +994,47 @@ model Refund {
 
   @@index([status])
   @@index([eventId])
+}
+
+/// Buyer using the ZAYA app: signs in with a phone number and a code sent by SMS (no password,
+/// no required e-mail). Their tickets are the ones issued to that number (Ticket.holderPhone).
+model Customer {
+  id                 String    @id @default(uuid())
+  /// International digits without "+": 243 + 9 digits for the DRC, as Ticket.holderPhone
+  phone              String    @unique
+  firstName          String?
+  lastName           String?
+  email              String?
+  /// fr | ln
+  language           String    @default("fr")
+  commune            String?
+  /// gospel, rumba, afro, sport, comedie, conferences
+  interests          String[]  @default([])
+  /// Consents, never pre-ticked and revocable at any time
+  promoNotifications Boolean   @default(false)
+  locationInUse      Boolean   @default(false)
+  locationAlways     Boolean   @default(false)
+  visibleToFriends   Boolean   @default(false)
+  lastLoginAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  sessions CustomerSession[]
+}
+
+/// The phone a customer is signed in on: one at a time, so a ticket's QR shows on one device only
+model CustomerSession {
+  id         String   @id @default(uuid())
+  customerId String
+  /// SHA-256 of the current refresh token (rotated on every refresh)
+  tokenHash  String
+  platform   String   @default("android")
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+  expiresAt  DateTime
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
 }

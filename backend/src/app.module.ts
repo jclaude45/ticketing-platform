@@ -22,6 +22,7 @@ import { UsersModule } from './users/users.module';
 import { EventsModule } from './events/events.module';
 import { BillingModule } from './billing/billing.module';
 import { PrivacyModule } from './privacy/privacy.module';
+import { CustomerModule } from './customer/customer.module';
 import { TicketsModule } from './tickets/tickets.module';
 import { ControllersModule } from './controllers-mgmt/controllers.module';
 import { ValidationModule } from './validation/validation.module';
@@ -102,6 +103,7 @@ import { SecurityMiddleware } from './common/middleware/security.middleware';
     PaymentModule,
     BillingModule,
     PrivacyModule,
+    CustomerModule,
   ],
   controllers: [AppController],
   providers: [

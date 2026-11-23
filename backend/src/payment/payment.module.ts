@@ -13,5 +13,6 @@ import { ShopModule } from '../shop/shop.module';
   imports: [PrismaModule, TicketsModule, PublicModule, ShopModule, NotificationsModule],
   controllers: [PaymentController],
   providers: [PaymentService, FlexPayWebhookGuard, TurnstileService],
+  exports: [PaymentService],
 })
 export class PaymentModule {}

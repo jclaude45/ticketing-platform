@@ -83,7 +83,8 @@ export class PublicService {
 
   // ─── List published events ──────────────────────────────────────────────────
 
-  async listEvents(page = 1, limit = 12, search?: string, city?: string, type?: string, past = false) {
+  /** `from`/`to`: events taking place during that window (the app's « Ce soir », « Ce week-end ») */
+  async listEvents(page = 1, limit = 12, search?: string, city?: string, type?: string, past = false, from?: Date, to?: Date) {
     const skip = (page - 1) * limit;
     // Upcoming events by default; past=true lists the ones already over that their organizer
     // keeps on the site (marked as ended), most recent first
@@ -107,6 +108,8 @@ export class PublicService {
     if (type && (Object.values(EventType) as string[]).includes(type)) {
       where.AND.push({ type });
     }
+    if (from) where.AND.push({ endDate: { gte: from } });
+    if (to) where.AND.push({ startDate: { lte: to } });
     if (where.AND.length === 0) delete where.AND;
 
     const [events, total] = await Promise.all([
@@ -226,7 +229,11 @@ export class PublicService {
     const byContact = await this.prisma.ticket.count({
       where: {
         source: 'ONLINE', price: 0, createdAt: { gte: since },
-        OR: [{ holderEmail: { equals: who.email.trim(), mode: 'insensitive' } }, { holderPhone: who.phone }],
+        OR: [
+          // No e-mail (ZAYA app): the phone alone identifies the person
+          ...(who.email.trim() ? [{ holderEmail: { equals: who.email.trim(), mode: 'insensitive' as const } }] : []),
+          { holderPhone: who.phone },
+        ],
       },
     });
     const ipKey = who.ip ? `free-tickets:ip:${who.ip}` : null;
@@ -260,7 +267,7 @@ export class PublicService {
     if (event.endDate.getTime() < Date.now()) throw new BadRequestException('Cet événement est terminé');
     const holderPhone = normalizeDrcPhone(dto.holderPhone);
     if (!holderPhone) throw new BadRequestException('Numéro de téléphone invalide : utilisez 089…, +24389… ou 89…');
-    await assertMailDomain(dto.holderEmail);
+    if (dto.holderEmail) await assertMailDomain(dto.holderEmail);
 
     // Load and validate all requested templates in one query
     const templateIds = dto.items.map(i => i.templateId);
@@ -508,7 +515,8 @@ export class PublicService {
       unsubscribe?: { page: string; oneClick: string } | null;
     } | null,
   ): Promise<boolean> {
-    if (!this.mailer) return false;
+    // Buyers of the ZAYA app may have no e-mail: their tickets are in the app
+    if (!this.mailer || !holder.holderEmail) return false;
     const awaitingReply = !!invitation?.awaitingReply;
 
     const from        = this.config.get<string>('email.from') || this.config.get<string>('email.user');
